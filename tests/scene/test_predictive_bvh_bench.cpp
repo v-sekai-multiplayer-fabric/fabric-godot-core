@@ -656,6 +656,12 @@ struct Harness {
 	Vector<pbvh_node_id_t> sorted;
 	Vector<pbvh_internal_t> internals;
 	Vector<uint32_t> bucket_dir;
+	// pbvh_tree_tick requires parent_of_internal / leaf_to_internal /
+	// touched_bits / touched_meta_bits to be wired and the bitmaps zeroed.
+	// PbvhTickScratch sizes all four off internal_capacity and uses
+	// resize_initialized() on the bitmaps — see the docstring on the struct
+	// in predictive_bvh_adapter.h.
+	PbvhTickScratch tick_scratch;
 	pbvh_tree_t tree = {};
 	Aabb scene;
 
@@ -665,7 +671,8 @@ struct Harness {
 				-BENCH_BOUND, BENCH_BOUND, -BENCH_BOUND, BENCH_BOUND);
 		storage.resize(n + 16);
 		sorted.resize(n + 16);
-		internals.resize(2 * (n + 16));
+		const uint32_t internal_cap = 2u * (n + 16u);
+		internals.resize(internal_cap);
 		bucket_dir.resize(pbvh_bucket_dir_size(n));
 		tree.nodes = storage.ptrw();
 		tree.capacity = storage.size();
@@ -677,6 +684,7 @@ struct Harness {
 		tree.internal_root = PBVH_NULL_NODE;
 		tree.bucket_dir = bucket_dir.ptrw();
 		tree.bucket_bits = HILBERT_PREFIX_BITS;
+		tick_scratch.attach(&tree, n + 16u, internal_cap);
 		for (uint32_t i = 0; i < n; i++) {
 			pbvh_tree_insert_h(&tree, (pbvh_eclass_id_t)i,
 					r128s[i].box, r128s[i].hilbert);
