@@ -1491,7 +1491,45 @@ theorem build_skip_invariants (t : PbvhTree) :
       (node.left = none → node.right = none → node.skip = j + 1) ∧
       (∀ L R, node.left = some L → node.right = some R →
         ∃ (hL : L < t'.internals.size), L = j + 1 ∧
-          (t'.internals[L]'hL).skip = R) := by sorry
+          (t'.internals[L]'hL).skip = R) := by
+  intro t' j hj
+  -- t' is a let-binding for build t; we need to expose its content.
+  change (j < ((build t).internals[j]'hj).skip ∧
+          ((build t).internals[j]'hj).skip ≤ (build t).internals.size) ∧
+         ((build t).internals[j]'hj).bounds =
+           windowBounds t.leaves (build t).sorted ((build t).internals[j]'hj).offset
+             (((build t).internals[j]'hj).offset + ((build t).internals[j]'hj).span) ∧
+         (((build t).internals[j]'hj).left = none →
+           ((build t).internals[j]'hj).right = none →
+           ((build t).internals[j]'hj).skip = j + 1) ∧
+         (∀ L R, ((build t).internals[j]'hj).left = some L →
+           ((build t).internals[j]'hj).right = some R →
+           ∃ (hL : L < (build t).internals.size), L = j + 1 ∧
+             ((build t).internals[L]'hL).skip = R)
+  change j < (build t).internals.size at hj
+  unfold build at hj ⊢
+  dsimp only at hj ⊢
+  split at hj
+  · -- Empty case: t'.internals = #[], so j < 0 is absurd.
+    rename_i hemp
+    simp at hj
+  · -- Non-empty case: t'.internals = (buildSubtree ... #[] 0 sorted.size).1.
+    rename_i hnemp
+    simp only [hnemp, if_false] at hj ⊢
+    set sorted := insertionSortByHilbert t.leaves (liveIds t.leaves) with hsorted_def
+    set R := buildSubtree t.leaves sorted #[] 0 sorted.size with hR_def
+    have hj_ge : (#[] : Array PbvhInternal).size ≤ j := by simp
+    have hj_R : j < R.1.size := hj
+    refine ⟨?_, ?_, ?_, ?_⟩
+    · exact buildSubtree_new_node_skip_monotone t.leaves sorted
+        sorted.size #[] 0 sorted.size rfl j hj_ge hj_R
+    · exact buildSubtree_new_node_bounds t.leaves sorted
+        sorted.size #[] 0 sorted.size rfl j hj_ge hj_R
+    · exact buildSubtree_new_node_leaf_block_skip t.leaves sorted
+        sorted.size #[] 0 sorted.size rfl j hj_ge hj_R
+    · intro L Rc hL hR
+      exact buildSubtree_new_node_right_is_left_skip t.leaves sorted
+        sorted.size #[] 0 sorted.size rfl j hj_ge hj_R L Rc hL hR
 theorem build_contains_leaf (t : PbvhTree)
     (j : Nat) (hj : j < (build t).internals.size)
     (l : PbvhLeaf) (k : Nat)
