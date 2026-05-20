@@ -3,7 +3,7 @@
 
 import PredictiveBVH.Primitives.Types
 import PredictiveBVH.Formulas.Formula
-import PredictiveBVHResearch.Protocol.Fabric
+import PredictiveBVH.Protocol.Fabric
 import PredictiveBVH.Relativistic.NoGod
 
 open PredictiveBVH.Relativistic

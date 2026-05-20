@@ -22,7 +22,10 @@ lake build
 ```
 
 `lake build` is expected to fail. Repair work targets one module at a
-time; use `lake build PredictiveBVHResearch.<Module>` to iterate.
+time; use `lake build PredictiveBVH.<Module>` to iterate on a specific
+research-tier module (they now share the `PredictiveBVH.*` namespace and
+file tree), or `lake build PredictiveBVHResearch` to build the full
+research-tier aggregator.
 
 ## Lake dependencies
 
@@ -34,10 +37,10 @@ time; use `lake build PredictiveBVHResearch.<Module>` to iterate.
 
 ## Conventions
 
-- Module path renamed to `PredictiveBVHResearch.*`; internal Lean
-  `namespace PredictiveBVH …` declarations are unchanged.
-- Cross-references between moved files use `PredictiveBVHResearch.*`
-  imports.
-- Imports of clean upstream modules (`PredictiveBVH.Primitives.Types`
-  etc.) are unchanged and resolve via the Lake dep on `optimal-partition`.
+- Research-tier modules live under `PredictiveBVH/` alongside production
+  files. The `PredictiveBVHResearch.lean` aggregator at repo root pins
+  the research-tier import closure for `lake build PredictiveBVHResearch`.
+- Internal Lean `namespace PredictiveBVH …` declarations are unchanged.
+- Cross-references between research-tier files use `PredictiveBVH.*`
+  imports (same as production).
 - Commit message style: sentence case, no `type(scope):` prefix.

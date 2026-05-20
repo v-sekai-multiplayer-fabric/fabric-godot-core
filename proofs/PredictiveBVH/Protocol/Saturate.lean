@@ -2,7 +2,7 @@
 -- Copyright (c) 2026-present K. S. Ernest (iFire) Lee
 
 import PredictiveBVH.Primitives.Types
-import PredictiveBVHResearch.Spatial.Partition
+import PredictiveBVH.Spatial.Partition
 
 -- ============================================================================
 -- E-GRAPH SATURATION

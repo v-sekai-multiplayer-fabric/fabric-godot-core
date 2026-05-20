@@ -161,18 +161,18 @@ Production-tier (this repo, in the `lake build` gate):
 | [Codegen/TreeC.lean](PredictiveBVH/Codegen/TreeC.lean) | Tree-op C (control-flow only) |
 | [Codegen/QuinticHermite.lean](PredictiveBVH/Codegen/QuinticHermite.lean) | C³ quintic Hermite basis |
 
-Research-tier ([multiplayer-fabric-predictive-bvh-research](https://github.com/V-Sekai-fire/multiplayer-fabric-predictive-bvh-research), currently broken under Lean 4.26):
+Research-tier (currently partial under Lean 4.26; sources live alongside
+production under `PredictiveBVH/`, aggregated by `PredictiveBVHResearch.lean`):
 
 | File | Invariant |
 |---|---|
-| `PredictiveBVHResearch/Spatial/Tree.lean` | `build` / `aabbQueryN` soundness + completeness |
-| `PredictiveBVHResearch/Spatial/RefitIncremental.lean` | Incremental refit soundness |
-| `PredictiveBVHResearch/Spatial/Partition.lean` | AABB partition / union / containment |
-| `PredictiveBVHResearch/Protocol/Build.lean` | Tree build protocol + Hilbert sort |
-| `PredictiveBVHResearch/Protocol/Saturate.lean` | EGraph saturation on BVH formulas |
-| `PredictiveBVHResearch/Protocol/Fabric.lean` | Multi-zone migration state |
-| `PredictiveBVHResearch/Interest/AuthorityInterest.lean` | `InterestReplica`, authority zone |
-| `PredictiveBVHResearch/Relativistic/ReBAC.lean` | ReBAC authorization bounds |
+| [PredictiveBVH/Spatial/Tree.lean](PredictiveBVH/Spatial/Tree.lean) | `build` / `aabbQueryN` soundness + completeness |
+| [PredictiveBVH/Spatial/RefitIncremental.lean](PredictiveBVH/Spatial/RefitIncremental.lean) | Incremental refit soundness |
+| [PredictiveBVH/Spatial/Partition.lean](PredictiveBVH/Spatial/Partition.lean) | AABB partition / union / containment |
+| [PredictiveBVH/Protocol/Saturate.lean](PredictiveBVH/Protocol/Saturate.lean) | EGraph saturation on BVH formulas |
+| [PredictiveBVH/Protocol/Fabric.lean](PredictiveBVH/Protocol/Fabric.lean) | Multi-zone migration state |
+| [PredictiveBVH/Interest/AuthorityInterest.lean](PredictiveBVH/Interest/AuthorityInterest.lean) | `InterestReplica`, authority zone |
+| [PredictiveBVH/Relativistic/ReBAC.lean](PredictiveBVH/Relativistic/ReBAC.lean) | ReBAC authorization bounds |
 
 ## How to add a new formula
 
@@ -187,8 +187,7 @@ Research-tier ([multiplayer-fabric-predictive-bvh-research](https://github.com/V
 
 ## How to add a new tree op
 
-1. State it in
-   [`PredictiveBVHResearch/Spatial/Tree.lean`](https://github.com/V-Sekai-fire/multiplayer-fabric-predictive-bvh-research/blob/main/PredictiveBVHResearch/Spatial/Tree.lean)
+1. State it in [`PredictiveBVH/Spatial/Tree.lean`](PredictiveBVH/Spatial/Tree.lean)
    as a pure function on `PbvhTree`.
 2. Prove the invariants it preserves (structural, cover, skip-pointer,
    etc.) — reuse lemmas from the index above.

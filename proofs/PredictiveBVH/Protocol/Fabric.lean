@@ -5,6 +5,8 @@ import PredictiveBVH.Primitives.Types
 import PredictiveBVH.Spatial.HilbertBroadphase
 import PredictiveBVH.Relativistic.NoGod
 
+open PredictiveBVH.Relativistic
+
 -- Import clz30 from Types (moved there for O(N+k) broadphase)
 -- clz30 is defined in Types.lean now
 
@@ -52,7 +54,7 @@ inductive MigrationState where
   | owned
   | staging (targetZone : Nat) (arrivalHLC : HLC)
   | incoming (fromZone : Nat)
-  deriving Inhabited, Repr
+  deriving Inhabited
 -- #end MigrationState
 
 -- ── Fabric latency ───────────────────────────────────────────────────────────
