@@ -892,10 +892,17 @@ TEST_CASE("[PredictiveBVH][Bench] growth rate of insert+tick vs DynamicBVH") {
 		Vector<uint32_t> leaf_to;
 		leaf_to.resize(N + 16);
 		const uint32_t touched_words = (internal_cap + 63u) / 64u;
+		// pbvh_tree_tick's API contract requires touched_bits and touched_meta_bits
+		// to be all-zero on entry (bits self-clear during the scan phase, so
+		// they're zero on exit too). Vector<uint64_t>::resize() does not
+		// zero-initialise trivially-constructible types — any garbage left here
+		// would be read back as a "touched internal index" in the scan phase and
+		// dereferenced as t->internals[garbage_idx], yielding a SIGSEGV when the
+		// garbage index exceeds the allocated internals[] capacity.
 		Vector<uint64_t> touched_bits;
-		touched_bits.resize(touched_words);
+		touched_bits.resize_initialized(touched_words);
 		Vector<uint64_t> touched_meta_bits;
-		touched_meta_bits.resize((touched_words + 63u) / 64u);
+		touched_meta_bits.resize_initialized((touched_words + 63u) / 64u);
 
 		pbvh_tree_t tree = {};
 		tree.nodes = storage.ptrw();
@@ -1054,10 +1061,17 @@ TEST_CASE("[PredictiveBVH][Bench] per-frame 1%-dirty + Q-queries steady-state") 
 		Vector<uint32_t> leaf_to;
 		leaf_to.resize(N + 16);
 		const uint32_t touched_words = (internal_cap + 63u) / 64u;
+		// pbvh_tree_tick's API contract requires touched_bits and touched_meta_bits
+		// to be all-zero on entry (bits self-clear during the scan phase, so
+		// they're zero on exit too). Vector<uint64_t>::resize() does not
+		// zero-initialise trivially-constructible types — any garbage left here
+		// would be read back as a "touched internal index" in the scan phase and
+		// dereferenced as t->internals[garbage_idx], yielding a SIGSEGV when the
+		// garbage index exceeds the allocated internals[] capacity.
 		Vector<uint64_t> touched_bits;
-		touched_bits.resize(touched_words);
+		touched_bits.resize_initialized(touched_words);
 		Vector<uint64_t> touched_meta_bits;
-		touched_meta_bits.resize((touched_words + 63u) / 64u);
+		touched_meta_bits.resize_initialized((touched_words + 63u) / 64u);
 
 		pbvh_tree_t tree = {};
 		tree.nodes = storage.ptrw();
@@ -1287,10 +1301,17 @@ TEST_CASE("[PredictiveBVH][Bench] per-frame stress 20%-dirty metre-scale motion"
 		Vector<uint32_t> leaf_to;
 		leaf_to.resize(N + 16);
 		const uint32_t touched_words = (internal_cap + 63u) / 64u;
+		// pbvh_tree_tick's API contract requires touched_bits and touched_meta_bits
+		// to be all-zero on entry (bits self-clear during the scan phase, so
+		// they're zero on exit too). Vector<uint64_t>::resize() does not
+		// zero-initialise trivially-constructible types — any garbage left here
+		// would be read back as a "touched internal index" in the scan phase and
+		// dereferenced as t->internals[garbage_idx], yielding a SIGSEGV when the
+		// garbage index exceeds the allocated internals[] capacity.
 		Vector<uint64_t> touched_bits;
-		touched_bits.resize(touched_words);
+		touched_bits.resize_initialized(touched_words);
 		Vector<uint64_t> touched_meta_bits;
-		touched_meta_bits.resize((touched_words + 63u) / 64u);
+		touched_meta_bits.resize_initialized((touched_words + 63u) / 64u);
 
 		pbvh_tree_t tree = {};
 		tree.nodes = storage.ptrw();
