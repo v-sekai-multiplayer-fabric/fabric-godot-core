@@ -9,10 +9,10 @@ import PredictiveBVH.Spatial.ScaleContradictions
 /-!
 # EML Adversarial Heuristics
 
-This module proves how the universal EML operator (exp(x) - ln(y)) 
+This module proves how the universal EML operator (exp(x) - ln(y))
 can analytically extract ZK Z-bounds for all 7 Adversarial Scenarios.
 
-By using an exact algebraic representation in the E-Graph, we can 
+By using an exact algebraic representation in the E-Graph, we can
 parameterize Godot Engine gaps to arbitrary bounds for dynamic optimization, rather than relying on hardcoded assertions.
 -/
 

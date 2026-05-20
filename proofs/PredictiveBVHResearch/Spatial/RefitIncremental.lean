@@ -491,7 +491,7 @@ theorem refitOne_preserves_localCover_higher (t : PbvhTree) (k j : InternalId)
 
 /-- General preservation lemma: if `refitOne` fires at index `k`, and `k` is
     neither `j` nor one of `j`'s children, then `localCoverAt j` is preserved.
-    This generalises `refitOne_preserves_localCover_higher` (which uses
+    This generalizes `refitOne_preserves_localCover_higher` (which uses
     `k < j` + `preorderInvariant` to derive the `k ≠ child` side-conditions)
     and is used in the incremental proof where the side-conditions come from
     `h_marked_closed` instead of topological ordering. -/

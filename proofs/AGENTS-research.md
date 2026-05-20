@@ -11,7 +11,7 @@ production repo's `bvh-codegen` exe writes `predictive_bvh.h` without
 touching anything here.
 
 The modules cover query soundness on the abstract BVH, zone migration
-protocol, and ReBAC authorisation. They are currently broken under Lean
+protocol, and ReBAC authorization. They are currently broken under Lean
 4.26 and are tracked for incremental repair.
 
 ## Build

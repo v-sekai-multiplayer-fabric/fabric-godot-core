@@ -106,12 +106,12 @@ private theorem foldl_maxRelStep_ge (l : List Relation) (acc : Option Relation) 
   induction l generalizing acc with
   | nil =>
     simp only [List.foldl]
-    rcases h with h | ⟨a, ha, hge⟩
+    rcases h with h | ⟨a, ha, he⟩
     · exact absurd h (List.not_mem_nil _)
-    · exact ⟨a, ha, hge⟩
+    · exact ⟨a, ha, he⟩
   | cons hd tl ih =>
     simp only [List.foldl]
-    rcases h with h | ⟨a, ha, hge⟩
+    rcases h with h | ⟨a, ha, he⟩
     · simp only [List.mem_cons] at h
       rcases h with rfl | hmem
       · -- r = hd: the new acc after this step has rank ≥ r.rank
@@ -135,9 +135,9 @@ private theorem foldl_maxRelStep_ge (l : List Relation) (acc : Option Relation) 
       | none   => exact ⟨hd, rfl, Nat.zero_le _⟩  -- shouldn't happen but fine
       | some a =>
         by_cases hrk : hd.rank ≥ a.rank
-        · exact ⟨hd, by simp [hrk], Nat.le_trans hge hrk⟩
+        · exact ⟨hd, by simp [hrk], Nat.le_trans he hrk⟩
         · push_neg at hrk
-          exact ⟨a, by simp [Nat.not_le.mpr hrk], hge⟩
+          exact ⟨a, by simp [Nat.not_le.mpr hrk], he⟩
 
 /-- If `r ∈ c.relations`, then `maxRelation` returns some s with rank ≥ r.rank. -/
 private theorem maxRelation_ge {n : Nat} (c : PlayerClaim n) (r : Relation)
@@ -159,7 +159,7 @@ theorem rebac_public_observe {n : Nat} (c : PlayerClaim n)
     (h : .«public» ∈ c.relations) :
     rebacCheck c .observe = true := by
   simp only [rebacCheck, Action.minRelation, Relation.rank]
-  rcases maxRelation_ge c .«public» h with ⟨s, hs, hge⟩
+  rcases maxRelation_ge c .«public» h with ⟨s, hs, he⟩
   simp only [hs]
   exact Nat.zero_le _
 
@@ -168,10 +168,10 @@ theorem rebac_owner_all {n : Nat} (c : PlayerClaim n)
     (h : .owner ∈ c.relations) (a : Action) :
     rebacCheck c a = true := by
   simp only [rebacCheck]
-  rcases maxRelation_ge c .owner h with ⟨s, hs, hge⟩
+  rcases maxRelation_ge c .owner h with ⟨s, hs, he⟩
   simp only [hs]
   have hmin : a.minRelation.rank ≤ 4 := by cases a <;> simp [Action.minRelation, Relation.rank]
-  simpa [Relation.rank] using Nat.le_trans hmin hge
+  simpa [Relation.rank] using Nat.le_trans hmin he
 
 /-- rebacCheck is monotone: passing a more permissive action implies passing a less permissive one. -/
 theorem rebac_monotone {n : Nat} (c : PlayerClaim n) (a1 a2 : Action)

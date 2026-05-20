@@ -127,7 +127,7 @@ private def insertSortedByHilbert (key : LeafId → Nat) (x : LeafId) :
 /-- Stable insertion sort of `ids` by `leaves[·].hilbert`. Out-of-bounds ids
     sort as if their key were 0 (defensive, matches the previous panic-avoiding
     accessor). Pure structural recursion — no `Id.run do`. Equivalent in
-    observable behaviour to the prior in-place implementation; the functional
+    observable behavior to the prior in-place implementation; the functional
     form admits direct `sorted_is_ascending_after_build`-style proofs. -/
 private def insertionSortByHilbert
     (leaves : Array PbvhLeaf) (ids : Array LeafId) : Array LeafId :=
@@ -2270,10 +2270,10 @@ theorem ghost_aabbQueryN_complete_from_invariants
 /-- **Agreement between `tick` and `build` on the fallback path.** When
     `tick` takes its `build`-fallback branch — either because the tree
     has no bucket directory (`bucketBits = 0`) or because the resort set
-    is too large to amortise — the resulting tree is definitionally
+    is too large to amortize — the resulting tree is definitionally
     `t.build`, so every query agrees pointwise.
 
-    The incremental branch is an optimisation: it writes per-bucket
+    The incremental branch is an optimization: it writes per-bucket
     `resortBucket` + `refitBucket` updates into `t` without a full
     rebuild, and is *not* generally equal to `build t` at the tree
     level. Its query-level equivalence to `build` is enforced

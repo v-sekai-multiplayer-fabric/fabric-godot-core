@@ -140,7 +140,7 @@ private theorem forIn_set!_pres {α γ : Type} [Inhabited α] (B : Nat) (l : Lis
     (hbody : ∀ b s, s.fst.size = B → b < B →
              (Id.run (body b s)).2.fst.size = B) :
     ∀ (init : MProd (Array α) Nat), init.fst.size = B →
-    (Id.run (forIn (m := Id) l init (fun b r => do
+    (Id.run (foreign (m := Id) l init (fun b r => do
       let res ← body b r
       pure (ForInStep.yield res.2)))).fst.size = B := by
   induction l with
@@ -151,7 +151,7 @@ private theorem forIn_set!_pres {α γ : Type} [Inhabited α] (B : Nat) (l : Lis
     rw [List.forIn_cons]
     show (Id.run (do
       let res ← body head init
-      forIn (m := Id) tail res.2 (fun b r => do
+      foreign (m := Id) tail res.2 (fun b r => do
         let res ← body b r
         pure (ForInStep.yield res.2)))).fst.size = B
     apply ih (fun c hc => hbound c (List.mem_cons.mpr (Or.inr hc)))

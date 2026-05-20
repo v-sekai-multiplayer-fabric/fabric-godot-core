@@ -53,7 +53,7 @@
 --   ScreenSpace      — 2D, origin top-left, Y increases DOWN.
 --                      Units: pixels (Int). Window size: winW × winH.
 --
---   CanvasUV         — 2D, normalised [0, UV_MAX]². Origin top-left,
+--   CanvasUV         — 2D, normalized [0, UV_MAX]². Origin top-left,
 --                      UV_MAX = 1 000 000 (represents 1.0).
 --                      u increases RIGHT, v increases DOWN (matches ScreenSpace).
 --
@@ -157,12 +157,12 @@ def halfW : Int := 625000
 /-- Anchor half-height: canvas_height/2 * UI_PIXELS_TO_METER = 360/1024 m ≈ 351 562 μm. -/
 def halfH : Int := 351562
 
-/-- Canvas centre Y: runtime value (μm above XROrigin3D floor).
+/-- Canvas center Y: runtime value (μm above XROrigin3D floor).
     Not a fixed constant — canvas placed dynamically from camera transform.
-    Proof theorems are parameterised over any centreY. -/
+    Proof theorems are parameterized over any centreY. -/
 def centreY : Int := 1000000  -- placeholder: 1.0 m for the test scene
 
-/-- Canvas centre Z: −1.5 m = −1 500 000 μm in front of XROrigin3D. -/
+/-- Canvas center Z: −1.5 m = −1 500 000 μm in front of XROrigin3D. -/
 def centreZ : Int := -1500000
 
 /-- Source offset in front of canvas: 0.1 m = 100 000 μm. -/
@@ -259,19 +259,19 @@ theorem source_ahead_of_canvas (u_uv v_uv : Int) :
     centreZ < (uvToSourceWorld u_uv v_uv).z := by
   rw [source_z_fixed]; simp [centreZ, frontOffset]
 
--- ── lassodb.gd — full behaviour model ───────────────────────────────────────
+-- ── lassodb.gd — full behavior model ───────────────────────────────────────
 --
 -- 1. POI position in source-local space (get_origin_transformed_pos):
 --
 --    Simple path  (our case — Canvas3DAnchor extends Node3D, no get_aabb()):
 --      aabb.size.is_zero_approx() = true  ⟹
 --      point_local = source.affine_inverse() * poi.origin.global_position
---      The POI is treated as a dimensionless point at its anchor centre.
+--      The POI is treated as a dimensionless point at its anchor center.
 --
 --    AABB path  (active when origin has get_aabb(), e.g. a MeshInstance3D):
 --      Purpose: find the closest point on the POI's bounding box to the
 --               source ray, so the lasso can snap to the FACE of a large
---               object rather than always its centre.
+--               object rather than always its center.
 --
 --      Steps:
 --        a. Scale AABB by 1000× to reduce float precision loss on small boxes:
@@ -302,7 +302,7 @@ theorem source_ahead_of_canvas (u_uv v_uv : Int) :
 --      Any POI whose origin node is a VisualInstance3D subclass (MeshInstance3D,
 --      Label3D, etc.) will have get_aabb() and trigger this path.
 --      Future canvas_3d_anchor variants that add a visual mesh child and expose
---      get_aabb() would automatically use the surface-snapping behaviour.
+--      get_aabb() would automatically use the surface-snapping behavior.
 --
 -- 2. Scoring formula (query loop):
 --      angular_dist  = point_local.angle_to(Vector3(0, 0, -1))
@@ -421,7 +421,7 @@ theorem aligned_within_rejection_sphere :
 --   uv=(1,0)  [top-right]    → source_x = +625000 μm, source_y = centreY + 351562 μm
 --   uv=(0,1)  [bottom-left]  → source_x = −625000 μm, source_y = centreY − 351563 μm
 --   uv=(1,1)  [bottom-right] → source_x = +625000 μm, source_y = centreY − 351563 μm
---   uv=(0.5, 0.5) [centre]   → source_x = 0,          source_y = centreY
+--   uv=(0.5, 0.5) [center]   → source_x = 0,          source_y = centreY
 --
 -- X is symmetric (halfW = 625000 μm both sides).
 -- Y is off by 1 μm top-vs-bottom due to floor division (see uv_y_bottom_maps_to_canvas_bottom).
@@ -431,7 +431,7 @@ theorem uv_y_top_maps_to_canvas_top :
     (uvToSourceWorld 0 0).y = centreY + halfH := by native_decide
 
 /-- Y-mapping: screen bottom (v=UV_MAX) maps to centreY − halfH − 1.
-    The −1 is a floor-division artefact: 360_000_000 mod 1024 = 512, so
+    The −1 is a floor-division artifact: 360_000_000 mod 1024 = 512, so
     −360_000_000 / 1024 = −351563 (floors toward −∞) while +360_000_000 / 1024 = 351562. -/
 theorem uv_y_bottom_maps_to_canvas_bottom :
     (uvToSourceWorld 0 UV_MAX).y = centreY - halfH - 1 := by native_decide
@@ -455,15 +455,15 @@ theorem uv_canvas_top_left :
 theorem uv_canvas_bottom_right :
     screenToUV 1280 720 1280 720 = (UV_MAX, UV_MAX) := by native_decide
 
-/-- Centre pixel maps to UV (UV_MAX/2, UV_MAX/2) = (500000, 500000). -/
+/-- Center pixel maps to UV (UV_MAX/2, UV_MAX/2) = (500000, 500000). -/
 theorem uv_canvas_center :
     screenToUV 1280 720 640 360 = (500000, 500000) := by native_decide
 
-/-- Centre UV maps to source x = 0 (canvas midline). -/
+/-- Center UV maps to source x = 0 (canvas midline). -/
 theorem source_x_at_center :
     (uvToSourceWorld 500000 500000).x = 0 := by native_decide
 
-/-- Centre UV maps to source y = centreY (canvas midline). -/
+/-- Center UV maps to source y = centreY (canvas midline). -/
 theorem source_y_at_center :
     (uvToSourceWorld 500000 500000).y = centreY := by native_decide
 
@@ -613,11 +613,11 @@ theorem canvas_plane_scale_correct :
 -- canvas_plane._update() places the mesh at local offset (in pixel units):
 --   mesh_x_offset = W × (0.25 − 0.5 × canvas_anchor_x)
 -- In 4× integer arithmetic: 4 × offset = W × (1 − 2 × canvas_anchor_x_num / den).
--- For mesh centre = anchor origin: offset = 0  ↔  canvas_anchor_x = 0.5.
+-- For mesh center = anchor origin: offset = 0  ↔  canvas_anchor_x = 0.5.
 -- Default canvas_anchor_x = 0.0 → offset = W/4 = 320 px →
 --   physical = 320 × (2/1024) m = halfW = 0.625 m (entire canvas half-width!).
 
-/-- canvas_anchor_x = 1/2: 4 × offset = W × (1 − 2 × ½) = 0. Mesh centred. -/
+/-- canvas_anchor_x = 1/2: 4 × offset = W × (1 − 2 × ½) = 0. Mesh centered. -/
 theorem pivot_aligned_at_half_anchor :
     1280 * (1 - 2 * 1 / 2) = 0 := by native_decide
 

@@ -4,7 +4,7 @@
 -- Aspirational/research-tier proofs split out of multiplayer-fabric-predictive-bvh.
 -- These modules are NOT load-bearing for the production C codegen header
 -- (`predictive_bvh.h`); they encode model-level claims about the abstract BVH,
--- migration protocol, and authorisation logic, and are currently broken under
+-- migration protocol, and authorization logic, and are currently broken under
 -- Lean 4.26. See README.md for the repair roadmap.
 import PredictiveBVHResearch.Spatial.Partition
 import PredictiveBVHResearch.Spatial.Tree

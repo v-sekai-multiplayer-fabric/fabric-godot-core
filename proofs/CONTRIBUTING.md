@@ -15,7 +15,7 @@ induction.
 
 ### AmoLean EGraph
 
-[../AmoLean/](../AmoLean/) is the arithmetic optimiser. It operates on
+[../AmoLean/](../AmoLean/) is the arithmetic optimizer. It operates on
 `Expr Int` — integer-like ring polynomials only. Comparisons, ternaries,
 and booleans are not ring ops.
 
@@ -172,7 +172,7 @@ Research-tier ([multiplayer-fabric-predictive-bvh-research](https://github.com/V
 | `PredictiveBVHResearch/Protocol/Saturate.lean` | EGraph saturation on BVH formulas |
 | `PredictiveBVHResearch/Protocol/Fabric.lean` | Multi-zone migration state |
 | `PredictiveBVHResearch/Interest/AuthorityInterest.lean` | `InterestReplica`, authority zone |
-| `PredictiveBVHResearch/Relativistic/ReBAC.lean` | ReBAC authorisation bounds |
+| `PredictiveBVHResearch/Relativistic/ReBAC.lean` | ReBAC authorization bounds |
 
 ## How to add a new formula
 
@@ -204,11 +204,11 @@ We sequence risk here so the production module stays light. Verification
 mass lives in this directory; production logic is exported as a single
 verified C header.
 
-## Documentation style: Hz, seconds, metres
+## Documentation style: Hz, seconds, meters
 
 All human-facing prose in `README.md`, `OptimalPartitionBook.md`,
 `CONCEPT*.md`, and any other reader-facing doc must use Hz, seconds,
-and metres as public units. Internal integer encodings (μm, μm/tick) are
+and meters as public units. Internal integer encodings (μm, μm/tick) are
 an implementation detail of the exact-arithmetic core — they belong in
 code, and at most in a single Units note that explains why the encoding
 exists.
@@ -228,7 +228,7 @@ Everywhere else:
 - Durations in seconds / ms (e.g. "4 s migration hysteresis", "100 ms
   latency floor"), not ticks.
 - Rates in Hz (e.g. "20 Hz default simulation rate"), not "per tick".
-- Distances in metres (e.g. "5 m interest radius"), not μm or mm.
+- Distances in meters (e.g. "5 m interest radius"), not μm or mm.
 - Velocities in m/s (e.g. "10 m/s velocity cap"), not μm/tick or
   mm/tick.
 - Accelerations in m/s².
