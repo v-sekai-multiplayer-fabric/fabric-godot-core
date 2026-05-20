@@ -37,13 +37,13 @@
 // proofs reason over EClassId; this adapter treats the pbvh_node_id_t as the
 // eclass id and stores caller-supplied void * payloads in a parallel sidecar.
 
-#include <thirdparty/predictive_bvh/predictive_bvh.h>
-
 #include "core/math/aabb.h"
 #include "core/math/plane.h"
 #include "core/math/vector3.h"
 #include "core/templates/local_vector.h"
 #include "core/typedefs.h"
+
+#include <thirdparty/predictive_bvh/predictive_bvh.h>
 
 // Portable count-leading-zeros for uint64_t.
 // MSVC lacks __builtin_clzll; use _BitScanReverse64 instead.
