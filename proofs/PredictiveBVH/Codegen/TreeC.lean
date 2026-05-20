@@ -4,15 +4,16 @@
 -- TreeC.lean — emits the pbvh_tree_* block into predictive_bvh.h.
 --
 -- The generated header is consumed at
--- modules/multiplayer_fabric_mmog/predictive_bvh/predictive_bvh.h. Algorithm and
--- field layout mirror Spatial/Tree.lean verbatim so the proofs there hold
--- for the code emitted here.
+-- modules/multiplayer_fabric_mmog/predictive_bvh/predictive_bvh.h.
+-- (Abstract-BVH soundness/completeness proofs once lived in Spatial/Tree.lean,
+-- but were removed when Lean 4.26 broke them past trivial repair. The
+-- production gate is the C-level doctest harness, not these proofs.)
 
 namespace PredictiveBVH.Codegen.TreeC
 
 def treeBanner : String :=
   "/* ══════════════════════════════════════════════════════════════════════════\n" ++
-  "   PBVH TREE (Hilbert-radix nested-set BVH; emitted from Spatial/Tree.lean)\n" ++
+  "   PBVH TREE (Hilbert-radix nested-set BVH)\n" ++
   "   ══════════════════════════════════════════════════════════════════════════ */\n\n"
 
 def treeBody : String := "typedef uint32_t pbvh_eclass_id_t;
