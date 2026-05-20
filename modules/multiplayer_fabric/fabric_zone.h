@@ -30,7 +30,6 @@
 
 #pragma once
 
-#include "fabric_zone_types.h"
 #include "fabric_zone_journal.h"
 #include "fabric_zone_types.h"
 #include "relativistic_zone.h"
