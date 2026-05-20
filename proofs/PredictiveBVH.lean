@@ -33,9 +33,6 @@ import PredictiveBVH.Codegen.QuinticHermite
 import PredictiveBVH.Codegen.TreeC
 import PredictiveBVH.Codegen.CodeGen
 
--- Research-tier proofs (Spatial.{Partition, Tree, RefitIncremental},
--- Protocol.{Build, Saturate, Fabric}, Interest.AuthorityInterest,
--- Relativistic.ReBAC) live in
--- https://github.com/V-Sekai-fire/multiplayer-fabric-predictive-bvh-research
--- because they are not in the codegen import closure and are currently
--- broken under Lean 4.26.
+-- Research-tier proofs live in the sibling `PredictiveBVHResearch` lib
+-- (root file: PredictiveBVHResearch.lean). They are not in the codegen
+-- import closure; build them with `lake build PredictiveBVHResearch`.
