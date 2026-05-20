@@ -126,7 +126,18 @@ def refitOne (t : PbvhTree) (i : InternalId) : PbvhTree :=
     during per-frame refit. -/
 theorem refitOne_preserves_other_internals (t : PbvhTree) (i : InternalId)
     (j : InternalId) (hj : j < t.internals.size) (hij : i ≠ j) :
-    (refitOne t i).internals[j]? = t.internals[j]? := by sorry
+    (refitOne t i).internals[j]? = t.internals[j]? := by
+  unfold refitOne
+  by_cases hi : i < t.internals.size
+  · simp [hi]
+    rw [Array.getElem?_set_ne]
+    exact fun hji => hij hji
+  · simp [hi]
+
+/-- `refitOne` preserves the *size* of the internals array. Follows from
+    `Array.set` being size-preserving; used as a structural precondition by
+    every subsequent theorem (so later lemmas can quantify over `i <
+    (refitOne t k).internals.size` without extra bookkeeping). -/
 theorem refitOne_preserves_size (t : PbvhTree) (i : InternalId) :
     (refitOne t i).internals.size = t.internals.size := by
   unfold refitOne
@@ -299,7 +310,48 @@ def refitFull (t : PbvhTree) : PbvhTree :=
 
 /-- `refitFull` preserves the internals array size. -/
 theorem refitFull_preserves_size (t : PbvhTree) :
-    (refitFull t).internals.size = t.internals.size := by sorry
+    (refitFull t).internals.size = t.internals.size := by
+  unfold refitFull
+  induction List.range t.internals.size with
+  | nil => simp
+  | cons k ks ih =>
+    simp only [List.foldr_cons]
+    rw [refitOne_preserves_size]
+    exact ih
+
+/- `refitFull` establishes the global cover invariant.
+    PROOF SKETCH (for future mechanisation):
+    Let n = t.internals.size.  Define:
+      step k t₀ := (List.range k).foldr refitOne t₀   (processes k-1 … 0)
+    We prove by induction on k (downward from n to 0):
+      ∀ j < k, localCoverAt (step k t₀) j.
+    Base (k = 0): vacuous.
+    Step (k → k+1):
+      step (k+1) t₀ = refitOne k (step k t₀).
+      (a) j = k: refitOne_establishes_local_cover_at_i gives localCoverAt. ✓
+      (b) j < k (IH): refitOne at k only modifies node k's bounds.
+          Node j's children have index > j.  Two sub-cases:
+          • child index > k: those bounds are unchanged by refitOne k
+            (by refitOne_preserves_other_internals), so j's localCoverAt
+            is preserved from the IH directly.
+          • child index ≤ k (= k itself, since j < k ≤ child): child k was
+            just refit; j's bounds may now be too tight.  But j is
+            processed at step j < k, so step j+1 … refitOne j … reads
+            the correct, already-updated child bounds at that later point.
+            Because step (k+1) = refitOne k ∘ step k, and j < k, j's
+            refitOne fires *after* k's.  At the time refitOne j fires it
+            reads k's final (correct) bounds.  After that, no refitOne at
+            any index ≠ j changes j's bounds.  So j's final bounds are
+            correct.
+    The argument for the full fold is: at the very end, every node i had
+    refitOne i applied *after* all its children's refitOne applications,
+    and no later refitOne changes i's bounds. -/
+/-- Key helper for `refitFull_establishes_cover`: refitting a lower-indexed
+    node `k` preserves `localCoverAt` at a higher-indexed node `j`.
+    Intuition: `refitOne k` only changes node `k`'s `bounds`. Node `j`'s own
+    fields are unchanged (j ≠ k). By `preorderInvariant`, j's children have
+    indices > j > k, so they are ≠ k, and their bounds are also unchanged.
+    Hence the cover condition at j evaluates identically. -/
 theorem refitOne_preserves_localCover_higher (t : PbvhTree) (k j : InternalId)
     (hpre : preorderInvariant t) (hkj : k < j)
     (hj : j < t.internals.size)
