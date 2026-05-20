@@ -892,7 +892,55 @@ theorem buildSubtree_preserves_prefix (leaves : Array PbvhLeaf)
     ∀ (n : Nat) (internals : Array PbvhInternal) (lo hi : Nat), hi - lo = n →
       ∀ (j : Nat) (hj : j < internals.size),
         ∃ (hj' : j < (buildSubtree leaves sorted internals lo hi).1.size),
-          (buildSubtree leaves sorted internals lo hi).1[j]'hj' = internals[j] := by sorry
+          (buildSubtree leaves sorted internals lo hi).1[j]'hj' = internals[j] := by
+  intro n
+  induction n using Nat.strongRecOn with
+  | _ n ih =>
+    intro internals lo hi hn j hj
+    -- Split the dependent existential BEFORE unfolding buildSubtree, so that
+    -- the equality goal is non-dependent (no `∃` with a witness referencing
+    -- the destructured `mid`). This is the workaround for Lean 4.26's stricter
+    -- "motive not type correct" check on `obtain`/`generalize` over computeMid.
+    have h_size : j < (buildSubtree leaves sorted internals lo hi).1.size := by
+      have hge := buildSubtree_size_ge leaves sorted n internals lo hi hn
+      omega
+    refine ⟨h_size, ?_⟩
+    unfold buildSubtree
+    split
+    · -- Base: pushed leaf; position j < internals.size is unchanged.
+      show (internals.push _)[j]'_ = internals[j]
+      exact Array.getElem_push_lt hj
+    · -- Recursive: now the goal is a plain equation, not a dependent existential.
+      dsimp only
+      obtain ⟨mid, _, _⟩ := computeMid leaves sorted lo hi (by omega)
+      let ph : PbvhInternal :=
+        { bounds := windowBounds leaves sorted lo hi, offset := lo,
+          span := hi - lo, skip := internals.size + 1,
+          left := none, right := none }
+      let state0 := internals.push ph
+      have hstate0_size : state0.size = internals.size + 1 := by
+        show (internals.push ph).size = internals.size + 1
+        simp [Array.size_push]
+      have hj_state0 : j < state0.size := by omega
+      have hstate0_j : ∀ (h : j < state0.size), state0[j]'h = internals[j] := by
+        intro h
+        show (internals.push ph)[j]'h = internals[j]
+        exact Array.getElem_push_lt hj
+      have hleft_lt : mid - lo < n := by omega
+      obtain ⟨hj_s1, hleft⟩ := ih (mid - lo) hleft_lt state0 lo mid rfl j hj_state0
+      have hleft_j : (buildSubtree leaves sorted state0 lo mid).1[j]'hj_s1 =
+          internals[j] := by rw [hleft]; exact hstate0_j hj_state0
+      have hright_lt : hi - mid < n := by omega
+      obtain ⟨hj_s2, hright⟩ := ih (hi - mid) hright_lt
+        (buildSubtree leaves sorted state0 lo mid).1 mid hi rfl j hj_s1
+      have hbridge : (buildSubtree leaves sorted
+          (buildSubtree leaves sorted state0 lo mid).1 mid hi).1[j]'hj_s2 =
+            internals[j] := by rw [hright]; exact hleft_j
+      have hne : j ≠ internals.size := by omega
+      show ((buildSubtree leaves sorted _ mid hi).1.set!
+          internals.size _)[j]'_ = internals[j]
+      rw [Array.getElem_set_ne (h := hne)]
+      exact hbridge
 theorem aabbContains_refl (a : BoundingBox) : aabbContains a a := by
   simp [aabbContains]
 
