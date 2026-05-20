@@ -13,17 +13,16 @@ require «truth_research_zk» from git
 lean_lib «PredictiveBVH» where
   roots := #[`PredictiveBVH]
 
-lean_lib LassoMapping where
-  roots := #[`LassoMapping]
+lean_lib Lasso where
+  roots := #[`Lasso.Mapping, `Lasso.InputDelivery]
 
-lean_lib LassoInputDelivery where
-  roots := #[`LassoInputDelivery]
+lean_lib WorkQueue where
+  roots := #[`WorkQueue.Reachability]
 
 -- Research-tier proofs (Spatial.{Partition, Tree, RefitIncremental},
--- Protocol.{Build, Saturate, Fabric}, Interest.AuthorityInterest,
--- Relativistic.ReBAC). Absorbed from former
--- multiplayer-fabric-predictive-bvh-research subrepo. These import the
--- production `PredictiveBVH.*` modules directly from this package.
+-- Protocol.{Saturate, Fabric}, Interest.AuthorityInterest,
+-- Relativistic.ReBAC). Module sources live under `PredictiveBVH/` alongside
+-- production files; this aggregator pins the research-tier import closure.
 lean_lib «PredictiveBVHResearch» where
   roots := #[`PredictiveBVHResearch]
 

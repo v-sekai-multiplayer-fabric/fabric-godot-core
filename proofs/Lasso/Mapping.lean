@@ -1,6 +1,8 @@
 -- SPDX-License-Identifier: MIT
 -- Copyright (c) 2026-present K. S. Ernest (iFire) Lee
 
+import Mathlib.Tactic.Ring
+
 -- ============================================================================
 -- LASSO UV MAPPING — FORMAL SPECIFICATION
 --
@@ -184,10 +186,10 @@ def UV_MAX : Int := 1000000   -- represents 1.0
 def clampUV (u_uv : Int) : Int := max 0 (min UV_MAX u_uv)
 
 theorem clampUV_lower (u_uv : Int) : 0 ≤ clampUV u_uv := by
-  simp [clampUV]; omega
+  simp [clampUV]
 
 theorem clampUV_upper (u_uv : Int) : clampUV u_uv ≤ UV_MAX := by
-  simp [clampUV, UV_MAX]; omega
+  simp [clampUV, UV_MAX]
 
 -- ── Screen-to-UV mapping ────────────────────────────────────────────────────
 -- Canvas aspect ratio: 16 : 9 (1 280 × 720 pixels).
