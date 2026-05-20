@@ -10,8 +10,6 @@
 -- authorization logic, and some are currently broken under Lean 4.26.
 -- See README.md for the repair roadmap.
 import PredictiveBVH.Spatial.Partition
-import PredictiveBVH.Spatial.Tree
-import PredictiveBVH.Spatial.RefitIncremental
 import PredictiveBVH.Protocol.Saturate
 import PredictiveBVH.Protocol.Fabric
 import PredictiveBVH.Interest.AuthorityInterest

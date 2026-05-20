@@ -166,8 +166,6 @@ production under `PredictiveBVH/`, aggregated by `PredictiveBVHResearch.lean`):
 
 | File | Invariant |
 |---|---|
-| [PredictiveBVH/Spatial/Tree.lean](PredictiveBVH/Spatial/Tree.lean) | `build` / `aabbQueryN` soundness + completeness |
-| [PredictiveBVH/Spatial/RefitIncremental.lean](PredictiveBVH/Spatial/RefitIncremental.lean) | Incremental refit soundness |
 | [PredictiveBVH/Spatial/Partition.lean](PredictiveBVH/Spatial/Partition.lean) | AABB partition / union / containment |
 | [PredictiveBVH/Protocol/Saturate.lean](PredictiveBVH/Protocol/Saturate.lean) | EGraph saturation on BVH formulas |
 | [PredictiveBVH/Protocol/Fabric.lean](PredictiveBVH/Protocol/Fabric.lean) | Multi-zone migration state |
@@ -187,13 +185,12 @@ production under `PredictiveBVH/`, aggregated by `PredictiveBVHResearch.lean`):
 
 ## How to add a new tree op
 
-1. State it in [`PredictiveBVH/Spatial/Tree.lean`](PredictiveBVH/Spatial/Tree.lean)
-   as a pure function on `PbvhTree`.
-2. Prove the invariants it preserves (structural, cover, skip-pointer,
-   etc.) — reuse lemmas from the index above.
-3. Emit the C body as a string in `Codegen/TreeC.lean`, calling existing
-   EGraph-emitted helpers for any ring arithmetic.
-4. Regenerate, add a doctest under
+1. Emit the C body as a string in `Codegen/TreeC.lean`, calling existing
+   EGraph-emitted helpers for any ring arithmetic. The abstract-BVH
+   soundness/completeness proofs that used to back this step were removed
+   when Lean 4.26 broke them past trivially-repairable; the production
+   gate is the C-level doctest harness.
+2. Regenerate, add a doctest under
    [`tests/scene/test_predictive_bvh_*.cpp`](../../tests/scene/), run
    the regression gate.
 
