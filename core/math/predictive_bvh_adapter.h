@@ -715,16 +715,17 @@ inline void pbvh_tree_refit(pbvh_tree_t *t) {
  * aabbQueryN_complete_from_invariants only requires each internal's bounds
  * to be a superset of its subtree leaves. Over-conservative bounds stay sound.
  *
- * Falls back to pbvh_tree_refit when any sidecar is NULL. */
+ * Preconditions (caller-enforced via pbvh_tree_tick's checks, which is the
+ * only entry to this internal function): parent_of_internal[], leaf_to_internal[],
+ * touched_bits[], and touched_meta_bits[] are all non-null; the two bitmaps
+ * are all-zero on entry (they self-clear during the scan phase so they're
+ * also all-zero on exit). Violating either trips an out-of-bounds index of
+ * internals[] in the scan phase — there is no fallback path that hides
+ * misuse, by design (the previous silent fall-through to pbvh_tree_refit
+ * masked a real bug that took years to surface). */
 inline void pbvh_tree_refit_incremental_(pbvh_tree_t *t,
 		const pbvh_dirty_leaf_t *dirty, uint32_t dirty_count) {
 	if (t->internal_count == 0u) {
-		return;
-	}
-	if (dirty == nullptr || dirty_count == 0u ||
-			t->parent_of_internal == nullptr || t->leaf_to_internal == nullptr ||
-			t->touched_bits == nullptr || t->touched_meta_bits == nullptr) {
-		pbvh_tree_refit(t);
 		return;
 	}
 	/* Mark phase: walk ancestors, setting bits in touched_bits AND in the
@@ -1259,6 +1260,55 @@ inline bool pbvh_tree_is_empty(const pbvh_tree_t *t) {
 	return true;
 }
 
+/* Scratch buffers required by pbvh_tree_tick's incremental refit path.
+ *
+ * Owns four arrays that must be wired into a pbvh_tree_t before any tick:
+ *   - parent_of_internal[internal_capacity] — internal-id parent index,
+ *     populated by pbvh_tree_build
+ *   - leaf_to_internal[leaf_capacity]       — leaf-id → enclosing internal,
+ *     populated by pbvh_tree_build
+ *   - touched_bits[ceil(internal_capacity / 64)] — one bit per internal,
+ *     ALL-ZERO on entry to every tick (self-clears during the scan)
+ *   - touched_meta_bits[ceil(touched_words / 64)] — one bit per touched_bits
+ *     word, also ALL-ZERO on entry
+ *
+ * Using `attach()` rather than open-coded resize+ptrw blocks the two
+ * specific footguns that the original setup walked into:
+ *
+ *   1. `LocalVector<uint64_t>::resize()` and `Vector<uint64_t>::resize()`
+ *      both leave trivially-constructible types UNINITIALISED. The tick
+ *      scan phase iterates set bits of touched_bits/touched_meta_bits and
+ *      dereferences `internals[(w<<6)|b]` for each — garbage bits crash
+ *      with SIGSEGV when the bogus index runs past the allocated capacity.
+ *      `attach()` uses resize_initialized() on the two bitmap arrays.
+ *
+ *   2. The sizes are coupled: touched_bits has ceil(internal_capacity/64)
+ *      uint64s, touched_meta_bits has ceil(touched_words/64). Copy-paste
+ *      of that arithmetic at every call site is its own bug class.
+ *
+ * Pair the scratch with the tree for its lifetime; on every rebuild that
+ * grows `internal_capacity`, call `attach()` again. The four arrays remain
+ * caller-owned; this struct simply manages their backing storage. */
+struct PbvhTickScratch {
+	LocalVector<uint32_t> parent_of_internal;
+	LocalVector<uint32_t> leaf_to_internal;
+	LocalVector<uint64_t> touched_bits;
+	LocalVector<uint64_t> touched_meta_bits;
+
+	void attach(pbvh_tree_t *p_tree, uint32_t p_leaf_capacity,
+			uint32_t p_internal_capacity) {
+		parent_of_internal.resize(p_internal_capacity);
+		leaf_to_internal.resize(p_leaf_capacity);
+		const uint32_t touched_words = (p_internal_capacity + 63u) / 64u;
+		touched_bits.resize_initialized(touched_words);
+		touched_meta_bits.resize_initialized((touched_words + 63u) / 64u);
+		p_tree->parent_of_internal = parent_of_internal.ptr();
+		p_tree->leaf_to_internal = leaf_to_internal.ptr();
+		p_tree->touched_bits = touched_bits.ptr();
+		p_tree->touched_meta_bits = touched_meta_bits.ptr();
+	}
+};
+
 /* Phase 2c: per-frame dirty-leaf entry handed to pbvh_tree_tick. old_hilbert
  * is the Hilbert code the leaf had on the previous build/tick; the current
  * code lives in t->nodes[leaf_id].hilbert. Comparing the two, masked by
@@ -1317,6 +1367,24 @@ inline void pbvh_tree_tick(pbvh_tree_t *t,
 		pbvh_tree_build(t);
 		return;
 	}
+	/* (5) Incremental-refit sidecars are mandatory once we know dirty != null
+	 * and there's a built tree to update. There used to be a silent fall-through
+	 * to pbvh_tree_refit when any of these were null, but that masked the
+	 * "I forgot to set up the scratch buffers" failure mode for the entire
+	 * lifetime of the module — the new bench tests are what surfaced it as
+	 * a SIGSEGV in the scan phase. Use PbvhTickScratch to wire all four in
+	 * lockstep with correct sizing and zero-initialised bitmaps. */
+	ERR_FAIL_NULL_MSG(t->parent_of_internal,
+			"pbvh_tree_tick: parent_of_internal must be wired before incremental refit. "
+			"Use PbvhTickScratch::attach() or call pbvh_tree_build instead.");
+	ERR_FAIL_NULL_MSG(t->leaf_to_internal,
+			"pbvh_tree_tick: leaf_to_internal must be wired before incremental refit.");
+	ERR_FAIL_NULL_MSG(t->touched_bits,
+			"pbvh_tree_tick: touched_bits must be wired and zero-initialised before "
+			"incremental refit.");
+	ERR_FAIL_NULL_MSG(t->touched_meta_bits,
+			"pbvh_tree_tick: touched_meta_bits must be wired and zero-initialised before "
+			"incremental refit.");
 	/* Never rebuild in steady-state — any input pattern that forces a full
 	 * O(N) pass is a DoS vector. Instead, treat sorted[]/internals[] topology
 	 * as copy-on-write: structure is fixed at the last build, and every frame
@@ -1375,11 +1443,11 @@ private:
 	LocalVector<void *> userdata; // parallel to node_storage
 	// Phase 2c incremental-refit sidecars. Allocated lazily via _ensure_capacity
 	// so pbvh_tree_tick can do O(K + n_touched) ancestor refits rather than
-	// the O(internal_count) bottom-up pass.
-	LocalVector<uint32_t> parent_of_internal_storage;
-	LocalVector<uint32_t> leaf_to_internal_storage;
-	LocalVector<uint64_t> touched_bits_storage;
-	LocalVector<uint64_t> touched_meta_bits_storage;
+	// the O(internal_count) bottom-up pass. Owned by PbvhTickScratch so the
+	// sizing arithmetic and zero-initialisation of the bitmaps stay in one
+	// place — see the PbvhTickScratch docstring above for the trap this
+	// closes (resize() leaves uint64 garbage that crashes the scan phase).
+	PbvhTickScratch tick_scratch;
 	uint32_t index_slot = 0;
 	bool dirty = false; // true if insert/update/remove happened since last build
 
@@ -1396,20 +1464,16 @@ private:
 		sorted_storage.resize(new_cap);
 		internal_storage.resize(internal_cap);
 		userdata.resize(new_cap);
-		parent_of_internal_storage.resize(internal_cap);
-		leaf_to_internal_storage.resize(new_cap);
-		const uint32_t touched_words = (internal_cap + 63u) / 64u;
-		touched_bits_storage.resize(touched_words);
-		touched_meta_bits_storage.resize((touched_words + 63u) / 64u);
 		tree.nodes = node_storage.ptr();
 		tree.sorted = sorted_storage.ptr();
 		tree.internals = internal_storage.ptr();
 		tree.capacity = new_cap;
 		tree.internal_capacity = internal_cap;
-		tree.parent_of_internal = parent_of_internal_storage.ptr();
-		tree.leaf_to_internal = leaf_to_internal_storage.ptr();
-		tree.touched_bits = touched_bits_storage.ptr();
-		tree.touched_meta_bits = touched_meta_bits_storage.ptr();
+		// Sizes parent_of_internal, leaf_to_internal, touched_bits and
+		// touched_meta_bits correctly relative to internal_cap; zero-fills the
+		// two bitmaps (resize_initialized). Wires all four pointer fields on
+		// `tree` in lockstep.
+		tick_scratch.attach(&tree, new_cap, internal_cap);
 	}
 
 	// Scale by 1e6 (micrometres) to preserve sub-meter precision; keep the
