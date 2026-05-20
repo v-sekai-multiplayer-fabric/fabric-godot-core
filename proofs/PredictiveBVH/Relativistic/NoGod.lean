@@ -86,7 +86,7 @@ theorem VClock.le_trans {n : Nat} {a b c : VClock n}
   fun i => Nat.le_trans (hab i) (hbc i)
 
 theorem VClock.lt_irrefl {n : Nat} (vc : VClock n) : ¬ VClock.lt vc vc :=
-  fun ⟨_, i, hi⟩ => Nat.lt_irrefl _ hi
+  fun ⟨_, _i, hi⟩ => Nat.lt_irrefl _ hi
 
 theorem VClock.lt_trans {n : Nat} {a b c : VClock n}
     (hab : VClock.lt a b) (hbc : VClock.lt b c) : VClock.lt a c :=
@@ -575,8 +575,8 @@ theorem HLC.toVClock_lt_of_pt_lt (maxL : Nat) (a b : HLC)
     hilbertSpanWidth (zonePrefixDepth zoneCount)) satisfies DisjointRanges.
     Proved by contradiction: if z1 ≠ z2 then one interval strictly precedes the
     other (via Nat.mul_le_mul_right + omega); both containing h is impossible. -/
-theorem uniform_partition_disjoint (n zoneCount : Nat)
-    (hpos : 0 < zoneCount) (depth : Nat) (cell_w : Nat) (hcw : 0 < cell_w)
+theorem uniform_partition_disjoint (_n zoneCount : Nat)
+    (_hpos : 0 < zoneCount) (_depth : Nat) (cell_w : Nat) (hcw : 0 < cell_w)
     (ranges : List ZoneRange)
     (hunif : ranges = (List.range zoneCount).map (fun z =>
         { zoneId := z, lo := z * cell_w, hi := z * cell_w + cell_w - 1 })) :
@@ -611,7 +611,7 @@ theorem uniform_partition_disjoint (n zoneCount : Nat)
     `node_view_from_zone_count` because zoneId = position in 0..zoneCount-1
     and length = zoneCount. -/
 theorem geometric_authority_zoneId_lt_length {n : Nat}
-    (view : NodeView n) (h : Nat) (hlen : 0 < view.ranges.length)
+    (view : NodeView n) (h : Nat) (_hlen : 0 < view.ranges.length)
     (hvalid : ∀ r ∈ view.ranges, r.zoneId < view.ranges.length)
     {r : ZoneRange} (hauth : geometricAuthority view h = some r) :
     r.zoneId < view.ranges.length := by
