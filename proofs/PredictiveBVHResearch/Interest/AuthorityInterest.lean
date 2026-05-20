@@ -22,7 +22,7 @@ open PredictiveBVH.Relativistic
 --   Tracked via EntityMigInfo.zone + MigrationState.
 --
 -- Interest (area of interest / AOI replica):
---   A read-only ghost copy held by a neighbouring zone.
+--   A read-only ghost copy held by a neighboring zone.
 --   Used to serve CH_INTEREST snapshots to players near the zone boundary
 --   without paying the cost of an authority transfer.
 --   Ghost count is bounded separately from authority count (InterestCapacity).

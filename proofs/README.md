@@ -83,7 +83,7 @@ PredictiveBVH/
 
 ## Units
 
-The public physical units for this system are **Hz, seconds, and metres**. Internally, the exact-arithmetic core stores integer coordinates in **micrometres** and integer velocities in μm per simulation step; this is an implementation detail of the Lean library and is converted at the C++ boundary by `r128_from_real_um` and `r128_to_real_m`.
+The public physical units for this system are **Hz, seconds, and meters**. Internally, the exact-arithmetic core stores integer coordinates in **micrometres** and integer velocities in μm per simulation step; this is an implementation detail of the Lean library and is converted at the C++ boundary by `r128_from_real_um` and `r128_to_real_m`.
 
 - `vMaxPhysical` = **10 m/s** — normal entity velocity cap
 - `currentFunnelPeak` = **60 m/s** — C7 adversarial rip-current spike cap

@@ -216,7 +216,7 @@ theorem receive_subsumes_sender {n : Nat} (view : NodeView n) (msg : GossipMsg n
     are disjoint, then the post-receive view's ranges are also disjoint.
     This is the core "no god" safety invariant: no coordinator is needed because
     the gossip gating (causal dominance) guarantees the adopted map is from a node
-    that itself maintained disjointness.
+    that itself maintained disjointedness.
     Red → green: proved by case analysis on the if-branch. -/
 theorem receive_preserves_disjoint {n : Nat} (view : NodeView n) (msg : GossipMsg n)
     (hview : DisjointRanges view.ranges)

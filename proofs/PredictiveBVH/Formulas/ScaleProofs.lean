@@ -101,12 +101,12 @@ def printScaleComparison : IO Unit := do
   IO.println s!"  Morton O(N+k) typical        max N ≈ {nMorton}   ({nMorton / (max nNaive 1)}×)"
 
 -- ============================================================================
--- MMOG TIER BUDGET UTILISATION
+-- MMOG TIER BUDGET UTILIZATION
 -- ============================================================================
 
 def printMmogBudgetUtilisation : IO Unit := do
   let budget := serverBudget
-  IO.println "── MMOG player scale: Morton O(N+k) budget utilisation ──"
+  IO.println "── MMOG player scale: Morton O(N+k) budget utilization ──"
   IO.println "                  tier       N     mortonCost  budget%"
   let row (name : String) (n : Nat) : IO Unit := do
     let mc := mortonCostN_typical n
@@ -118,4 +118,3 @@ def printMmogBudgetUtilisation : IO Unit := do
   row "VRChat+ (10×)"   800
   row "Morton ceiling"  (maxN mortonCostN_typical budget)
   IO.println s!"  (server budget = {budget} pair-checks/tick, calibrated to Squad/HLL N=100)"
-

@@ -125,7 +125,7 @@ inductive XRControllerSignal
   | PoseChanged    (hand : Hand) (valid : Bool)
   deriving Repr
 
--- ── xr_action_host.gd behaviour model ───────────────────────────────────────
+-- ── xr_action_host.gd behavior model ───────────────────────────────────────
 -- xr_action_host.gd connects to XRController3D signals and calls:
 --   fire_pose_changed(pose)   — on PoseChanged
 --   fire_button_event(event)  — on ButtonPressed / ButtonReleased
@@ -150,7 +150,7 @@ theorem xr_signal_total (sig : XRControllerSignal) :
     xrSignalToLassoEvent sig = none ∨ ∃ e, xrSignalToLassoEvent sig = some e := by
   cases sig <;> simp [xrSignalToLassoEvent] <;> try { right; exact ⟨_, rfl⟩ }
 
--- ── desktop_mouse_action.gd behaviour model ──────────────────────────────────
+-- ── desktop_mouse_action.gd behavior model ──────────────────────────────────
 -- desktop_mouse_action._input receives Godot InputEvents.
 -- Only two relevant types:
 --   InputEventMouseMotion → fire_pose_changed (no button dispatch)
@@ -185,7 +185,7 @@ theorem dma_button_fires_iff_mouse_button_press (ev : GodotInputEvent) :
   | Other                   => simp [dmaInputToLassoEvents]
 
 -- ── osascript accessibility gap (axiom) ─────────────────────────────────────
--- macOS accessibility API (AXUIElement / osascript `click at {}`) synthesises
+-- macOS accessibility API (AXUIElement / osascript `click at {}`) synthesizes
 -- a CGEventType.mouseMoved event — NOT mouseDown + mouseUp.
 -- Godot's DisplayServerMacOS receives CGEvents via NSApplication event loop.
 -- MouseMoved → InputEventMouseMotion only; no InputEventMouseButton generated.
@@ -195,7 +195,7 @@ theorem dma_button_fires_iff_mouse_button_press (ev : GodotInputEvent) :
 --   "InputEventMouseButton does NOT reach _input() via osascript accessibility
 --    clicks. Raw CGEvent (CGEvent.post(.cghidEventTap)) is required."
 --
--- This is an axiom (OS behaviour, not provable in Lean without FFI):
+-- This is an axiom (OS behavior, not provable in Lean without FFI):
 
 axiom osascript_click_is_motion :
     ∀ (screen_x screen_y : Int),
@@ -245,7 +245,7 @@ theorem desktop_click_produces_press (x y : Int) :
 /-- PoseUpdate is required before ButtonPress on both paths. -/
 theorem pose_precedes_button_xr :
     -- XR: PoseChanged must have fired (xr_action_host connects pose signal first)
-    -- Modelled: PoseUpdate appears in the event stream before ButtonPress
+    -- Modeled: PoseUpdate appears in the event stream before ButtonPress
     True := trivial  -- structural guarantee from XRController3D signal ordering
 
 theorem pose_precedes_button_dma (x y : Int) (btn : Nat) :
@@ -289,7 +289,7 @@ theorem trigger_both_hands :
 -- When exactly one POI is registered, the lasso always returns it regardless
 -- of the source transform (aim direction is irrelevant).
 --
--- This explains observed behaviour: with only the "Press Me" button registered,
+-- This explains observed behavior: with only the "Press Me" button registered,
 -- the lasso selects it no matter where the XR controller points.
 --
 -- Proof sketch:

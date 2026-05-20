@@ -32,4 +32,3 @@ lean_lib «PredictiveBVHResearch» where
 lean_exe «bvh-codegen» where
   root := `PredictiveBVH.Codegen.CodeGen
   supportInterpreter := true
-

@@ -228,7 +228,7 @@ def g221_c7 : C7_SegmentBoundaryViolation :=
 theorem c7_mitigation_sound (vSeg delta : Nat) : (vSeg - vSeg) * delta = 0 := by
   simp
 
--- ── Scene-diameter delta cap (C5 generalisation applied in sim) ──────────────
+-- ── Scene-diameter delta cap (C5 generalization applied in sim) ──────────────
 
 /-- Given the maximum observed velocity in the scene, the safe rebuild interval
     is capped so that ghost bounds never inflate beyond the scene diameter.

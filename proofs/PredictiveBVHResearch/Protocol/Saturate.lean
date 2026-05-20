@@ -63,7 +63,7 @@ def SaturateState.getRootClass (s : SaturateState) : Option EClassId :=
 --
 -- For each 2-way split node (.horz, .vert, .depth), insert the two
 -- alternative axis splits into the same EClass.  The E-graph keeps the
--- cheapest.  This is the BVH analogue of AV1's partition mode search:
+-- cheapest.  This is the BVH analog of AV1's partition mode search:
 -- the encoder tries horizontal, vertical, and square splits at each
 -- superblock and picks the best RDO cost.
 
