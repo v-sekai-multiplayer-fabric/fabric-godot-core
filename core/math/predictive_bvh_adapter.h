@@ -567,7 +567,7 @@ inline pbvh_internal_id_t pbvh_build_internal_with_parent_(pbvh_tree_t *t,
 		return PBVH_NULL_NODE;
 	}
 	pbvh_internal_id_t id = t->internal_count++;
-	if (t->parent_of_internal != NULL) {
+	if (t->parent_of_internal != nullptr) {
 		t->parent_of_internal[id] = parent;
 	}
 	pbvh_internal_t *n = &t->internals[id];
@@ -625,7 +625,7 @@ inline pbvh_internal_id_t pbvh_build_internal_(pbvh_tree_t *t, uint32_t lo, uint
  * sorted[] whose Hilbert prefix at bucket_bits equals b. Runs in O(N + B)
  * where B = 1 << bucket_bits. */
 inline void pbvh_build_bucket_dir_(pbvh_tree_t *t) {
-	if (t->bucket_dir == NULL || t->bucket_bits == 0u || t->bucket_bits > 30u) {
+	if (t->bucket_dir == nullptr || t->bucket_bits == 0u || t->bucket_bits > 30u) {
 		return;
 	}
 	const uint32_t B = 1u << t->bucket_bits;
@@ -721,9 +721,9 @@ inline void pbvh_tree_refit_incremental_(pbvh_tree_t *t,
 	if (t->internal_count == 0u) {
 		return;
 	}
-	if (dirty == NULL || dirty_count == 0u ||
-			t->parent_of_internal == NULL || t->leaf_to_internal == NULL ||
-			t->touched_bits == NULL || t->touched_meta_bits == NULL) {
+	if (dirty == nullptr || dirty_count == 0u ||
+			t->parent_of_internal == nullptr || t->leaf_to_internal == nullptr ||
+			t->touched_bits == nullptr || t->touched_meta_bits == nullptr) {
 		pbvh_tree_refit(t);
 		return;
 	}
@@ -841,7 +841,7 @@ inline void pbvh_tree_build(pbvh_tree_t *t) {
 		}
 	}
 	t->sorted_count = k;
-	if (k > 1u && t->internals != NULL && t->internal_capacity >= k) {
+	if (k > 1u && t->internals != nullptr && t->internal_capacity >= k) {
 		pbvh_node_id_t *scratch = (pbvh_node_id_t *)t->internals;
 		pbvh_node_id_t *src = t->sorted;
 		pbvh_node_id_t *dst = scratch;
@@ -886,13 +886,13 @@ inline void pbvh_tree_build(pbvh_tree_t *t) {
 	}
 	t->internal_count = 0u;
 	t->internal_root = PBVH_NULL_NODE;
-	if (t->internals != NULL && t->internal_capacity > 0u && k > 0u) {
+	if (t->internals != nullptr && t->internal_capacity > 0u && k > 0u) {
 		t->internal_root = pbvh_build_internal_(t, 0u, k);
 	}
 	/* Auto-tune bucket_bits from leaf count. Caller pre-allocated bucket_dir
 	 * via pbvh_bucket_dir_size(N); this overwrite keeps per-query scan cost
 	 * bounded by PBVH_BUCKET_K_TARGET at any N. */
-	if (t->bucket_dir != NULL) {
+	if (t->bucket_dir != nullptr) {
 		t->bucket_bits = pbvh_bucket_bits_for(k);
 	}
 	pbvh_build_bucket_dir_(t);
@@ -900,7 +900,7 @@ inline void pbvh_tree_build(pbvh_tree_t *t) {
 	 * above. Any leaf id inside a leaf-range internal's [offset, offset+span)
 	 * window has that internal as its immediate enclosing ancestor. One pass
 	 * over leaf-range internals, total O(N) writes. */
-	if (t->leaf_to_internal != NULL) {
+	if (t->leaf_to_internal != nullptr) {
 		for (uint32_t i = 0u; i < t->internal_count; i++) {
 			pbvh_internal_t *n = &t->internals[i];
 			if (n->left != PBVH_NULL_NODE || n->right != PBVH_NULL_NODE) {
@@ -989,7 +989,7 @@ inline void pbvh_tree_aabb_query_n(pbvh_tree_t *t, const Aabb *query,
 inline void pbvh_tree_aabb_query_b(pbvh_tree_t *t, const Aabb *query,
 		uint32_t query_hilbert,
 		int (*cb)(pbvh_eclass_id_t, void *), void *ud) {
-	if (t->bucket_dir == NULL || t->bucket_bits == 0u) {
+	if (t->bucket_dir == nullptr || t->bucket_bits == 0u) {
 		pbvh_tree_aabb_query_n(t, query, cb, ud);
 		return;
 	}
@@ -1297,11 +1297,11 @@ inline bool pbvh_tree_is_empty(const pbvh_tree_t *t) {
 inline void pbvh_tree_tick(pbvh_tree_t *t,
 		const pbvh_dirty_leaf_t *dirty, uint32_t dirty_count) {
 	/* (2) Defensive NULL guard. */
-	if (t == NULL || t->nodes == NULL) {
+	if (t == nullptr || t->nodes == nullptr) {
 		return;
 	}
 	/* (1) Trivial fallback. */
-	if (dirty_count == 0u || dirty == NULL || t->bucket_bits == 0u ||
+	if (dirty_count == 0u || dirty == nullptr || t->bucket_bits == 0u ||
 			t->bucket_bits > 30u) {
 		pbvh_tree_build(t);
 		return;
@@ -1342,7 +1342,7 @@ inline void pbvh_tree_tick(pbvh_tree_t *t,
  * Phase 2c fast path call pbvh_tree_tick directly with their dirty list. */
 inline void pbvh_tree_optimize_incremental(pbvh_tree_t *t, int passes) {
 	(void)passes;
-	pbvh_tree_tick(t, NULL, 0u);
+	pbvh_tree_tick(t, nullptr, 0u);
 }
 
 /* Opaque uint32 tag for consumers that multiplex multiple trees (e.g.
