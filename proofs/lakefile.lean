@@ -19,6 +19,14 @@ lean_lib LassoMapping where
 lean_lib LassoInputDelivery where
   roots := #[`LassoInputDelivery]
 
+-- Research-tier proofs (Spatial.{Partition, Tree, RefitIncremental},
+-- Protocol.{Build, Saturate, Fabric}, Interest.AuthorityInterest,
+-- Relativistic.ReBAC). Absorbed from former
+-- multiplayer-fabric-predictive-bvh-research subrepo. These import the
+-- production `PredictiveBVH.*` modules directly from this package.
+lean_lib «PredictiveBVHResearch» where
+  roots := #[`PredictiveBVHResearch]
+
 -- AmoLean C code generator: writes thirdparty/predictive_bvh/predictive_bvh.h
 @[default_target]
 lean_exe «bvh-codegen» where
