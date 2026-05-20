@@ -1568,7 +1568,83 @@ theorem aabbQueryNGo_visits_overlapping_leaf (t : PbvhTree) (q : BoundingBox)
       target - i = m → i ≤ target →
       (∀ k, i ≤ k → k ≤ target →
         aabbOverlapsDec (t.internals[k]!).bounds q = true) →
-      l.eclass ∈ aabbQueryNGo t q i acc := by sorry
+      l.eclass ∈ aabbQueryNGo t q i acc := by
+  intro m
+  induction m using Nat.strongRecOn with
+  | _ m ih =>
+    intro i acc hm hi_le h_path
+    have hi_lt : i < t.internals.size :=
+      Nat.lt_of_le_of_lt hi_le htarget
+    have hov_i : aabbOverlapsDec (t.internals[i]!).bounds q = true :=
+      h_path i (Nat.le_refl _) hi_le
+    by_cases hi_eq : i = target
+    · -- Base case: arrived at target, use local leaf-block completeness.
+      subst hi_eq
+      exact aabbQueryNGo_leaf_block_complete t q i hi_lt
+        ⟨by rw [h_target_left]; rfl, by rw [h_target_right]; rfl⟩
+        hov_i jw hjw l hl halive hl_ov acc
+    · -- Step case: i < target; advance by exactly one.
+      have hi_lt_target : i < target :=
+        Nat.lt_of_le_of_ne hi_le hi_eq
+      have hm1 : target - (i + 1) < m := by omega
+      have hi1_le : i + 1 ≤ target := by omega
+      have h_path1 : ∀ k, i + 1 ≤ k → k ≤ target →
+          aabbOverlapsDec (t.internals[k]!).bounds q = true :=
+        fun k hk1 hk2 => h_path k (by omega) hk2
+      rw [aabbQueryNGo]
+      dsimp only
+      split
+      · rename_i h; omega
+      · rename_i hlt'
+        set n := t.internals[i]! with hn_def
+        -- The `next` in aabbQueryNGo
+        set next : Nat :=
+          if _ : i < n.skip ∧ n.skip ≤ t.internals.size then n.skip
+          else i + 1 with hnext_def
+        -- Split on the leaf-block check (4.26 picks this first).
+        split
+        · rename_i hleaf_cond
+          -- Leaf-block at i: next = skip[i] = i + 1.
+          have hleaf_split : n.left.isNone = true ∧ n.right.isNone = true := by
+            rw [← Bool.and_eq_true]; exact hleaf_cond
+          have hleft_none : n.left = none := by
+            cases hx : n.left with
+            | none => rfl
+            | some v =>
+              have : n.left.isNone = false := by rw [hx]; rfl
+              rw [this] at hleaf_split
+              exact absurd hleaf_split.1 (by decide)
+          have hright_none : n.right = none := by
+            cases hx : n.right with
+            | none => rfl
+            | some v =>
+              have : n.right.isNone = false := by rw [hx]; rfl
+              rw [this] at hleaf_split
+              exact absurd hleaf_split.2 (by decide)
+          have hskip_eq : n.skip = i + 1 := by
+            show (t.internals[i]!).skip = i + 1
+            exact h_leaf_skip i hi_lt hleft_none hright_none
+          have hmono := h_skip_mono i hi_lt
+          have hmono_cond : i < n.skip ∧ n.skip ≤ t.internals.size := by
+            show i < (t.internals[i]!).skip ∧
+                 (t.internals[i]!).skip ≤ t.internals.size
+            exact hmono
+          have hnext_val : next = i + 1 := by
+            rw [hnext_def]; split
+            · exact hskip_eq
+            · rename_i hne; exact absurd hmono_cond hne
+          set acc' := (List.range n.span).foldl (fun acc j =>
+            let lid := t.sorted[n.offset + j]!
+            match t.leaves[lid]? with
+            | some l =>
+              if l.alive && aabbOverlapsDec l.bounds q then
+                l.eclass :: acc else acc
+            | none => acc) acc with hacc'
+          rw [hnext_val]
+          exact ih _ hm1 (i + 1) acc' rfl hi1_le h_path1
+        · rename_i _hnonleaf
+          -- Non-leaf at i: algorithm advances to i + 1 directly.
+          exact ih _ hm1 (i + 1) acc rfl hi1_le h_path1
 theorem aabbQueryN_complete_from_invariants
     (t : PbvhTree) (q : BoundingBox)
     (h_leaf_skip : ∀ j, j < t.internals.size →
