@@ -1424,7 +1424,53 @@ theorem aabbQueryNGo_leaf_block_complete (t : PbvhTree) (q : BoundingBox)
     (halive : l.alive = true)
     (hl_ov : aabbOverlapsDec l.bounds q = true)
     (acc : List EClassId) :
-    l.eclass ∈ aabbQueryNGo t q i acc := by sorry
+    l.eclass ∈ aabbQueryNGo t q i acc := by
+  rw [aabbQueryNGo]
+  dsimp only
+  split
+  · rename_i h; omega
+  · rename_i hlt
+    set n := t.internals[i]! with hn_def
+    set next : Nat :=
+      if _ : i < n.skip ∧ n.skip ≤ t.internals.size then n.skip else i + 1
+      with hnext_def
+    have hnext_gt : next > i := by
+      rw [hnext_def]
+      by_cases h : i < n.skip ∧ n.skip ≤ t.internals.size
+      · simp [h]
+      · simp [h]
+    have hnext_le : next ≤ t.internals.size := by
+      rw [hnext_def]
+      by_cases h : i < n.skip ∧ n.skip ≤ t.internals.size
+      · simp [h]
+      · simp [h]; omega
+    have hnext_measure : t.internals.size - next < t.internals.size - i := by omega
+    have hchild_true : (n.left.isNone && n.right.isNone) = true := by
+      simp [hleaf.1, hleaf.2]
+    split
+    · -- This will be the `(n.left.isNone && n.right.isNone) = true` branch
+      -- in 4.26's reordering. Or the outer no-overlap branch in original order.
+      rename_i hcase
+      -- Case-discriminate based on which form the hypothesis takes.
+      first
+      | (-- 4.26 reorder: hcase is leaf-block predicate; outer if was simplified
+         have hemit := aabbQueryN_leaf_fold_emits t q n.offset n.span acc
+           j hj l hl halive hl_ov
+         exact aabbQueryNGo_preserves_membership t q _ next _ l.eclass rfl hemit)
+      | (-- Original order: hcase is ¬overlap (impossible since hov)
+         exfalso; exact absurd hov (by simp [hcase]))
+    · rename_i hcase
+      -- 4.26 reorder: hcase is leaf-block predicate = false (contradiction)
+      first
+      | (exact absurd hchild_true hcase)
+      | (-- Original order: nested split needed
+         split
+         · rename_i _
+           have hemit := aabbQueryN_leaf_fold_emits t q n.offset n.span acc
+             j hj l hl halive hl_ov
+           exact aabbQueryNGo_preserves_membership t q _ next _ l.eclass rfl hemit
+         · rename_i hchild
+           exact absurd hchild_true hchild)
 theorem buildSubtree_root_skip_monotone (leaves : Array PbvhLeaf)
     (sorted : Array LeafId) (internals : Array PbvhInternal) (lo hi : Nat) :
     let res := buildSubtree leaves sorted internals lo hi
