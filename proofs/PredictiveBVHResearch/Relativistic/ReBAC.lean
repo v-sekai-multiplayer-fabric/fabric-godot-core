@@ -97,6 +97,40 @@ def rebacCheck {n : Nat} (claim : PlayerClaim n) (action : Action) : Bool :=
 -- 3. FOLD MONOTONICITY  (load-bearing for the rank theorems below)
 -- ============================================================================
 
+/-- After one fold step, the result is `some s` with `s.rank ≥ r.rank`
+    where `r` is the element just consumed. -/
+private theorem maxRelStep_ge_self (acc : Option Relation) (r : Relation) :
+    ∃ s, maxRelStep acc r = some s ∧ s.rank ≥ r.rank := by
+  unfold maxRelStep
+  cases acc with
+  | none => exact ⟨r, rfl, Nat.le_refl _⟩
+  | some a =>
+    by_cases hrk : r.rank ≥ a.rank
+    · exact ⟨r, by simp [hrk], Nat.le_refl _⟩
+    · refine ⟨a, by simp [hrk], ?_⟩
+      exact Nat.le_of_lt (Nat.lt_of_not_ge hrk)
+
+/-- One fold step preserves an existing lower bound on the accumulator. -/
+private theorem maxRelStep_preserves (acc : Option Relation) (r : Relation) (s : Relation)
+    (h : ∃ a, acc = some a ∧ a.rank ≥ s.rank) :
+    ∃ b, maxRelStep acc r = some b ∧ b.rank ≥ s.rank := by
+  obtain ⟨a, ha, hge⟩ := h
+  unfold maxRelStep
+  rw [ha]
+  by_cases hrk : r.rank ≥ a.rank
+  · exact ⟨r, by simp [hrk], Nat.le_trans hge hrk⟩
+  · exact ⟨a, by simp [hrk], hge⟩
+
+/-- A foldl preserves an existing lower bound on the accumulator. -/
+private theorem foldl_maxRelStep_preserves (l : List Relation) (acc : Option Relation) (s : Relation)
+    (h : ∃ a, acc = some a ∧ a.rank ≥ s.rank) :
+    ∃ b, l.foldl maxRelStep acc = some b ∧ b.rank ≥ s.rank := by
+  induction l generalizing acc with
+  | nil => exact h
+  | cons x xs ih =>
+    show ∃ b, xs.foldl maxRelStep (maxRelStep acc x) = some b ∧ b.rank ≥ s.rank
+    exact ih (maxRelStep acc x) (maxRelStep_preserves acc x s h)
+
 /-- Core monotonicity lemma for the fold:
     if `r` appears in `l` or the accumulator already holds a relation of rank ≥ r.rank,
     then the fold result has rank ≥ r.rank. -/
@@ -105,39 +139,20 @@ private theorem foldl_maxRelStep_ge (l : List Relation) (acc : Option Relation) 
     ∃ s, l.foldl maxRelStep acc = some s ∧ s.rank ≥ r.rank := by
   induction l generalizing acc with
   | nil =>
-    simp only [List.foldl]
-    rcases h with h | ⟨a, ha, he⟩
-    · exact absurd h (List.not_mem_nil _)
-    · exact ⟨a, ha, he⟩
-  | cons hd tl ih =>
-    simp only [List.foldl]
-    rcases h with h | ⟨a, ha, he⟩
-    · simp only [List.mem_cons] at h
-      rcases h with rfl | hmem
-      · -- r = hd: the new acc after this step has rank ≥ r.rank
-        apply ih
-        right
-        unfold maxRelStep
-        cases acc with
-        | none   => exact ⟨hd, rfl, le_refl _⟩
-        | some a =>
-          by_cases hrk : hd.rank ≥ a.rank
-          · exact ⟨hd, by simp [hrk], le_refl _⟩
-          · push_neg at hrk
-            exact ⟨a, by simp [Nat.not_le.mpr hrk], Nat.le_of_lt hrk⟩
-      · -- r ∈ tl: delegate to IH
-        apply ih; left; exact hmem
-    · -- acc already good: pass it forward as the new accumulator after the step
-      apply ih
-      right
-      unfold maxRelStep
-      cases acc with
-      | none   => exact ⟨hd, rfl, Nat.zero_le _⟩  -- shouldn't happen but fine
-      | some a =>
-        by_cases hrk : hd.rank ≥ a.rank
-        · exact ⟨hd, by simp [hrk], Nat.le_trans he hrk⟩
-        · push_neg at hrk
-          exact ⟨a, by simp [Nat.not_le.mpr hrk], he⟩
+    rcases h with hmem | ⟨a, ha, hge⟩
+    · cases hmem
+    · exact ⟨a, ha, hge⟩
+  | cons x xs ih =>
+    show ∃ s, xs.foldl maxRelStep (maxRelStep acc x) = some s ∧ s.rank ≥ r.rank
+    rcases h with hmem | hge
+    · rcases List.mem_cons.mp hmem with hrx | hrxs
+      · -- r = x: stepping with x gives an accumulator of rank ≥ r.rank
+        subst hrx
+        exact foldl_maxRelStep_preserves xs (maxRelStep acc r) r (maxRelStep_ge_self acc r)
+      · -- r ∈ xs: forward to IH with the stepped accumulator
+        exact ih _ (Or.inl hrxs)
+    · -- acc was already good: step preserves it, then foldl preserves it
+      exact foldl_maxRelStep_preserves (x :: xs) acc r hge
 
 /-- If `r ∈ c.relations`, then `maxRelation` returns some s with rank ≥ r.rank. -/
 private theorem maxRelation_ge {n : Nat} (c : PlayerClaim n) (r : Relation)
@@ -158,32 +173,38 @@ theorem rebac_empty_denied {n : Nat} (pid : Nat) (vc : VClock n) (a : Action) :
 theorem rebac_public_observe {n : Nat} (c : PlayerClaim n)
     (h : .«public» ∈ c.relations) :
     rebacCheck c .observe = true := by
-  simp only [rebacCheck, Action.minRelation, Relation.rank]
-  rcases maxRelation_ge c .«public» h with ⟨s, hs, he⟩
-  simp only [hs]
+  unfold rebacCheck
+  rcases maxRelation_ge c .«public» h with ⟨s, hs, hge⟩
+  rw [hs]
+  simp only [Action.minRelation, Relation.rank, decide_eq_true_eq]
   exact Nat.zero_le _
 
 /-- owner can perform any action. -/
 theorem rebac_owner_all {n : Nat} (c : PlayerClaim n)
     (h : .owner ∈ c.relations) (a : Action) :
     rebacCheck c a = true := by
-  simp only [rebacCheck]
-  rcases maxRelation_ge c .owner h with ⟨s, hs, he⟩
-  simp only [hs]
-  have hmin : a.minRelation.rank ≤ 4 := by cases a <;> simp [Action.minRelation, Relation.rank]
-  simpa [Relation.rank] using Nat.le_trans hmin he
+  unfold rebacCheck
+  rcases maxRelation_ge c .owner h with ⟨s, hs, hge⟩
+  rw [hs]
+  simp only [decide_eq_true_eq]
+  have hmin : a.minRelation.rank ≤ 4 := by
+    cases a <;> simp [Action.minRelation, Relation.rank]
+  simpa [Relation.rank] using Nat.le_trans hmin hge
 
 /-- rebacCheck is monotone: passing a more permissive action implies passing a less permissive one. -/
 theorem rebac_monotone {n : Nat} (c : PlayerClaim n) (a1 a2 : Action)
     (hle : a2.minRelation.rank ≤ a1.minRelation.rank)
     (h : rebacCheck c a1 = true) :
     rebacCheck c a2 = true := by
-  simp only [rebacCheck] at h ⊢
+  unfold rebacCheck at h ⊢
   cases hm : c.maxRelation with
-  | none   => simp [hm] at h
+  | none =>
+    rw [hm] at h
+    exact h
   | some r =>
-    simp only [hm] at h ⊢
-    omega
+    rw [hm] at h
+    simp only [decide_eq_true_eq] at h ⊢
+    exact Nat.le_trans hle h
 
 -- ============================================================================
 -- 5. AUTHORITY LOCALITY
@@ -200,8 +221,8 @@ def isAuthority {n : Nat} (view : NodeView n) (h : Nat) : Bool :=
     Any rebacCheck for .interact or .modify MUST be evaluated here; interest zones
     that receive such a request must forward it to the authority zone. -/
 theorem rebac_requires_authority_for_mutation {n : Nat} (view : NodeView n)
-    (rep : RelReplica n) (claim : PlayerClaim n)
-    (hauth : isAuthority view rep.hilbertCode = true) :
+    (rep : RelReplica n) (_claim : PlayerClaim n)
+    (_hauth : isAuthority view rep.hilbertCode = true) :
     -- Authority zone: may evaluate rebacCheck for any action.
     -- Proof: the authority zone is the single owner; no coordinator needed.
     True :=
@@ -211,7 +232,7 @@ theorem rebac_requires_authority_for_mutation {n : Nat} (view : NodeView n)
     the public relation holds by default, so no forwarding is needed for reads. -/
 theorem interest_can_answer_observe {n : Nat} (view : NodeView n)
     (rep : RelReplica n) (claim : PlayerClaim n)
-    (hnotauth : isAuthority view rep.hilbertCode = false)
+    (_hnotauth : isAuthority view rep.hilbertCode = false)
     (hpub : .«public» ∈ claim.relations) :
     rebacCheck claim .observe = true :=
   rebac_public_observe claim hpub
@@ -222,8 +243,8 @@ theorem interest_can_answer_observe {n : Nat} (view : NodeView n)
     or .modify is not the binding answer; only the authority zone's answer counts. -/
 theorem non_authority_cannot_bind_mutation {n : Nat} (view : NodeView n)
     (rep : RelReplica n)
-    (hnotauth : isAuthority view rep.hilbertCode = false)
-    (action : Action) (hact : action = .interact ∨ action = .modify) :
+    (_hnotauth : isAuthority view rep.hilbertCode = false)
+    (action : Action) (_hact : action = .interact ∨ action = .modify) :
     -- The result of rebacCheck here is NOT binding; forward to authority zone.
     -- Modeled as: the non-authority evaluation is irrelevant (trivially true).
     True :=
