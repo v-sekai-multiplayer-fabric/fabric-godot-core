@@ -114,12 +114,12 @@ private theorem maxRelStep_ge_self (acc : Option Relation) (r : Relation) :
 private theorem maxRelStep_preserves (acc : Option Relation) (r : Relation) (s : Relation)
     (h : ∃ a, acc = some a ∧ a.rank ≥ s.rank) :
     ∃ b, maxRelStep acc r = some b ∧ b.rank ≥ s.rank := by
-  obtain ⟨a, ha, hge⟩ := h
+  obtain ⟨a, ha, he⟩ := h
   unfold maxRelStep
   rw [ha]
   by_cases hrk : r.rank ≥ a.rank
-  · exact ⟨r, by simp [hrk], Nat.le_trans hge hrk⟩
-  · exact ⟨a, by simp [hrk], hge⟩
+  · exact ⟨r, by simp [hrk], Nat.le_trans he hrk⟩
+  · exact ⟨a, by simp [hrk], he⟩
 
 /-- A foldl preserves an existing lower bound on the accumulator. -/
 private theorem foldl_maxRelStep_preserves (l : List Relation) (acc : Option Relation) (s : Relation)
@@ -139,12 +139,12 @@ private theorem foldl_maxRelStep_ge (l : List Relation) (acc : Option Relation) 
     ∃ s, l.foldl maxRelStep acc = some s ∧ s.rank ≥ r.rank := by
   induction l generalizing acc with
   | nil =>
-    rcases h with hmem | ⟨a, ha, hge⟩
+    rcases h with hmem | ⟨a, ha, he⟩
     · cases hmem
-    · exact ⟨a, ha, hge⟩
+    · exact ⟨a, ha, he⟩
   | cons x xs ih =>
     show ∃ s, xs.foldl maxRelStep (maxRelStep acc x) = some s ∧ s.rank ≥ r.rank
-    rcases h with hmem | hge
+    rcases h with hmem | he
     · rcases List.mem_cons.mp hmem with hrx | hrxs
       · -- r = x: stepping with x gives an accumulator of rank ≥ r.rank
         subst hrx
@@ -152,7 +152,7 @@ private theorem foldl_maxRelStep_ge (l : List Relation) (acc : Option Relation) 
       · -- r ∈ xs: forward to IH with the stepped accumulator
         exact ih _ (Or.inl hrxs)
     · -- acc was already good: step preserves it, then foldl preserves it
-      exact foldl_maxRelStep_preserves (x :: xs) acc r hge
+      exact foldl_maxRelStep_preserves (x :: xs) acc r he
 
 /-- If `r ∈ c.relations`, then `maxRelation` returns some s with rank ≥ r.rank. -/
 private theorem maxRelation_ge {n : Nat} (c : PlayerClaim n) (r : Relation)
@@ -174,7 +174,7 @@ theorem rebac_public_observe {n : Nat} (c : PlayerClaim n)
     (h : .«public» ∈ c.relations) :
     rebacCheck c .observe = true := by
   unfold rebacCheck
-  rcases maxRelation_ge c .«public» h with ⟨s, hs, hge⟩
+  rcases maxRelation_ge c .«public» h with ⟨s, hs, he⟩
   rw [hs]
   simp only [Action.minRelation, Relation.rank, decide_eq_true_eq]
   exact Nat.zero_le _
@@ -184,12 +184,12 @@ theorem rebac_owner_all {n : Nat} (c : PlayerClaim n)
     (h : .owner ∈ c.relations) (a : Action) :
     rebacCheck c a = true := by
   unfold rebacCheck
-  rcases maxRelation_ge c .owner h with ⟨s, hs, hge⟩
+  rcases maxRelation_ge c .owner h with ⟨s, hs, he⟩
   rw [hs]
   simp only [decide_eq_true_eq]
   have hmin : a.minRelation.rank ≤ 4 := by
     cases a <;> simp [Action.minRelation, Relation.rank]
-  simpa [Relation.rank] using Nat.le_trans hmin hge
+  simpa [Relation.rank] using Nat.le_trans hmin he
 
 /-- rebacCheck is monotone: passing a more permissive action implies passing a less permissive one. -/
 theorem rebac_monotone {n : Nat} (c : PlayerClaim n) (a1 a2 : Action)
