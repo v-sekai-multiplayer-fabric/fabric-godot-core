@@ -410,7 +410,25 @@ def refitIncrementalSpec
     the only mutation is `Array.set` (size-preserving) or no-op. -/
 theorem walkAndMark_preserves_size (parentOf : InternalId → Option InternalId) :
     ∀ (fuel : Nat) (marked : Array Bool) (i : InternalId),
-      (walkAndMark parentOf fuel marked i).size = marked.size := by sorry
+      (walkAndMark parentOf fuel marked i).size = marked.size := by
+  intro fuel
+  induction fuel with
+  | zero =>
+    intro marked i
+    unfold walkAndMark
+    rfl
+  | succ k ih =>
+    intro marked i
+    unfold walkAndMark
+    by_cases hi : i < marked.size
+    · simp only [hi, dif_pos]
+      split
+      · simp [Array.size_set]
+      · rw [ih]; simp [Array.size_set]
+    · simp only [hi, dif_neg, not_false_iff]
+      split
+      · rfl
+      · rw [ih]
 theorem walkAndMark_preserves_true (parentOf : InternalId → Option InternalId) :
     ∀ (fuel : Nat) (marked : Array Bool) (i : InternalId) (j : Nat),
       marked.getD j false = true →
