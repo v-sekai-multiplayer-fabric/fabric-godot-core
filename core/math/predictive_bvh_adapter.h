@@ -1276,7 +1276,7 @@ inline bool pbvh_tree_is_empty(const pbvh_tree_t *t) {
  * specific footguns that the original setup walked into:
  *
  *   1. `LocalVector<uint64_t>::resize()` and `Vector<uint64_t>::resize()`
- *      both leave trivially-constructible types UNINITIALISED. The tick
+ *      both leave trivially-constructible types UNINITIALIZED. The tick
  *      scan phase iterates set bits of touched_bits/touched_meta_bits and
  *      dereferences `internals[(w<<6)|b]` for each — garbage bits crash
  *      with SIGSEGV when the bogus index runs past the allocated capacity.
