@@ -63,7 +63,7 @@
 				[b]Note:[/b] Only one server instance is supported at a time.
 			</description>
 		</method>
-<method name="get_quic" qualifiers="const">
+		<method name="get_quic" qualifiers="const">
 			<return type="QUICClient" />
 			<description>
 				Returns the underlying [QUICClient] used by this peer, or [code]null[/code] if the session is using the WebTransport session backend (the common case after [method create_client]).
