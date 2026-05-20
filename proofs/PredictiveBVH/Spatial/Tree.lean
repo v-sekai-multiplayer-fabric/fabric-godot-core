@@ -993,7 +993,17 @@ theorem windowBounds_contains_init_slot
     (leaves : Array PbvhLeaf) (sorted : Array LeafId) (lo hi : Nat)
     (hlo : lo < hi) (l : PbvhLeaf)
     (hl : leaves[sorted[lo]!]? = some l) :
-    aabbContains (windowBounds leaves sorted lo hi) l.bounds := by sorry
+    aabbContains (windowBounds leaves sorted lo hi) l.bounds := by
+  unfold windowBounds
+  rw [if_neg (by omega : ¬ lo ≥ hi)]
+  dsimp only
+  have hinit_eq : (leaves[sorted[lo]!]?.map (·.bounds)).getD
+      { minX := 0, maxX := 0, minY := 0, maxY := 0, minZ := 0, maxZ := 0 } =
+      l.bounds := by
+    rw [hl]
+    rfl
+  rw [hinit_eq]
+  apply foldl_unionBounds_dep_contains_init
 theorem windowBounds_contains_step_slot
     (leaves : Array PbvhLeaf) (sorted : Array LeafId) (lo hi : Nat)
     (hlo : lo < hi) (j : Nat) (hj : j < hi - lo - 1)
@@ -1177,7 +1187,44 @@ theorem aabbQueryN_leaf_fold_preserves_sound (t : PbvhTree) (q : BoundingBox)
               if l.alive && aabbOverlapsDec l.bounds q then
                 l.eclass :: acc else acc
             | none => acc) acc,
-      querySoundOf t q e := by sorry
+      querySoundOf t q e := by
+  refine foldl_invariant
+    (P := fun (acc : List EClassId) => ∀ e ∈ acc, querySoundOf t q e)
+    _ _ _ hacc ?_
+  intro acc' j hacc'
+  set lid := t.sorted[offset + j]!
+  cases hlk : t.leaves[lid]? with
+  | none => simpa [hlk] using hacc'
+  | some l =>
+    by_cases hg : l.alive ∧ aabbOverlapsDec l.bounds q = true
+    · obtain ⟨halive, hov⟩ := hg
+      have hlid_lt : lid < t.leaves.size := by
+        rcases Array.getElem?_eq_some_iff.mp hlk with ⟨h, _⟩
+        exact h
+      have hleq : t.leaves[lid]'hlid_lt = l := by
+        have h := Array.getElem?_eq_getElem hlid_lt
+        rw [h] at hlk
+        exact Option.some.inj hlk
+      simp only [hlk, halive, hov, Bool.and_self, and_self, if_true]
+      intro e he
+      simp only [List.mem_cons] at he
+      rcases he with heq | htail
+      · refine ⟨lid, hlid_lt, ?_, ?_, ?_⟩
+        · rw [hleq]; exact halive
+        · rw [hleq]; exact heq.symm
+        · rw [hleq]; exact hov
+      · exact hacc' e htail
+    · push_neg at hg
+      by_cases halive : l.alive
+      · have hov : aabbOverlapsDec l.bounds q = false := by
+          have := hg halive
+          cases hov' : aabbOverlapsDec l.bounds q
+          · rfl
+          · rw [hov'] at this; exact absurd rfl this
+        simp only [hlk, halive, hov, Bool.and_false, if_false]
+        exact hacc'
+      · simp only [hlk, halive, Bool.false_and, if_false]
+        exact hacc'
 private theorem foldl_cons_preserves {α β : Type _}
     (f : List β → α → List β)
     (hmono : ∀ (acc : List β) (a : α) (x : β), x ∈ acc → x ∈ f acc a) :
@@ -1256,7 +1303,40 @@ theorem aabbQueryNGo_preserves_sound (t : PbvhTree) (q : BoundingBox) :
     ∀ (m : Nat) (i : Nat) (acc : List EClassId),
       t.internals.size - i = m →
       (∀ e ∈ acc, querySoundOf t q e) →
-      ∀ e ∈ aabbQueryNGo t q i acc, querySoundOf t q e := by sorry
+      ∀ e ∈ aabbQueryNGo t q i acc, querySoundOf t q e := by
+  intro m
+  induction m using Nat.strongRecOn with
+  | _ m ih =>
+    intro i acc hm hacc e he
+    rw [aabbQueryNGo] at he
+    dsimp only at he
+    split at he
+    · rw [List.mem_reverse] at he
+      exact hacc e he
+    · rename_i hlt
+      have hi_lt : i < t.internals.size := by omega
+      set n := t.internals[i]! with hn_def
+      set next : Nat :=
+        if _ : i < n.skip ∧ n.skip ≤ t.internals.size then n.skip else i + 1
+        with hnext_def
+      have hnext_gt : next > i := by
+        simp only [hnext_def]
+        by_cases h : i < n.skip ∧ n.skip ≤ t.internals.size
+        · simp [h]
+        · simp [h]
+      have hnext_le : next ≤ t.internals.size := by
+        simp only [hnext_def]
+        by_cases h : i < n.skip ∧ n.skip ≤ t.internals.size
+        · simp [h]
+        · simp [h]; omega
+      have hnext_measure : t.internals.size - next < m := by omega
+      split at he
+      · exact ih _ hnext_measure next acc rfl hacc e he
+      · split at he
+        · have hfold := aabbQueryN_leaf_fold_preserves_sound t q n.offset n.span acc hacc
+          exact ih _ hnext_measure next _ rfl hfold e he
+        · have hi1_measure : t.internals.size - (i + 1) < m := by omega
+          exact ih _ hi1_measure (i + 1) acc rfl hacc e he
 theorem aabbQueryN_sound (t : PbvhTree) (q : BoundingBox) :
     ∀ e ∈ aabbQueryN t q, querySoundOf t q e := by
   intro e he
@@ -1277,7 +1357,63 @@ theorem aabbQueryNGo_preserves_membership (t : PbvhTree) (q : BoundingBox) :
     ∀ (m : Nat) (i : Nat) (acc : List EClassId) (e : EClassId),
       t.internals.size - i = m →
       e ∈ acc →
-      e ∈ aabbQueryNGo t q i acc := by sorry
+      e ∈ aabbQueryNGo t q i acc := by
+  intro m
+  induction m using Nat.strongRecOn with
+  | _ m ih =>
+    intro i acc e hm he
+    rw [aabbQueryNGo]
+    dsimp only
+    split
+    · rw [List.mem_reverse]; exact he
+    · rename_i hlt
+      have hi_lt : i < t.internals.size := by omega
+      set n := t.internals[i]! with hn_def
+      set next : Nat :=
+        if _ : i < n.skip ∧ n.skip ≤ t.internals.size then n.skip else i + 1
+        with hnext_def
+      have hnext_gt : next > i := by
+        simp only [hnext_def]
+        by_cases h : i < n.skip ∧ n.skip ≤ t.internals.size
+        · simp [h]
+        · simp [h]
+      have hnext_le : next ≤ t.internals.size := by
+        simp only [hnext_def]
+        by_cases h : i < n.skip ∧ n.skip ≤ t.internals.size
+        · simp [h]
+        · simp [h]; omega
+      have hnext_measure : t.internals.size - next < m := by omega
+      split
+      · exact ih _ hnext_measure next acc e rfl he
+      · split
+        · have hfold : e ∈ (List.range n.span).foldl (fun acc j =>
+              let lid := t.sorted[n.offset + j]!
+              match t.leaves[lid]? with
+              | some l =>
+                if l.alive && aabbOverlapsDec l.bounds q then
+                  l.eclass :: acc else acc
+              | none => acc) acc := by
+            have hmono : ∀ (acc : List EClassId) (k : Nat) (x : EClassId),
+                x ∈ acc →
+                x ∈ (fun acc j =>
+                  let lid := t.sorted[n.offset + j]!
+                  match t.leaves[lid]? with
+                  | some l =>
+                    if l.alive && aabbOverlapsDec l.bounds q then
+                      l.eclass :: acc else acc
+                  | none => acc) acc k := by
+              intro acc' k x hx
+              dsimp only
+              cases hlk : t.leaves[t.sorted[n.offset + k]!]? with
+              | none => simpa [hlk] using hx
+              | some l' =>
+                by_cases hg : l'.alive && aabbOverlapsDec l'.bounds q
+                · simp only [hlk, hg, if_true]; exact List.mem_cons_of_mem _ hx
+                · simp only [hlk, hg, if_false]; exact hx
+            exact foldl_cons_preserves _ hmono (List.range n.span) acc e he
+          exact ih _ hnext_measure next _ e rfl hfold
+        · have hi1_measure : t.internals.size - (i + 1) < m := by omega
+          exact ih _ hi1_measure (i + 1) acc e rfl he
 theorem aabbQueryNGo_leaf_block_complete (t : PbvhTree) (q : BoundingBox)
     (i : Nat) (hi : i < t.internals.size)
     (hleaf : (t.internals[i]!).left.isNone ∧ (t.internals[i]!).right.isNone)
@@ -1292,7 +1428,13 @@ theorem aabbQueryNGo_leaf_block_complete (t : PbvhTree) (q : BoundingBox)
 theorem buildSubtree_root_skip_monotone (leaves : Array PbvhLeaf)
     (sorted : Array LeafId) (internals : Array PbvhInternal) (lo hi : Nat) :
     let res := buildSubtree leaves sorted internals lo hi
-    res.2 < res.1[res.2]!.skip ∧ res.1[res.2]!.skip ≤ res.1.size := by sorry
+    res.2 < res.1[res.2]!.skip ∧ res.1[res.2]!.skip ≤ res.1.size := by
+  have hroot := buildSubtree_root_lt_size leaves sorted internals lo hi
+  have hskip := buildSubtree_skip_eq_final_size leaves sorted internals lo hi
+  dsimp only at hskip ⊢
+  refine ⟨?_, ?_⟩
+  · rw [hskip]; exact hroot
+  · rw [hskip]
 theorem build_skip_invariants (t : PbvhTree) :
     let t' := build t
     ∀ (j : Nat) (hj : j < t'.internals.size),
