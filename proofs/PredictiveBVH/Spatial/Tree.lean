@@ -1538,7 +1538,18 @@ theorem build_contains_leaf (t : PbvhTree)
       k < ((build t).internals[j]'hj).offset +
           ((build t).internals[j]'hj).span)
     (hl : t.leaves[(build t).sorted[k]!]? = some l) :
-    aabbContains ((build t).internals[j]'hj).bounds l.bounds := by sorry
+    aabbContains ((build t).internals[j]'hj).bounds l.bounds := by
+  unfold build at hj node_offset_le k_lt_node_end hl ⊢
+  dsimp only at hj node_offset_le k_lt_node_end hl ⊢
+  split at hj
+  · rename_i hemp
+    simp at hj
+  · rename_i hnemp
+    simp only [hnemp, if_false] at hj node_offset_le k_lt_node_end hl ⊢
+    set sorted := insertionSortByHilbert t.leaves (liveIds t.leaves) with hsorted_def
+    have hj_ge : (#[] : Array PbvhInternal).size ≤ j := by simp
+    exact buildSubtree_new_node_contains_leaf t.leaves sorted #[] 0 sorted.size
+      j hj_ge hj l k node_offset_le k_lt_node_end hl
 theorem aabbQueryNGo_visits_overlapping_leaf (t : PbvhTree) (q : BoundingBox)
     (h_leaf_skip : ∀ j, j < t.internals.size →
       (t.internals[j]!).left = none → (t.internals[j]!).right = none →
