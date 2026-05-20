@@ -887,23 +887,6 @@ TEST_CASE("[PredictiveBVH][Bench] growth rate of insert+tick vs DynamicBVH") {
 		internals.resize(internal_cap);
 		Vector<uint32_t> bucket_dir;
 		bucket_dir.resize(pbvh_bucket_dir_size(N));
-		Vector<uint32_t> parent_of;
-		parent_of.resize(internal_cap);
-		Vector<uint32_t> leaf_to;
-		leaf_to.resize(N + 16);
-		const uint32_t touched_words = (internal_cap + 63u) / 64u;
-		// pbvh_tree_tick's API contract requires touched_bits and touched_meta_bits
-		// to be all-zero on entry (bits self-clear during the scan phase, so
-		// they're zero on exit too). Vector<uint64_t>::resize() does not
-		// zero-initialise trivially-constructible types — any garbage left here
-		// would be read back as a "touched internal index" in the scan phase and
-		// dereferenced as t->internals[garbage_idx], yielding a SIGSEGV when the
-		// garbage index exceeds the allocated internals[] capacity.
-		Vector<uint64_t> touched_bits;
-		touched_bits.resize_initialized(touched_words);
-		Vector<uint64_t> touched_meta_bits;
-		touched_meta_bits.resize_initialized((touched_words + 63u) / 64u);
-
 		pbvh_tree_t tree = {};
 		tree.nodes = storage.ptrw();
 		tree.capacity = storage.size();
@@ -915,10 +898,10 @@ TEST_CASE("[PredictiveBVH][Bench] growth rate of insert+tick vs DynamicBVH") {
 		tree.internal_root = PBVH_NULL_NODE;
 		tree.bucket_dir = bucket_dir.ptrw();
 		tree.bucket_bits = HILBERT_PREFIX_BITS;
-		tree.parent_of_internal = parent_of.ptrw();
-		tree.leaf_to_internal = leaf_to.ptrw();
-		tree.touched_bits = touched_bits.ptrw();
-		tree.touched_meta_bits = touched_meta_bits.ptrw();
+		// Wires parent_of_internal, leaf_to_internal, touched_bits, and
+		// touched_meta_bits with correct sizing and zero-initialised bitmaps.
+		PbvhTickScratch tick_scratch;
+		tick_scratch.attach(&tree, N + 16, internal_cap);
 
 		const uint64_t t_p_ins0 = OS::get_singleton()->get_ticks_usec();
 		for (uint32_t i = 0; i < N; i++) {
@@ -1056,23 +1039,6 @@ TEST_CASE("[PredictiveBVH][Bench] per-frame 1%-dirty + Q-queries steady-state") 
 		internals.resize(internal_cap);
 		Vector<uint32_t> bucket_dir;
 		bucket_dir.resize(pbvh_bucket_dir_size(N));
-		Vector<uint32_t> parent_of;
-		parent_of.resize(internal_cap);
-		Vector<uint32_t> leaf_to;
-		leaf_to.resize(N + 16);
-		const uint32_t touched_words = (internal_cap + 63u) / 64u;
-		// pbvh_tree_tick's API contract requires touched_bits and touched_meta_bits
-		// to be all-zero on entry (bits self-clear during the scan phase, so
-		// they're zero on exit too). Vector<uint64_t>::resize() does not
-		// zero-initialise trivially-constructible types — any garbage left here
-		// would be read back as a "touched internal index" in the scan phase and
-		// dereferenced as t->internals[garbage_idx], yielding a SIGSEGV when the
-		// garbage index exceeds the allocated internals[] capacity.
-		Vector<uint64_t> touched_bits;
-		touched_bits.resize_initialized(touched_words);
-		Vector<uint64_t> touched_meta_bits;
-		touched_meta_bits.resize_initialized((touched_words + 63u) / 64u);
-
 		pbvh_tree_t tree = {};
 		tree.nodes = storage.ptrw();
 		tree.capacity = storage.size();
@@ -1084,10 +1050,10 @@ TEST_CASE("[PredictiveBVH][Bench] per-frame 1%-dirty + Q-queries steady-state") 
 		tree.internal_root = PBVH_NULL_NODE;
 		tree.bucket_dir = bucket_dir.ptrw();
 		tree.bucket_bits = HILBERT_PREFIX_BITS;
-		tree.parent_of_internal = parent_of.ptrw();
-		tree.leaf_to_internal = leaf_to.ptrw();
-		tree.touched_bits = touched_bits.ptrw();
-		tree.touched_meta_bits = touched_meta_bits.ptrw();
+		// Wires parent_of_internal, leaf_to_internal, touched_bits, and
+		// touched_meta_bits with correct sizing and zero-initialised bitmaps.
+		PbvhTickScratch tick_scratch;
+		tick_scratch.attach(&tree, N + 16, internal_cap);
 
 		for (uint32_t i = 0; i < N; i++) {
 			pbvh_tree_insert_h(&tree, (pbvh_eclass_id_t)i, r128s[i].box, r128s[i].hilbert);
@@ -1296,23 +1262,6 @@ TEST_CASE("[PredictiveBVH][Bench] per-frame stress 20%-dirty metre-scale motion"
 		internals.resize(internal_cap);
 		Vector<uint32_t> bucket_dir;
 		bucket_dir.resize(pbvh_bucket_dir_size(N));
-		Vector<uint32_t> parent_of;
-		parent_of.resize(internal_cap);
-		Vector<uint32_t> leaf_to;
-		leaf_to.resize(N + 16);
-		const uint32_t touched_words = (internal_cap + 63u) / 64u;
-		// pbvh_tree_tick's API contract requires touched_bits and touched_meta_bits
-		// to be all-zero on entry (bits self-clear during the scan phase, so
-		// they're zero on exit too). Vector<uint64_t>::resize() does not
-		// zero-initialise trivially-constructible types — any garbage left here
-		// would be read back as a "touched internal index" in the scan phase and
-		// dereferenced as t->internals[garbage_idx], yielding a SIGSEGV when the
-		// garbage index exceeds the allocated internals[] capacity.
-		Vector<uint64_t> touched_bits;
-		touched_bits.resize_initialized(touched_words);
-		Vector<uint64_t> touched_meta_bits;
-		touched_meta_bits.resize_initialized((touched_words + 63u) / 64u);
-
 		pbvh_tree_t tree = {};
 		tree.nodes = storage.ptrw();
 		tree.capacity = storage.size();
@@ -1324,10 +1273,10 @@ TEST_CASE("[PredictiveBVH][Bench] per-frame stress 20%-dirty metre-scale motion"
 		tree.internal_root = PBVH_NULL_NODE;
 		tree.bucket_dir = bucket_dir.ptrw();
 		tree.bucket_bits = HILBERT_PREFIX_BITS;
-		tree.parent_of_internal = parent_of.ptrw();
-		tree.leaf_to_internal = leaf_to.ptrw();
-		tree.touched_bits = touched_bits.ptrw();
-		tree.touched_meta_bits = touched_meta_bits.ptrw();
+		// Wires parent_of_internal, leaf_to_internal, touched_bits, and
+		// touched_meta_bits with correct sizing and zero-initialised bitmaps.
+		PbvhTickScratch tick_scratch;
+		tick_scratch.attach(&tree, N + 16, internal_cap);
 
 		for (uint32_t i = 0; i < N; i++) {
 			pbvh_tree_insert_h(&tree, (pbvh_eclass_id_t)i, r128s[i].box, r128s[i].hilbert);
