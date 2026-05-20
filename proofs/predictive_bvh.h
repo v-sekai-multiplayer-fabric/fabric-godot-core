@@ -59,9 +59,7 @@
 
 #include <thirdparty/misc/r128.h>
 
-#include <math.h>
-#include <stdbool.h>
-#include <stdint.h>
+#include <cstdint>
 
 #ifdef _MSC_VER
 #include <intrin.h>

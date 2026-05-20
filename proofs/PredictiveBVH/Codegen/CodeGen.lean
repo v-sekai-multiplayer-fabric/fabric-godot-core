@@ -331,9 +331,7 @@ private def cPreamble : String :=
   " */\n" ++
   "#ifndef PREDICTIVE_BVH_H\n" ++
   "#define PREDICTIVE_BVH_H\n\n" ++
-  "#include <stdint.h>\n" ++
-  "#include <stdbool.h>\n" ++
-  "#include <math.h>\n" ++
+  "#include <cstdint>\n" ++
   "#include \"thirdparty/misc/r128.h\"\n\n" ++
   "#ifdef _MSC_VER\n" ++
   "#include <intrin.h>\n" ++
