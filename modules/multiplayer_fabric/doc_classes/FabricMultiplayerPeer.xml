@@ -45,7 +45,6 @@
 		<method name="create_server">
 			<return type="int" enum="Error" />
 			<param index="0" name="port" type="int" />
-			<param index="1" name="max_clients" type="int" default="32" />
 			<description>
 				Creates a server bound to [param port] with a maximum of [param max_clients] connections. Returns [constant OK] on success.
 			</description>
@@ -68,8 +67,14 @@
 		</method>
 	</methods>
 	<members>
+		<member name="client_factory" type="Callable" setter="set_client_factory" getter="get_client_factory" default="Callable()">
+		</member>
+		<member name="frame_channels" type="bool" setter="set_frame_channels" getter="get_frame_channels" default="false">
+		</member>
 		<member name="game_id" type="String" setter="set_game_id" getter="get_game_id" default="&quot;&quot;">
 			The game identifier used by the zone fabric for topic routing.
+		</member>
+		<member name="server_factory" type="Callable" setter="set_server_factory" getter="get_server_factory" default="Callable()">
 		</member>
 	</members>
 </class>
