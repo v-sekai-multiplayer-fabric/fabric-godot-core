@@ -673,7 +673,12 @@ struct Harness {
 		sorted.resize(n + 16);
 		const uint32_t internal_cap = 2u * (n + 16u);
 		internals.resize(internal_cap);
-		bucket_dir.resize(pbvh_bucket_dir_size(n));
+		// bucket_dir must cover the same headroom as storage/sorted: the
+		// [Tick] insert-since-build case grows count past n before tick falls
+		// back to pbvh_tree_build, which auto-tunes bucket_bits off the new
+		// count. Sizing for n alone overflows when that bumps a bit (caught
+		// by ASan as a heap-buffer-overflow in pbvh_build_bucket_dir_).
+		bucket_dir.resize(pbvh_bucket_dir_size(n + 16u));
 		tree.nodes = storage.ptrw();
 		tree.capacity = storage.size();
 		tree.root = PBVH_NULL_NODE;
