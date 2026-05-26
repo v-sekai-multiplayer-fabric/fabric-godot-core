@@ -704,6 +704,9 @@ void main()
 #line 232
         uint bounce_0 = 0U;
 
+#line 232
+        float local_hits_1 = local_hits_0;
+
 
         for(;;)
         {
@@ -714,6 +717,9 @@ void main()
             }
             else
             {
+
+#line 235
+                local_hits_0 = local_hits_1;
 
 #line 235
                 break;
@@ -728,83 +734,119 @@ void main()
             if(!_S26)
             {
 
-#line 239
+#line 238
+                local_hits_0 = local_hits_1;
                 break;
             }
             Triangle_0 _S27 = triangles_0._data[uint(hit_tri_1)];
 
 #line 241
+            float max_alpha_0 = 0.0;
+
+#line 241
             b_0 = 0U;
+
             for(;;)
             {
 
-#line 242
+#line 243
                 if(b_0 < 9U)
                 {
                 }
                 else
                 {
 
-#line 242
+#line 243
                     break;
                 }
 
 #line 243
-                local_absorbed_0[b_0] = local_absorbed_0[b_0] + materials_0._data[uint(_S27.material_index_0)].coefficients_0[b_0];
+                float alpha_0 = materials_0._data[uint(_S27.material_index_0)].coefficients_0[b_0];
 
-#line 242
+                local_absorbed_0[b_0] = local_absorbed_0[b_0] + materials_0._data[uint(_S27.material_index_0)].coefficients_0[b_0];
+                if((materials_0._data[uint(_S27.material_index_0)].coefficients_0[b_0]) > max_alpha_0)
+                {
+
+#line 246
+                    max_alpha_0 = alpha_0;
+
+#line 246
+                }
+
+#line 243
                 b_0 = b_0 + 1U;
 
-#line 242
+#line 243
             }
 
-
-            float local_hits_1 = local_hits_0 + 1.0;
-
-
-            Triangle_0 tri_1 = triangles_0._data[uint(hit_tri_1)];
-            Vertex_0 _S28 = vertices_0._data[uint(tri_1.i0_0)];
+#line 248
+            float local_hits_2 = local_hits_1 + 1.0;
 
 
-            vec3 hit_normal_0 = normalize(cross(vertices_0._data[uint(tri_1.i1_0)].position_0 - _S28.position_0, vertices_0._data[uint(tri_1.i2_0)].position_0 - _S28.position_0));
+
+            if(bounce_0 > 4U)
+            {
+
+#line 253
+                float _S28 = max(1.0 - max_alpha_0, 0.05000000074505806);
+                float _S29 = rand_float_0(rng_2);
+
+#line 254
+                if(_S29 > _S28)
+                {
+
+#line 254
+                    local_hits_0 = local_hits_2;
+                    break;
+                }
 
 #line 252
+            }
+
+#line 259
+            Triangle_0 tri_1 = triangles_0._data[uint(hit_tri_1)];
+            Vertex_0 _S30 = vertices_0._data[uint(tri_1.i0_0)];
+
+
+            vec3 hit_normal_0 = normalize(cross(vertices_0._data[uint(tri_1.i1_0)].position_0 - _S30.position_0, vertices_0._data[uint(tri_1.i2_0)].position_0 - _S30.position_0));
+
+#line 263
             vec3 hit_normal_1;
             if((dot(hit_normal_0, ray_dir_1)) > 0.0)
             {
 
-#line 253
+#line 264
                 hit_normal_1 = - hit_normal_0;
 
-#line 253
+#line 264
             }
             else
             {
 
-#line 253
+#line 264
                 hit_normal_1 = hit_normal_0;
 
-#line 253
+#line 264
             }
 
 
-            vec3 _S29 = ray_origin_1 + ray_dir_1 * hit_t_1 + hit_normal_1 * params_0.bias_0;
-            vec3 _S30 = random_cosine_direction_0(hit_normal_1, rng_2);
+            vec3 _S31 = ray_origin_1 + ray_dir_1 * hit_t_1 + hit_normal_1 * params_0.bias_0;
+            vec3 _S32 = random_cosine_direction_0(hit_normal_1, rng_2);
 
 #line 235
-            uint _S31 = bounce_0 + 1U;
+            uint _S33 = bounce_0 + 1U;
 
 #line 235
-            ray_origin_1 = _S29;
+            ray_origin_1 = _S31;
 
 #line 235
-            ray_dir_1 = _S30;
+            ray_dir_1 = _S32;
 
 #line 235
-            bounce_0 = _S31;
+            bounce_0 = _S33;
 
 #line 235
-            local_hits_0 = local_hits_1;
+            local_hits_1 = local_hits_2;
 
 #line 235
         }
@@ -818,28 +860,28 @@ void main()
 #line 231
     b_0 = 0U;
 
-#line 261
+#line 272
     for(;;)
     {
 
-#line 261
+#line 272
         if(b_0 < 9U)
         {
         }
         else
         {
 
-#line 261
+#line 272
             break;
         }
 
-#line 262
+#line 273
         output_accum_0._data[uint(probe_index_0)].absorbed_0[b_0] = output_accum_0._data[uint(probe_index_0)].absorbed_0[b_0] + local_absorbed_0[b_0];
 
-#line 261
+#line 272
         b_0 = b_0 + 1U;
 
-#line 261
+#line 272
     }
 
 

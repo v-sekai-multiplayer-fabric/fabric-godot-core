@@ -248,45 +248,72 @@ static void _bake_probe_task(void *p_userdata, uint32_t p_index) {
 	*task.gain_out = 0.045f * CLAMP(enclosure * 4.0f, 0.01f, 1.0f);
 }
 
-bool ReverbProbeGI::_bake_gpu(const PackedVector3Array &p_probes, const Vector<Vector3> &p_vertices, const Vector<int> &p_indices, const Vector<int> &p_tri_materials, const AABB &p_bounds, int p_ray_count, int p_max_bounces, PackedFloat32Array &r_rt60, PackedFloat32Array &r_gains) {
-	static constexpr int NUM_BANDS = 9;
-
-	RenderingDevice *rd = RenderingServer::get_singleton()->create_local_rendering_device();
-	if (!rd) {
-		return false;
+void ReverbProbeGI::_ensure_gpu_resources() {
+	if (_gpu_rd) {
+		return;
 	}
-
-	int probe_count = p_probes.size();
-	int tri_count = p_indices.size() / 3;
-	float volume = p_bounds.size.x * p_bounds.size.y * p_bounds.size.z;
-	float surface_area = 2.0f * (p_bounds.size.x * p_bounds.size.y + p_bounds.size.y * p_bounds.size.z + p_bounds.size.x * p_bounds.size.z);
-
-	// Compile embedded GLSL to SPIR-V, then create shader.
+	_gpu_rd = RenderingServer::get_singleton()->create_local_rendering_device();
+	if (!_gpu_rd) {
+		return;
+	}
 	String shader_error;
-	Vector<uint8_t> spirv = rd->shader_compile_spirv_from_source(
+	Vector<uint8_t> spirv = _gpu_rd->shader_compile_spirv_from_source(
 			RenderingDevice::SHADER_STAGE_COMPUTE, reverb_bake_glsl, RenderingDevice::SHADER_LANGUAGE_GLSL, &shader_error);
 	if (spirv.is_empty()) {
 		print_line(vformat("ReverbProbeGI: GPU shader compile error: %s", shader_error));
-		memdelete(rd);
-		return false;
+		memdelete(_gpu_rd);
+		_gpu_rd = nullptr;
+		return;
 	}
 	RenderingDevice::ShaderStageSPIRVData stage;
 	stage.shader_stage = RenderingDevice::SHADER_STAGE_COMPUTE;
 	stage.spirv = spirv;
 	Vector<RenderingDevice::ShaderStageSPIRVData> stages;
 	stages.push_back(stage);
-	RID shader = rd->shader_create_from_spirv(stages);
-	if (shader.is_null()) {
-		print_line("ReverbProbeGI: GPU bake failed — shader creation error");
-		memdelete(rd);
+	_gpu_shader = _gpu_rd->shader_create_from_spirv(stages);
+	if (_gpu_shader.is_null()) {
+		print_line("ReverbProbeGI: GPU shader creation failed");
+		memdelete(_gpu_rd);
+		_gpu_rd = nullptr;
+		return;
+	}
+	_gpu_pipeline = _gpu_rd->compute_pipeline_create(_gpu_shader);
+}
+
+void ReverbProbeGI::_free_gpu_resources() {
+	if (_gpu_rd) {
+		if (_gpu_pipeline.is_valid()) {
+			_gpu_rd->free(_gpu_pipeline);
+		}
+		if (_gpu_shader.is_valid()) {
+			_gpu_rd->free(_gpu_shader);
+		}
+		memdelete(_gpu_rd);
+		_gpu_rd = nullptr;
+	}
+}
+
+bool ReverbProbeGI::_bake_gpu(const PackedVector3Array &p_probes, const Vector<Vector3> &p_vertices, const Vector<int> &p_indices, const Vector<int> &p_tri_materials, const AABB &p_bounds, int p_ray_count, int p_max_bounces, PackedFloat32Array &r_rt60, PackedFloat32Array &r_gains) {
+	static constexpr int NUM_BANDS = 9;
+
+	_ensure_gpu_resources();
+	if (!_gpu_rd) {
 		return false;
 	}
+	RenderingDevice *rd = _gpu_rd;
+	RID shader = _gpu_shader;
+	RID pipeline = _gpu_pipeline;
 
-	RID pipeline = rd->compute_pipeline_create(shader);
+	int probe_count = p_probes.size();
+	int tri_count = p_indices.size() / 3;
+	float volume = p_bounds.size.x * p_bounds.size.y * p_bounds.size.z;
+	float surface_area = 2.0f * (p_bounds.size.x * p_bounds.size.y + p_bounds.size.y * p_bounds.size.z + p_bounds.size.x * p_bounds.size.z);
 
 	// Build 3D grid acceleration structure (same algorithm as lightmapper_rd).
 	static constexpr uint32_t CLUSTER_SIZE = 32;
-	int grid_size = MAX(2, (int)Math::ceil(cbrtf((float)tri_count / 4.0f)));
+	// Auto-tune grid: aim for ~8 triangles per occupied cell.
+	int grid_size = MAX(4, (int)Math::ceil(cbrtf((float)tri_count / 8.0f)));
+	grid_size = MIN(grid_size, 128);
 	grid_size = (int)Math::next_power_of_2((uint32_t)grid_size);
 	AABB bounds = p_bounds;
 	bounds.grow_by(0.01f);
@@ -440,9 +467,9 @@ bool ReverbProbeGI::_bake_gpu(const PackedVector3Array &p_probes, const Vector<V
 	vertex_data.resize(p_vertices.size() * sizeof(float) * 6);
 	float *vd = (float *)vertex_data.ptrw();
 	for (int vi = 0; vi < p_vertices.size(); vi++) {
-		vd[vi * 6 + 0] = p_vertices[vi].x;
-		vd[vi * 6 + 1] = p_vertices[vi].y;
-		vd[vi * 6 + 2] = p_vertices[vi].z;
+		vd[vi * 6 + 0] = (float)p_vertices[vi].x;
+		vd[vi * 6 + 1] = (float)p_vertices[vi].y;
+		vd[vi * 6 + 2] = (float)p_vertices[vi].z;
 		vd[vi * 6 + 3] = 0;
 		vd[vi * 6 + 4] = 1;
 		vd[vi * 6 + 5] = 0;
@@ -464,9 +491,9 @@ bool ReverbProbeGI::_bake_gpu(const PackedVector3Array &p_probes, const Vector<V
 	probe_data.resize(probe_count * sizeof(float) * 4);
 	float *pd = (float *)probe_data.ptrw();
 	for (int pi = 0; pi < probe_count; pi++) {
-		pd[pi * 4 + 0] = p_probes[pi].x;
-		pd[pi * 4 + 1] = p_probes[pi].y;
-		pd[pi * 4 + 2] = p_probes[pi].z;
+		pd[pi * 4 + 0] = (float)p_probes[pi].x;
+		pd[pi * 4 + 1] = (float)p_probes[pi].y;
+		pd[pi * 4 + 2] = (float)p_probes[pi].z;
 		pd[pi * 4 + 3] = 0;
 	}
 
@@ -541,8 +568,8 @@ bool ReverbProbeGI::_bake_gpu(const PackedVector3Array &p_probes, const Vector<V
 	{ RenderingDevice::Uniform u; u.uniform_type = RenderingDevice::UNIFORM_TYPE_STORAGE_BUFFER; u.binding = 0; u.append_id(accum_buf); set1.push_back(u); }
 	RID uniform_set1 = rd->uniform_set_create(set1, shader, 1);
 
-	// Dispatch in batches to avoid GPU timeout.
-	int max_rays_per_batch = 8192;
+	// Dispatch in larger batches now that grid acceleration prevents TDR.
+	int max_rays_per_batch = 32768;
 	int groups_x = Math::division_round_up(probe_count, 64);
 
 	for (int batch_from = 0; batch_from < p_ray_count; batch_from += max_rays_per_batch) {

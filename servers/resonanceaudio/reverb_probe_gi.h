@@ -78,6 +78,13 @@ private:
 	Ref<ResonanceAudioMaterialMap> material_map;
 	WallMaterial wall_material = MATERIAL_PLASTER_SMOOTH;
 
+	// Cached GPU resources — persist across bakes.
+	RenderingDevice *_gpu_rd = nullptr;
+	RID _gpu_shader;
+	RID _gpu_pipeline;
+	void _ensure_gpu_resources();
+	void _free_gpu_resources();
+
 	void _collect_mesh_triangles(Node *p_node, Vector<Vector3> &r_vertices, Vector<int> &r_indices, Vector<int> &r_tri_materials, AABB &r_bounds);
 	bool _bake_gpu(const PackedVector3Array &p_probes, const Vector<Vector3> &p_vertices, const Vector<int> &p_indices, const Vector<int> &p_tri_materials, const AABB &p_bounds, int p_ray_count, int p_max_bounces, PackedFloat32Array &r_rt60, PackedFloat32Array &r_gains);
 	void _update_reverb_from_listener();

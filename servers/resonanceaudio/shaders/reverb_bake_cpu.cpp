@@ -64,7 +64,7 @@ struct ProbeAccum_0
 };
 
 
-#line 262
+#line 273
 struct GlobalParams_0
 {
     BakeParams_0* params_0;
@@ -80,7 +80,7 @@ struct GlobalParams_0
 };
 
 
-#line 262
+#line 273
 struct KernelContext_0
 {
     GlobalParams_0* globalParams_0;
@@ -1013,6 +1013,9 @@ void _main_0(void* _S33, void* entryPointParams_0, void* globalParams_1)
 #line 232
         uint32_t bounce_0 = 0U;
 
+#line 232
+        float local_hits_1 = local_hits_0;
+
 
         for(;;)
         {
@@ -1023,6 +1026,9 @@ void _main_0(void* _S33, void* entryPointParams_0, void* globalParams_1)
             }
             else
             {
+
+#line 235
+                local_hits_0 = local_hits_1;
 
 #line 235
                 break;
@@ -1037,83 +1043,119 @@ void _main_0(void* _S33, void* entryPointParams_0, void* globalParams_1)
             if(!_S37)
             {
 
-#line 239
+#line 238
+                local_hits_0 = local_hits_1;
                 break;
             }
             Triangle_0 _S38 = (&kernelContext_1)->globalParams_0->triangles_0.Load(hit_tri_1);
 
 #line 241
+            float max_alpha_0 = 0.0f;
+
+#line 241
             b_0 = 0U;
+
             for(;;)
             {
 
-#line 242
+#line 243
                 if(b_0 < 9U)
                 {
                 }
                 else
                 {
 
-#line 242
+#line 243
                     break;
                 }
 
 #line 243
-                local_absorbed_0[b_0] = local_absorbed_0[b_0] + (&((&kernelContext_1)->globalParams_0->materials_0)[_S38.material_index_0])->coefficients_0[b_0];
+                float alpha_0 = (&((&kernelContext_1)->globalParams_0->materials_0)[_S38.material_index_0])->coefficients_0[b_0];
 
-#line 242
+                local_absorbed_0[b_0] = local_absorbed_0[b_0] + (&((&kernelContext_1)->globalParams_0->materials_0)[_S38.material_index_0])->coefficients_0[b_0];
+                if(((&((&kernelContext_1)->globalParams_0->materials_0)[_S38.material_index_0])->coefficients_0[b_0]) > max_alpha_0)
+                {
+
+#line 246
+                    max_alpha_0 = alpha_0;
+
+#line 246
+                }
+
+#line 243
                 b_0 = b_0 + 1U;
 
-#line 242
+#line 243
             }
 
-
-            float local_hits_1 = local_hits_0 + 1.0f;
-
-
-            Triangle_0 tri_1 = (&kernelContext_1)->globalParams_0->triangles_0.Load(hit_tri_1);
-            Vertex_0 _S39 = (&kernelContext_1)->globalParams_0->vertices_0.Load(tri_1.i0_0);
+#line 248
+            float local_hits_2 = local_hits_1 + 1.0f;
 
 
-            Vector<float, 3>  hit_normal_0 = normalize_0(cross_0((&kernelContext_1)->globalParams_0->vertices_0.Load(tri_1.i1_0).position_0 - _S39.position_0, (&kernelContext_1)->globalParams_0->vertices_0.Load(tri_1.i2_0).position_0 - _S39.position_0));
+
+            if(bounce_0 > 4U)
+            {
+
+#line 253
+                float _S39 = (F32_max((1.0f - max_alpha_0), (0.05000000074505806f)));
+                float _S40 = rand_float_0(&rng_2);
+
+#line 254
+                if(_S40 > _S39)
+                {
+
+#line 254
+                    local_hits_0 = local_hits_2;
+                    break;
+                }
 
 #line 252
+            }
+
+#line 259
+            Triangle_0 tri_1 = (&kernelContext_1)->globalParams_0->triangles_0.Load(hit_tri_1);
+            Vertex_0 _S41 = (&kernelContext_1)->globalParams_0->vertices_0.Load(tri_1.i0_0);
+
+
+            Vector<float, 3>  hit_normal_0 = normalize_0(cross_0((&kernelContext_1)->globalParams_0->vertices_0.Load(tri_1.i1_0).position_0 - _S41.position_0, (&kernelContext_1)->globalParams_0->vertices_0.Load(tri_1.i2_0).position_0 - _S41.position_0));
+
+#line 263
             Vector<float, 3>  hit_normal_1;
             if((dot_0(hit_normal_0, ray_dir_1)) > 0.0f)
             {
 
-#line 253
+#line 264
                 hit_normal_1 = - hit_normal_0;
 
-#line 253
+#line 264
             }
             else
             {
 
-#line 253
+#line 264
                 hit_normal_1 = hit_normal_0;
 
-#line 253
+#line 264
             }
 
 
-            Vector<float, 3>  _S40 = ray_origin_1 + ray_dir_1 * (Vector<float, 3> )hit_t_1 + hit_normal_1 * (Vector<float, 3> )(slang_bit_cast<GlobalParams_0*>(globalParams_1))->params_0->bias_0;
-            Vector<float, 3>  _S41 = random_cosine_direction_0(hit_normal_1, &rng_2);
+            Vector<float, 3>  _S42 = ray_origin_1 + ray_dir_1 * (Vector<float, 3> )hit_t_1 + hit_normal_1 * (Vector<float, 3> )(slang_bit_cast<GlobalParams_0*>(globalParams_1))->params_0->bias_0;
+            Vector<float, 3>  _S43 = random_cosine_direction_0(hit_normal_1, &rng_2);
 
 #line 235
-            uint32_t _S42 = bounce_0 + 1U;
+            uint32_t _S44 = bounce_0 + 1U;
 
 #line 235
-            ray_origin_1 = _S40;
+            ray_origin_1 = _S42;
 
 #line 235
-            ray_dir_1 = _S41;
+            ray_dir_1 = _S43;
 
 #line 235
-            bounce_0 = _S42;
+            bounce_0 = _S44;
 
 #line 235
-            local_hits_0 = local_hits_1;
+            local_hits_1 = local_hits_2;
 
 #line 235
         }
@@ -1127,28 +1169,28 @@ void _main_0(void* _S33, void* entryPointParams_0, void* globalParams_1)
 #line 231
     b_0 = 0U;
 
-#line 261
+#line 272
     for(;;)
     {
 
-#line 261
+#line 272
         if(b_0 < 9U)
         {
         }
         else
         {
 
-#line 261
+#line 272
             break;
         }
 
-#line 262
+#line 273
         (&((&kernelContext_1)->globalParams_0->output_accum_0)[probe_index_0])->absorbed_0[b_0] = (&((&kernelContext_1)->globalParams_0->output_accum_0)[probe_index_0])->absorbed_0[b_0] + local_absorbed_0[b_0];
 
-#line 261
+#line 272
         b_0 = b_0 + 1U;
 
-#line 261
+#line 272
     }
 
 

@@ -239,10 +239,21 @@ void main(uint3 tid : SV_DispatchThreadID) {
 				break;
 
 			uint mat_idx = triangles[hit_tri].material_index;
+			float max_alpha = 0.0;
 			for (uint b = 0; b < NUM_BANDS; b++) {
-				local_absorbed[b] += materials[mat_idx].coefficients[b];
+				float alpha = materials[mat_idx].coefficients[b];
+				local_absorbed[b] += alpha;
+				if (alpha > max_alpha) max_alpha = alpha;
 			}
 			local_hits += 1.0;
+
+			// Russian roulette: after 5 bounces, probabilistically terminate.
+			// Survival probability based on reflectivity (1 - max_absorption).
+			if (bounce > 4) {
+				float survive = max(1.0 - max_alpha, 0.05);
+				if (rand_float(rng) > survive)
+					break;
+			}
 
 			// Compute hit normal for bounce.
 			Triangle tri = triangles[hit_tri];
