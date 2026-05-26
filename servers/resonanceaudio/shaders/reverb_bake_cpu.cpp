@@ -74,7 +74,7 @@ struct ProbeAccum_0
 };
 
 
-#line 304
+#line 303
 struct GlobalParams_0
 {
     BakeParams_0* params_0;
@@ -90,7 +90,7 @@ struct GlobalParams_0
 };
 
 
-#line 304
+#line 303
 struct KernelContext_0
 {
     GlobalParams_0* globalParams_0;
@@ -800,41 +800,41 @@ static bool trace_ray_grid_0(Vector<float, 3>  ray_origin_0, Vector<float, 3>  r
                     uint32_t tri_idx_0 = kernelContext_0->globalParams_0->triangle_indices_0.Load(_S27 + tri_base_0 + ti_0);
                     Triangle_0 tri_0 = kernelContext_0->globalParams_0->triangles_0.Load(tri_idx_0);
 
-#line 205
+#line 204
                     float t_1;
                     Vector<float, 3>  n_0;
-                    bool _S30 = ray_triangle_intersect_0(ray_origin_0, ray_dir_0, kernelContext_0->globalParams_0->vertices_0.Load(tri_0.i0_0).position_0, kernelContext_0->globalParams_0->vertices_0.Load(tri_0.i1_0).position_0, kernelContext_0->globalParams_0->vertices_0.Load(tri_0.i2_0).position_0, &t_1, &n_0);
+                    bool _S30 = ray_triangle_intersect_0(ray_origin_0, ray_dir_0, kernelContext_0->globalParams_0->vertices_0.Load(tri_0.i0_0).position_0 + kernelContext_0->globalParams_0->vertices_0.Load(tri_0.i0_0).position_lo_0, kernelContext_0->globalParams_0->vertices_0.Load(tri_0.i1_0).position_0 + kernelContext_0->globalParams_0->vertices_0.Load(tri_0.i1_0).position_lo_0, kernelContext_0->globalParams_0->vertices_0.Load(tri_0.i2_0).position_0 + kernelContext_0->globalParams_0->vertices_0.Load(tri_0.i2_0).position_lo_0, &t_1, &n_0);
 
-#line 207
+#line 206
                     bool _S31;
 
-#line 207
+#line 206
                     if(_S30)
                     {
 
-#line 207
+#line 206
                         _S31 = t_1 < (*hit_t_0);
 
-#line 207
+#line 206
                     }
                     else
                     {
 
-#line 207
+#line 206
                         _S31 = false;
 
-#line 207
+#line 206
                     }
 
-#line 207
+#line 206
                     if(_S31)
                     {
 
-#line 208
+#line 207
                         *hit_t_0 = t_1;
                         *hit_tri_0 = tri_idx_0;
 
-#line 207
+#line 206
                     }
 
 #line 197
@@ -852,19 +852,19 @@ static bool trace_ray_grid_0(Vector<float, 3>  ray_origin_0, Vector<float, 3>  r
 #line 184
         }
 
-#line 216
+#line 215
         if((t_max_0.x) < (t_max_0.y))
         {
 
-#line 217
+#line 216
             if((t_max_0.x) < (t_max_0.z))
             {
 
-#line 218
+#line 217
                 icell_0.x = icell_0.x + _S21;
                 t_max_0.x = t_max_0.x + _S18.x;
 
-#line 217
+#line 216
             }
             else
             {
@@ -872,23 +872,23 @@ static bool trace_ray_grid_0(Vector<float, 3>  ray_origin_0, Vector<float, 3>  r
                 icell_0.z = icell_0.z + _S23;
                 t_max_0.z = t_max_0.z + _S18.z;
 
-#line 217
+#line 216
             }
 
-#line 216
+#line 215
         }
         else
         {
 
-#line 225
+#line 224
             if((t_max_0.y) < (t_max_0.z))
             {
 
-#line 226
+#line 225
                 icell_0.y = icell_0.y + _S22;
                 t_max_0.y = t_max_0.y + _S18.y;
 
-#line 225
+#line 224
             }
             else
             {
@@ -896,13 +896,13 @@ static bool trace_ray_grid_0(Vector<float, 3>  ray_origin_0, Vector<float, 3>  r
                 icell_0.z = icell_0.z + _S23;
                 t_max_0.z = t_max_0.z + _S18.z;
 
-#line 225
+#line 224
             }
 
-#line 216
+#line 215
         }
 
-#line 233
+#line 232
         uint32_t _S32 = iters_0 + 1U;
 
 
@@ -912,20 +912,20 @@ static bool trace_ray_grid_0(Vector<float, 3>  ray_origin_0, Vector<float, 3>  r
             if((*hit_t_0) < ((F32_min(((F32_min((t_max_0.x), (t_max_0.y)))), (t_max_0.z))) / length_0(kernelContext_0->globalParams_0->params_0->to_cell_size_0)))
             {
 
-#line 240
+#line 239
                 break;
             }
 
-#line 236
+#line 235
         }
 
-#line 236
+#line 235
         iters_0 = _S32;
 
 #line 179
     }
 
-#line 244
+#line 243
     return (*hit_tri_0) != 4294967295U;
 }
 
@@ -940,23 +940,23 @@ static Vector<float, 3>  random_cosine_direction_0(Vector<float, 3>  normal_0, u
 }
 
 
-#line 248
+#line 247
 void _main_0(void* _S33, void* entryPointParams_0, void* globalParams_1)
 {
 
-#line 248
+#line 247
     ComputeThreadVaryingInput * _S34 = (slang_bit_cast<ComputeThreadVaryingInput *>(_S33));
 
-#line 248
+#line 247
     KernelContext_0 kernelContext_1;
 
-#line 248
+#line 247
     (&kernelContext_1)->globalParams_0 = (slang_bit_cast<GlobalParams_0*>(globalParams_1));
     uint32_t probe_index_0 = (_S34->groupID * Vector<uint32_t, 3> (64U, 1U, 1U) + _S34->groupThreadID).x;
     if(probe_index_0 >= ((slang_bit_cast<GlobalParams_0*>(globalParams_1))->params_0->probe_count_0))
     {
 
-#line 251
+#line 250
         return;
     }
 
@@ -965,35 +965,35 @@ void _main_0(void* _S33, void* entryPointParams_0, void* globalParams_1)
 
     FixedArray<float, 9>  local_absorbed_0;
 
-#line 257
+#line 256
     uint32_t b_0 = 0U;
     for(;;)
     {
 
-#line 258
+#line 257
         if(b_0 < 9U)
         {
         }
         else
         {
 
-#line 258
+#line 257
             break;
         }
 
-#line 259
+#line 258
         local_absorbed_0[b_0] = 0.0f;
 
-#line 258
+#line 257
         b_0 = b_0 + 1U;
 
-#line 258
+#line 257
     }
 
-#line 258
+#line 257
     uint32_t ray_idx_0 = (slang_bit_cast<GlobalParams_0*>(globalParams_1))->params_0->ray_from_0;
 
-#line 258
+#line 257
     float local_hits_0 = 0.0f;
 
 
@@ -1001,105 +1001,105 @@ void _main_0(void* _S33, void* entryPointParams_0, void* globalParams_1)
     for(;;)
     {
 
-#line 262
+#line 261
         if(ray_idx_0 < ((slang_bit_cast<GlobalParams_0*>(globalParams_1))->params_0->ray_to_0))
         {
         }
         else
         {
 
-#line 262
+#line 261
             break;
         }
 
-#line 263
+#line 262
         Vector<float, 3>  _S36 = random_sphere_direction_0(&rng_2);
 
-#line 263
+#line 262
         Vector<float, 3>  ray_origin_1 = _S35;
 
-#line 263
+#line 262
         Vector<float, 3>  ray_dir_1 = _S36;
 
-#line 263
+#line 262
         uint32_t bounce_0 = 0U;
 
-#line 263
+#line 262
         float local_hits_1 = local_hits_0;
 
 
         for(;;)
         {
 
-#line 266
+#line 265
             if(bounce_0 < ((slang_bit_cast<GlobalParams_0*>(globalParams_1))->params_0->max_bounces_0))
             {
             }
             else
             {
 
-#line 266
+#line 265
                 local_hits_0 = local_hits_1;
 
-#line 266
+#line 265
                 break;
             }
 
-#line 267
+#line 266
             float hit_t_1;
             uint32_t hit_tri_1;
 
-#line 268
+#line 267
             bool _S37 = trace_ray_grid_0(ray_origin_1, ray_dir_1, &hit_t_1, &hit_tri_1, &kernelContext_1);
             if(!_S37)
             {
 
-#line 269
+#line 268
                 local_hits_0 = local_hits_1;
                 break;
             }
             Triangle_0 _S38 = (&kernelContext_1)->globalParams_0->triangles_0.Load(hit_tri_1);
 
-#line 272
+#line 271
             float max_alpha_0 = 0.0f;
 
-#line 272
+#line 271
             b_0 = 0U;
 
             for(;;)
             {
 
-#line 274
+#line 273
                 if(b_0 < 9U)
                 {
                 }
                 else
                 {
 
-#line 274
+#line 273
                     break;
                 }
 
-#line 274
+#line 273
                 float alpha_0 = (&((&kernelContext_1)->globalParams_0->materials_0)[_S38.material_index_0])->coefficients_0[b_0];
 
                 local_absorbed_0[b_0] = local_absorbed_0[b_0] + (&((&kernelContext_1)->globalParams_0->materials_0)[_S38.material_index_0])->coefficients_0[b_0];
                 if(((&((&kernelContext_1)->globalParams_0->materials_0)[_S38.material_index_0])->coefficients_0[b_0]) > max_alpha_0)
                 {
 
-#line 277
+#line 276
                     max_alpha_0 = alpha_0;
 
-#line 277
+#line 276
                 }
 
-#line 274
+#line 273
                 b_0 = b_0 + 1U;
 
-#line 274
+#line 273
             }
 
-#line 279
+#line 278
             float local_hits_2 = local_hits_1 + 1.0f;
 
 
@@ -1107,101 +1107,101 @@ void _main_0(void* _S33, void* entryPointParams_0, void* globalParams_1)
             if(bounce_0 > 4U)
             {
 
-#line 284
+#line 283
                 float _S39 = (F32_max((1.0f - max_alpha_0), (0.05000000074505806f)));
                 float _S40 = rand_float_0(&rng_2);
 
-#line 285
+#line 284
                 if(_S40 > _S39)
                 {
 
-#line 285
+#line 284
                     local_hits_0 = local_hits_2;
                     break;
                 }
 
-#line 283
+#line 282
             }
 
-#line 290
+#line 289
             Triangle_0 tri_1 = (&kernelContext_1)->globalParams_0->triangles_0.Load(hit_tri_1);
-            Vertex_0 _S41 = (&kernelContext_1)->globalParams_0->vertices_0.Load(tri_1.i0_0);
+            Vector<float, 3>  v0_1 = (&kernelContext_1)->globalParams_0->vertices_0.Load(tri_1.i0_0).position_0 + (&kernelContext_1)->globalParams_0->vertices_0.Load(tri_1.i0_0).position_lo_0;
 
 
-            Vector<float, 3>  hit_normal_0 = normalize_0(cross_0((&kernelContext_1)->globalParams_0->vertices_0.Load(tri_1.i1_0).position_0 - _S41.position_0, (&kernelContext_1)->globalParams_0->vertices_0.Load(tri_1.i2_0).position_0 - _S41.position_0));
+            Vector<float, 3>  hit_normal_0 = normalize_0(cross_0((&kernelContext_1)->globalParams_0->vertices_0.Load(tri_1.i1_0).position_0 + (&kernelContext_1)->globalParams_0->vertices_0.Load(tri_1.i1_0).position_lo_0 - v0_1, (&kernelContext_1)->globalParams_0->vertices_0.Load(tri_1.i2_0).position_0 + (&kernelContext_1)->globalParams_0->vertices_0.Load(tri_1.i2_0).position_lo_0 - v0_1));
 
-#line 294
+#line 293
             Vector<float, 3>  hit_normal_1;
             if((dot_0(hit_normal_0, ray_dir_1)) > 0.0f)
             {
 
-#line 295
+#line 294
                 hit_normal_1 = - hit_normal_0;
 
-#line 295
+#line 294
             }
             else
             {
 
-#line 295
+#line 294
                 hit_normal_1 = hit_normal_0;
 
-#line 295
+#line 294
             }
 
 
-            Vector<float, 3>  _S42 = ray_origin_1 + ray_dir_1 * (Vector<float, 3> )hit_t_1 + hit_normal_1 * (Vector<float, 3> )(slang_bit_cast<GlobalParams_0*>(globalParams_1))->params_0->bias_0;
-            Vector<float, 3>  _S43 = random_cosine_direction_0(hit_normal_1, &rng_2);
+            Vector<float, 3>  _S41 = ray_origin_1 + ray_dir_1 * (Vector<float, 3> )hit_t_1 + hit_normal_1 * (Vector<float, 3> )(slang_bit_cast<GlobalParams_0*>(globalParams_1))->params_0->bias_0;
+            Vector<float, 3>  _S42 = random_cosine_direction_0(hit_normal_1, &rng_2);
 
-#line 266
-            uint32_t _S44 = bounce_0 + 1U;
+#line 265
+            uint32_t _S43 = bounce_0 + 1U;
 
-#line 266
-            ray_origin_1 = _S42;
+#line 265
+            ray_origin_1 = _S41;
 
-#line 266
-            ray_dir_1 = _S43;
+#line 265
+            ray_dir_1 = _S42;
 
-#line 266
-            bounce_0 = _S44;
+#line 265
+            bounce_0 = _S43;
 
-#line 266
+#line 265
             local_hits_1 = local_hits_2;
 
-#line 266
+#line 265
         }
 
-#line 262
+#line 261
         ray_idx_0 = ray_idx_0 + 1U;
 
-#line 262
+#line 261
     }
 
-#line 262
+#line 261
     b_0 = 0U;
 
-#line 303
+#line 302
     for(;;)
     {
 
-#line 303
+#line 302
         if(b_0 < 9U)
         {
         }
         else
         {
 
-#line 303
+#line 302
             break;
         }
 
-#line 304
+#line 303
         (&((&kernelContext_1)->globalParams_0->output_accum_0)[probe_index_0])->absorbed_0[b_0] = (&((&kernelContext_1)->globalParams_0->output_accum_0)[probe_index_0])->absorbed_0[b_0] + local_absorbed_0[b_0];
 
-#line 303
+#line 302
         b_0 = b_0 + 1U;
 
-#line 303
+#line 302
     }
 
 

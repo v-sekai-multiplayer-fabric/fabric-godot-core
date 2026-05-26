@@ -197,10 +197,9 @@ bool trace_ray_grid(float3 ray_origin, float3 ray_dir, out float hit_t, out uint
 				for (uint ti = 0; ti < tri_test; ti++) {
 					uint tri_idx = triangle_indices[cell_tri_start + tri_base + ti];
 					Triangle tri = triangles[tri_idx];
-					// Use hi-precision only for inner loop — position_lo is sub-ULP for local geometry.
-					float3 v0 = vertices[tri.i0].position;
-					float3 v1 = vertices[tri.i1].position;
-					float3 v2 = vertices[tri.i2].position;
+						float3 v0 = vertices[tri.i0].position + vertices[tri.i0].position_lo;
+					float3 v1 = vertices[tri.i1].position + vertices[tri.i1].position_lo;
+					float3 v2 = vertices[tri.i2].position + vertices[tri.i2].position_lo;
 
 					float t;
 					float3 n;
@@ -288,9 +287,9 @@ void main(uint3 tid : SV_DispatchThreadID) {
 
 			// Compute hit normal for bounce.
 			Triangle tri = triangles[hit_tri];
-			float3 v0 = vertices[tri.i0].position;
-			float3 v1 = vertices[tri.i1].position;
-			float3 v2 = vertices[tri.i2].position;
+			float3 v0 = vertices[tri.i0].position + vertices[tri.i0].position_lo;
+			float3 v1 = vertices[tri.i1].position + vertices[tri.i1].position_lo;
+			float3 v2 = vertices[tri.i2].position + vertices[tri.i2].position_lo;
 			float3 hit_normal = normalize(cross(v1 - v0, v2 - v0));
 			if (dot(hit_normal, ray_dir) > 0.0)
 				hit_normal = -hit_normal;
