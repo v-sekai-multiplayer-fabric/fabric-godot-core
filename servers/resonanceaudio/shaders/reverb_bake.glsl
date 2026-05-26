@@ -497,41 +497,41 @@ bool trace_ray_grid_0(vec3 ray_origin_0, vec3 ray_dir_0, out float hit_t_0, out 
                     uint tri_idx_0 = triangle_indices_0._data[uint(_S18 + tri_base_0 + ti_0)];
                     Triangle_0 tri_0 = triangles_0._data[uint(tri_idx_0)];
 
-#line 204
+#line 205
                     float t_1;
                     vec3 n_0;
-                    bool _S21 = ray_triangle_intersect_0(ray_origin_0, ray_dir_0, vertices_0._data[uint(tri_0.i0_0)].position_1 + vertices_0._data[uint(tri_0.i0_0)].position_lo_1, vertices_0._data[uint(tri_0.i1_0)].position_1 + vertices_0._data[uint(tri_0.i1_0)].position_lo_1, vertices_0._data[uint(tri_0.i2_0)].position_1 + vertices_0._data[uint(tri_0.i2_0)].position_lo_1, t_1, n_0);
+                    bool _S21 = ray_triangle_intersect_0(ray_origin_0, ray_dir_0, vertices_0._data[uint(tri_0.i0_0)].position_1, vertices_0._data[uint(tri_0.i1_0)].position_1, vertices_0._data[uint(tri_0.i2_0)].position_1, t_1, n_0);
 
-#line 206
+#line 207
                     bool _S22;
 
-#line 206
+#line 207
                     if(_S21)
                     {
 
-#line 206
+#line 207
                         _S22 = t_1 < hit_t_0;
 
-#line 206
+#line 207
                     }
                     else
                     {
 
-#line 206
+#line 207
                         _S22 = false;
 
-#line 206
+#line 207
                     }
 
-#line 206
+#line 207
                     if(_S22)
                     {
 
-#line 207
+#line 208
                         hit_t_0 = t_1;
                         hit_tri_0 = tri_idx_0;
 
-#line 206
+#line 207
                     }
 
 #line 197
@@ -549,19 +549,19 @@ bool trace_ray_grid_0(vec3 ray_origin_0, vec3 ray_dir_0, out float hit_t_0, out 
 #line 184
         }
 
-#line 215
+#line 216
         if((t_max_0.x) < (t_max_0.y))
         {
 
-#line 216
+#line 217
             if((t_max_0.x) < (t_max_0.z))
             {
 
-#line 217
+#line 218
                 icell_0[0] = icell_0[0] + _S12;
                 t_max_0[0] = t_max_0[0] + _S11.x;
 
-#line 216
+#line 217
             }
             else
             {
@@ -569,23 +569,23 @@ bool trace_ray_grid_0(vec3 ray_origin_0, vec3 ray_dir_0, out float hit_t_0, out 
                 icell_0[2] = icell_0[2] + _S14;
                 t_max_0[2] = t_max_0[2] + _S11.z;
 
-#line 216
+#line 217
             }
 
-#line 215
+#line 216
         }
         else
         {
 
-#line 224
+#line 225
             if((t_max_0.y) < (t_max_0.z))
             {
 
-#line 225
+#line 226
                 icell_0[1] = icell_0[1] + _S13;
                 t_max_0[1] = t_max_0[1] + _S11.y;
 
-#line 224
+#line 225
             }
             else
             {
@@ -593,13 +593,13 @@ bool trace_ray_grid_0(vec3 ray_origin_0, vec3 ray_dir_0, out float hit_t_0, out 
                 icell_0[2] = icell_0[2] + _S14;
                 t_max_0[2] = t_max_0[2] + _S11.z;
 
-#line 224
+#line 225
             }
 
-#line 215
+#line 216
         }
 
-#line 232
+#line 233
         uint _S23 = iters_0 + 1U;
 
 
@@ -609,20 +609,20 @@ bool trace_ray_grid_0(vec3 ray_origin_0, vec3 ray_dir_0, out float hit_t_0, out 
             if(hit_t_0 < (min(min(t_max_0.x, t_max_0.y), t_max_0.z) / length(params_0.to_cell_size_0)))
             {
 
-#line 239
+#line 240
                 break;
             }
 
-#line 235
+#line 236
         }
 
-#line 235
+#line 236
         iters_0 = _S23;
 
 #line 179
     }
 
-#line 243
+#line 244
     return hit_tri_0 != 4294967295U;
 }
 
@@ -637,17 +637,17 @@ vec3 random_cosine_direction_0(vec3 normal_0, inout uint rng_1)
 }
 
 
-#line 247
+#line 248
 layout(local_size_x = 64, local_size_y = 1, local_size_z = 1) in;
 void main()
 {
 
-#line 248
+#line 249
     uint probe_index_0 = gl_GlobalInvocationID.x;
     if(probe_index_0 >= (params_0.probe_count_0))
     {
 
-#line 250
+#line 251
         return;
     }
 
@@ -656,35 +656,35 @@ void main()
 
     float  local_absorbed_0[9];
 
-#line 256
+#line 257
     uint b_0 = 0U;
     for(;;)
     {
 
-#line 257
+#line 258
         if(b_0 < 9U)
         {
         }
         else
         {
 
-#line 257
+#line 258
             break;
         }
 
-#line 258
+#line 259
         local_absorbed_0[b_0] = 0.0;
 
-#line 257
+#line 258
         b_0 = b_0 + 1U;
 
-#line 257
+#line 258
     }
 
-#line 257
+#line 258
     uint ray_idx_0 = params_0.ray_from_0;
 
-#line 257
+#line 258
     float local_hits_0 = 0.0;
 
 
@@ -692,105 +692,105 @@ void main()
     for(;;)
     {
 
-#line 261
+#line 262
         if(ray_idx_0 < (params_0.ray_to_0))
         {
         }
         else
         {
 
-#line 261
+#line 262
             break;
         }
 
-#line 262
+#line 263
         vec3 _S25 = random_sphere_direction_0(rng_2);
 
-#line 262
+#line 263
         vec3 ray_origin_1 = _S24;
 
-#line 262
+#line 263
         vec3 ray_dir_1 = _S25;
 
-#line 262
+#line 263
         uint bounce_0 = 0U;
 
-#line 262
+#line 263
         float local_hits_1 = local_hits_0;
 
 
         for(;;)
         {
 
-#line 265
+#line 266
             if(bounce_0 < (params_0.max_bounces_0))
             {
             }
             else
             {
 
-#line 265
+#line 266
                 local_hits_0 = local_hits_1;
 
-#line 265
+#line 266
                 break;
             }
 
-#line 266
+#line 267
             float hit_t_1;
             uint hit_tri_1;
             bool _S26 = trace_ray_grid_0(ray_origin_1, ray_dir_1, hit_t_1, hit_tri_1);
 
-#line 268
+#line 269
             if(!_S26)
             {
 
-#line 268
+#line 269
                 local_hits_0 = local_hits_1;
                 break;
             }
             Triangle_0 _S27 = triangles_0._data[uint(hit_tri_1)];
 
-#line 271
+#line 272
             float max_alpha_0 = 0.0;
 
-#line 271
+#line 272
             b_0 = 0U;
 
             for(;;)
             {
 
-#line 273
+#line 274
                 if(b_0 < 9U)
                 {
                 }
                 else
                 {
 
-#line 273
+#line 274
                     break;
                 }
 
-#line 273
+#line 274
                 float alpha_0 = materials_0._data[uint(_S27.material_index_0)].coefficients_0[b_0];
 
                 local_absorbed_0[b_0] = local_absorbed_0[b_0] + materials_0._data[uint(_S27.material_index_0)].coefficients_0[b_0];
                 if((materials_0._data[uint(_S27.material_index_0)].coefficients_0[b_0]) > max_alpha_0)
                 {
 
-#line 276
+#line 277
                     max_alpha_0 = alpha_0;
 
-#line 276
+#line 277
                 }
 
-#line 273
+#line 274
                 b_0 = b_0 + 1U;
 
-#line 273
+#line 274
             }
 
-#line 278
+#line 279
             float local_hits_2 = local_hits_1 + 1.0;
 
 
@@ -798,101 +798,101 @@ void main()
             if(bounce_0 > 4U)
             {
 
-#line 283
+#line 284
                 float _S28 = max(1.0 - max_alpha_0, 0.05000000074505806);
                 float _S29 = rand_float_0(rng_2);
 
-#line 284
+#line 285
                 if(_S29 > _S28)
                 {
 
-#line 284
+#line 285
                     local_hits_0 = local_hits_2;
                     break;
                 }
 
-#line 282
+#line 283
             }
 
-#line 289
+#line 290
             Triangle_0 tri_1 = triangles_0._data[uint(hit_tri_1)];
-            vec3 v0_1 = vertices_0._data[uint(tri_1.i0_0)].position_1 + vertices_0._data[uint(tri_1.i0_0)].position_lo_1;
+            Vertex_0 _S30 = vertices_0._data[uint(tri_1.i0_0)];
 
 
-            vec3 hit_normal_0 = normalize(cross(vertices_0._data[uint(tri_1.i1_0)].position_1 + vertices_0._data[uint(tri_1.i1_0)].position_lo_1 - v0_1, vertices_0._data[uint(tri_1.i2_0)].position_1 + vertices_0._data[uint(tri_1.i2_0)].position_lo_1 - v0_1));
+            vec3 hit_normal_0 = normalize(cross(vertices_0._data[uint(tri_1.i1_0)].position_1 - _S30.position_1, vertices_0._data[uint(tri_1.i2_0)].position_1 - _S30.position_1));
 
-#line 293
+#line 294
             vec3 hit_normal_1;
             if((dot(hit_normal_0, ray_dir_1)) > 0.0)
             {
 
-#line 294
+#line 295
                 hit_normal_1 = - hit_normal_0;
 
-#line 294
+#line 295
             }
             else
             {
 
-#line 294
+#line 295
                 hit_normal_1 = hit_normal_0;
 
-#line 294
+#line 295
             }
 
 
-            vec3 _S30 = ray_origin_1 + ray_dir_1 * hit_t_1 + hit_normal_1 * params_0.bias_0;
-            vec3 _S31 = random_cosine_direction_0(hit_normal_1, rng_2);
+            vec3 _S31 = ray_origin_1 + ray_dir_1 * hit_t_1 + hit_normal_1 * params_0.bias_0;
+            vec3 _S32 = random_cosine_direction_0(hit_normal_1, rng_2);
 
-#line 265
-            uint _S32 = bounce_0 + 1U;
+#line 266
+            uint _S33 = bounce_0 + 1U;
 
-#line 265
-            ray_origin_1 = _S30;
+#line 266
+            ray_origin_1 = _S31;
 
-#line 265
-            ray_dir_1 = _S31;
+#line 266
+            ray_dir_1 = _S32;
 
-#line 265
-            bounce_0 = _S32;
+#line 266
+            bounce_0 = _S33;
 
-#line 265
+#line 266
             local_hits_1 = local_hits_2;
 
-#line 265
+#line 266
         }
 
-#line 261
+#line 262
         ray_idx_0 = ray_idx_0 + 1U;
 
-#line 261
+#line 262
     }
 
-#line 261
+#line 262
     b_0 = 0U;
 
-#line 302
+#line 303
     for(;;)
     {
 
-#line 302
+#line 303
         if(b_0 < 9U)
         {
         }
         else
         {
 
-#line 302
+#line 303
             break;
         }
 
-#line 303
+#line 304
         output_accum_0._data[uint(probe_index_0)].absorbed_0[b_0] = output_accum_0._data[uint(probe_index_0)].absorbed_0[b_0] + local_absorbed_0[b_0];
 
-#line 302
+#line 303
         b_0 = b_0 + 1U;
 
-#line 302
+#line 303
     }
 
 
