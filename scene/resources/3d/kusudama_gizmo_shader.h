@@ -104,7 +104,7 @@ int get_condition(in vec3 normal_dir, in int cone_counts, in float boundary_widt
 		}
 		current_condition = get_allowability_condition(current_condition, in_cone);
 	} else {
-		for(int i = 0; i < (cone_counts - 1) * 3; i = i + 3) {
+		for(int i = 0; i < cone_counts * 3; i = i + 3) {
 			normal_dir = normalize(normal_dir);
 
 			vec4 cone_1 = cone_sequence[i + 0];
