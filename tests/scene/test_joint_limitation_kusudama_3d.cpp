@@ -1743,18 +1743,27 @@ TEST_CASE("[Scene][JointLimitationKusudama3D] Test scaling - various cone counts
 	}
 }
 
-TEST_CASE("[Scene][JointLimitationKusudama3D] Test convex hull ordering") {
+TEST_CASE("[Scene][JointLimitationKusudama3D] Test polygon uses hull order for projection") {
+	// BUG REGRESSION: If polygon vertices use input order (0→1→2→3) instead of
+	// convex hull order, a scrambled sequence like (+X, +Y, -X, -Y) creates a
+	// self-intersecting polygon.  The half-space normals alternate direction,
+	// _polygon_contains always returns false, and _polygon_project picks the
+	// nearest self-intersecting edge — which can be closer to the origin than to
+	// the actual constraint boundary, causing the output to "snap inward" during
+	// interpolation.
+	//
+	// Fix: polygon construction uses convex hull order (sorted by angle around
+	// centroid) while tangent paths use the user's input order.
 	Ref<JointLimitationKusudama3D> limitation;
 	limitation.instantiate();
 
-	// Input cones in non-convex-hull order — the solver should reorder them.
 	Vector3 cp1 = Vector3(1, 0, 0).normalized();
-	Vector3 cp2 = Vector3(-1, 0, 0).normalized(); // opposite of cp1
+	Vector3 cp2 = Vector3(-1, 0, 0).normalized();
 	Vector3 cp3 = Vector3(0, 1, 0).normalized();
-	Vector3 cp4 = Vector3(0, -1, 0).normalized(); // opposite of cp3
+	Vector3 cp4 = Vector3(0, -1, 0).normalized();
 	real_t radius = Math::deg_to_rad(40.0);
 
-	// Scrambled order: cp1, cp3, cp2, cp4 (not sequential around the sphere).
+	// Scrambled order: NOT sequential around the sphere.
 	Vector<Vector4> cones;
 	cones.push_back(Vector4(cp1.x, cp1.y, cp1.z, radius));
 	cones.push_back(Vector4(cp3.x, cp3.y, cp3.z, radius));
@@ -1766,18 +1775,18 @@ TEST_CASE("[Scene][JointLimitationKusudama3D] Test convex hull ordering") {
 	Vector3 right = Vector3(1, 0, 0);
 	Quaternion rot = Quaternion();
 
-	// Despite scrambled input, the solver should work correctly.
-	// Test points near each cone center — should be returned unchanged.
-	Vector3 result1 = limitation->solve(forward, right, rot, cp1);
-	CHECK(result1.is_equal_approx(cp1));
-	Vector3 result2 = limitation->solve(forward, right, rot, cp3);
-	CHECK(result2.is_equal_approx(cp3));
+	// Points inside cones — returned unchanged regardless of order.
+	CHECK(limitation->solve(forward, right, rot, cp1).is_equal_approx(cp1));
+	CHECK(limitation->solve(forward, right, rot, cp3).is_equal_approx(cp3));
 
-	// Test a point between cp1 and cp3 — should be valid.
-	Vector3 between = (cp1 + cp3).normalized();
-	Vector3 result3 = limitation->solve(forward, right, rot, between);
-	CHECK(result3.is_finite());
-	CHECK(result3.is_normalized());
+	// Point outside all cones and tangent paths — must project to a boundary
+	// point that is on the unit sphere (not snapping toward origin).
+	Vector3 outside = Vector3(0, 0, 1).normalized(); // +Z, far from all cones
+	Vector3 result = limitation->solve(forward, right, rot, outside);
+	CHECK(result.is_finite());
+	CHECK(result.is_normalized());
+	// The result must be in the same hemisphere as the input (no opposite-side snap).
+	CHECK(result.dot(outside) >= 0.0f);
 }
 
 } // namespace TestJointLimitationKusudama3D
