@@ -1,12 +1,13 @@
-// Reverb probe bake compute shader.
+// Reverb probe bake compute shader with grid acceleration.
 // Per-probe ray tracing to estimate mean absorption per frequency band.
-// Output feeds into Resonance Audio's ComputeReverbProperties (Eyring equation).
+// Uses 3D grid + cluster AABB traversal (same as lightmapper_rd).
 //
 // Compile targets:
-//   GPU: slangc reverb_bake.slang -target spirv -profile sm_6_0 -entry main -o reverb_bake.spv
-//   CPU: slangc reverb_bake.slang -target cpp -entry main -o reverb_bake.cpp
+//   GPU: slangc reverb_bake.slang -target glsl -profile glsl_460 -entry main -stage compute -o reverb_bake.glsl
+//   CPU: slangc reverb_bake.slang -target cpp -entry main -stage compute -o reverb_bake_cpu.cpp
 
 static const uint NUM_BANDS = 9;
+static const uint CLUSTER_SIZE = 32;
 
 struct BakeParams {
 	uint ray_count;
@@ -15,9 +16,9 @@ struct BakeParams {
 	uint triangle_count;
 	uint ray_from;
 	uint ray_to;
-	float cell_size;
+	float3 to_cell_offset;
 	int grid_size;
-	float3 grid_offset;
+	float3 to_cell_size;
 	float bias;
 };
 
@@ -37,6 +38,13 @@ struct MaterialAbsorption {
 	float coefficients[NUM_BANDS];
 };
 
+struct ClusterAABB {
+	float3 min_bounds;
+	float pad0;
+	float3 max_bounds;
+	float pad1;
+};
+
 struct ProbeAccum {
 	float absorbed[NUM_BANDS];
 	float total_hits;
@@ -47,10 +55,12 @@ struct ProbeAccum {
 [[vk::binding(2, 0)]] StructuredBuffer<Triangle> triangles;
 [[vk::binding(3, 0)]] StructuredBuffer<float4> probe_positions;
 [[vk::binding(4, 0)]] StructuredBuffer<MaterialAbsorption> materials;
-[[vk::binding(5, 0)]] StructuredBuffer<uint> grid_indices;
+[[vk::binding(5, 0)]] StructuredBuffer<uint2> grid_data;
+[[vk::binding(6, 0)]] StructuredBuffer<uint2> cluster_indices;
+[[vk::binding(7, 0)]] StructuredBuffer<ClusterAABB> cluster_aabbs;
+[[vk::binding(8, 0)]] StructuredBuffer<uint> triangle_indices;
 [[vk::binding(0, 1)]] RWStructuredBuffer<ProbeAccum> output_accum;
 
-// PCG hash for deterministic pseudo-random numbers.
 uint pcg_hash(uint state) {
 	uint s = state * 747796405u + 2891336453u;
 	uint word = ((s >> ((s >> 28u) + 4u)) ^ s) * 277803737u;
@@ -62,7 +72,6 @@ float rand_float(inout uint state) {
 	return float(state) / float(0xFFFFFFFFu);
 }
 
-// Uniform sphere direction from two random floats.
 float3 random_sphere_direction(inout uint rng) {
 	float z = 2.0 * rand_float(rng) - 1.0;
 	float phi = 2.0 * 3.14159265 * rand_float(rng);
@@ -70,13 +79,11 @@ float3 random_sphere_direction(inout uint rng) {
 	return float3(r * cos(phi), r * sin(phi), z);
 }
 
-// Cosine-weighted hemisphere direction around normal.
 float3 random_cosine_direction(float3 normal, inout uint rng) {
 	float3 dir = random_sphere_direction(rng);
 	return normalize(dir + normal);
 }
 
-// Moller-Trumbore ray-triangle intersection.
 bool ray_triangle_intersect(float3 ro, float3 rd, float3 v0, float3 v1, float3 v2,
 		out float t, out float3 normal_out) {
 	t = 0.0;
@@ -105,6 +112,108 @@ bool ray_triangle_intersect(float3 ro, float3 rd, float3 v0, float3 v1, float3 v
 	return true;
 }
 
+bool ray_box_test(float3 origin, float3 inv_dir, float3 box_min, float3 box_max) {
+	float3 t0 = (box_min - origin) * inv_dir;
+	float3 t1 = (box_max - origin) * inv_dir;
+	float3 tmin = min(t0, t1);
+	float3 tmax = max(t0, t1);
+	float enter = max(max(tmin.x, tmin.y), tmin.z);
+	float exit = min(min(tmax.x, tmax.y), tmax.z);
+	return enter <= exit && exit >= 0.0;
+}
+
+// Trace a ray using DDA grid traversal with cluster AABBs.
+bool trace_ray_grid(float3 ray_origin, float3 ray_dir, out float hit_t, out uint hit_tri) {
+	hit_t = 1e30;
+	hit_tri = 0xFFFFFFFFu;
+
+	float3 inv_dir = 1.0 / ray_dir;
+	int gs = params.grid_size;
+
+	// Convert to cell coordinates.
+	float3 from_cell = (ray_origin - params.to_cell_offset) * params.to_cell_size;
+	int3 icell = int3(floor(from_cell));
+
+	// DDA setup.
+	int3 step = int3(sign(ray_dir));
+	float3 dir_cell = normalize(ray_dir * (1.0 / params.to_cell_size));
+	float3 delta = min(abs(1.0 / dir_cell), float(gs));
+	float3 t_max_init = (float3(icell) + max(float3(0, 0, 0), float3(step)) - from_cell) / dir_cell;
+	float3 t_max = t_max_init;
+
+	// Avoid division by zero for axis-aligned rays.
+	if (step.x == 0) t_max.x = 1e30;
+	if (step.y == 0) t_max.y = 1e30;
+	if (step.z == 0) t_max.z = 1e30;
+
+	uint iters = 0;
+	while (all(icell >= int3(0, 0, 0)) && all(icell < int3(gs, gs, gs)) && iters < 1000) {
+		uint cell_idx = uint(icell.x + icell.y * gs + icell.z * gs * gs);
+		uint2 cell_data = grid_data[cell_idx];
+		uint tri_count = cell_data.x;
+
+		if (tri_count > 0) {
+			uint cell_solid_index = cell_data.y;
+			uint cluster_start = cluster_indices[cell_solid_index].x;
+			uint cell_tri_start = cluster_indices[cell_solid_index].y;
+			uint cluster_count = (tri_count + CLUSTER_SIZE - 1) / CLUSTER_SIZE;
+
+			for (uint ci = 0; ci < cluster_count; ci++) {
+				ClusterAABB ca = cluster_aabbs[cluster_start + ci];
+				if (!ray_box_test(ray_origin, inv_dir, ca.min_bounds, ca.max_bounds))
+					continue;
+
+				uint tri_base = ci * CLUSTER_SIZE;
+				uint tri_test = min(CLUSTER_SIZE, tri_count - tri_base);
+				for (uint ti = 0; ti < tri_test; ti++) {
+					uint tri_idx = triangle_indices[cell_tri_start + tri_base + ti];
+					Triangle tri = triangles[tri_idx];
+					float3 v0 = vertices[tri.i0].position;
+					float3 v1 = vertices[tri.i1].position;
+					float3 v2 = vertices[tri.i2].position;
+
+					float t;
+					float3 n;
+					if (ray_triangle_intersect(ray_origin, ray_dir, v0, v1, v2, t, n) && t < hit_t) {
+						hit_t = t;
+						hit_tri = tri_idx;
+					}
+				}
+			}
+		}
+
+		// DDA step.
+		if (t_max.x < t_max.y) {
+			if (t_max.x < t_max.z) {
+				icell.x += step.x;
+				t_max.x += delta.x;
+			} else {
+				icell.z += step.z;
+				t_max.z += delta.z;
+			}
+		} else {
+			if (t_max.y < t_max.z) {
+				icell.y += step.y;
+				t_max.y += delta.y;
+			} else {
+				icell.z += step.z;
+				t_max.z += delta.z;
+			}
+		}
+		iters++;
+
+		// Early exit if we found a hit closer than the next cell boundary.
+		if (hit_tri != 0xFFFFFFFFu) {
+			float min_t_max = min(min(t_max.x, t_max.y), t_max.z);
+			// Convert cell-space t to world-space.
+			if (hit_t < min_t_max / length(params.to_cell_size))
+				break;
+		}
+	}
+
+	return hit_tri != 0xFFFFFFFFu;
+}
+
 [numthreads(64, 1, 1)]
 void main(uint3 tid : SV_DispatchThreadID) {
 	uint probe_index = tid.x;
@@ -124,43 +233,31 @@ void main(uint3 tid : SV_DispatchThreadID) {
 		float3 ray_origin = position;
 
 		for (uint bounce = 0; bounce < params.max_bounces; bounce++) {
-			float best_t = 1e30;
-			int best_tri = -1;
-			float3 best_normal = float3(0, 1, 0);
+			float hit_t;
+			uint hit_tri;
+			if (!trace_ray_grid(ray_origin, ray_dir, hit_t, hit_tri))
+				break;
 
-			// Brute-force closest intersection (grid acceleration is future optimization).
-			for (uint ti = 0; ti < params.triangle_count; ti++) {
-				Triangle tri = triangles[ti];
-				float3 v0 = vertices[tri.i0].position;
-				float3 v1 = vertices[tri.i1].position;
-				float3 v2 = vertices[tri.i2].position;
-
-				float t;
-				float3 n;
-				if (ray_triangle_intersect(ray_origin, ray_dir, v0, v1, v2, t, n)) {
-					if (t < best_t) {
-						best_t = t;
-						best_tri = int(ti);
-						best_normal = n;
-					}
-				}
-			}
-
-			if (best_tri < 0)
-				break; // Ray escaped — fully absorbed (outdoor).
-
-			uint mat_idx = triangles[best_tri].material_index;
+			uint mat_idx = triangles[hit_tri].material_index;
 			for (uint b = 0; b < NUM_BANDS; b++) {
 				local_absorbed[b] += materials[mat_idx].coefficients[b];
 			}
 			local_hits += 1.0;
 
-			ray_origin = ray_origin + ray_dir * best_t + best_normal * params.bias;
-			ray_dir = random_cosine_direction(best_normal, rng);
+			// Compute hit normal for bounce.
+			Triangle tri = triangles[hit_tri];
+			float3 v0 = vertices[tri.i0].position;
+			float3 v1 = vertices[tri.i1].position;
+			float3 v2 = vertices[tri.i2].position;
+			float3 hit_normal = normalize(cross(v1 - v0, v2 - v0));
+			if (dot(hit_normal, ray_dir) > 0.0)
+				hit_normal = -hit_normal;
+
+			ray_origin = ray_origin + ray_dir * hit_t + hit_normal * params.bias;
+			ray_dir = random_cosine_direction(hit_normal, rng);
 		}
 	}
 
-	// Write to output accumulator.
 	for (uint b = 0; b < NUM_BANDS; b++) {
 		output_accum[probe_index].absorbed[b] += local_absorbed[b];
 	}
