@@ -2,12 +2,17 @@
 // Per-probe ray tracing to estimate mean absorption per frequency band.
 // Uses 3D grid + cluster AABB traversal (same as lightmapper_rd).
 //
+// Dispatch: groups_x = ceil(rays_per_batch / 64), groups_y = probe_count
+// Each thread traces ONE ray for ONE probe, then workgroup reduces via
+// shared memory and atomicAdds the partial sum to the global accumulator.
+//
 // Compile targets:
 //   GPU: slangc reverb_bake.slang -target glsl -profile glsl_460 -entry main -stage compute -o reverb_bake.glsl
 //   CPU: slangc reverb_bake.slang -target cpp -entry main -stage compute -o reverb_bake_cpu.cpp
 
 static const uint NUM_BANDS = 9;
 static const uint CLUSTER_SIZE = 32;
+static const uint WORKGROUP_SIZE = 64;
 
 struct BakeParams {
 	uint ray_count;
@@ -43,11 +48,6 @@ struct ClusterAABB {
 	float pad0;
 	float3 max_bounds;
 	float pad1;
-};
-
-struct ProbeAccum {
-	float absorbed[NUM_BANDS];
-	float total_hits;
 };
 
 struct ProbePosition {
@@ -88,7 +88,22 @@ float3 df_sub(float3 a_hi, float3 a_lo, float3 b_hi, float3 b_lo) {
 [[vk::binding(6, 0)]] StructuredBuffer<uint2> cluster_indices;
 [[vk::binding(7, 0)]] StructuredBuffer<ClusterAABB> cluster_aabbs;
 [[vk::binding(8, 0)]] StructuredBuffer<uint> triangle_indices;
-[[vk::binding(0, 1)]] RWStructuredBuffer<ProbeAccum> output_accum;
+[[vk::binding(0, 1)]] RWStructuredBuffer<uint> output_accum;
+
+groupshared float s_absorbed[NUM_BANDS][WORKGROUP_SIZE];
+groupshared float s_hits[WORKGROUP_SIZE];
+
+void atomicAddFloat(uint index, float value) {
+	uint expected = output_accum[index];
+	[loop] for (;;) {
+		uint desired = asuint(asfloat(expected) + value);
+		uint original;
+		InterlockedCompareExchange(output_accum[index], expected, desired, original);
+		if (original == expected)
+			break;
+		expected = original;
+	}
+}
 
 uint pcg_hash(uint state) {
 	uint s = state * 747796405u + 2891336453u;
@@ -152,9 +167,11 @@ bool ray_box_test(float3 origin, float3 inv_dir, float3 box_min, float3 box_max)
 }
 
 // Trace a ray using DDA grid traversal with cluster AABBs.
-bool trace_ray_grid(float3 ray_origin, float3 ray_dir, out float hit_t, out uint hit_tri) {
+// Returns hit normal directly to avoid redundant vertex re-reads in caller.
+bool trace_ray_grid(float3 ray_origin, float3 ray_dir, out float hit_t, out uint hit_tri, out float3 hit_normal) {
 	hit_t = 1e30;
 	hit_tri = 0xFFFFFFFFu;
+	hit_normal = float3(0, 0, 0);
 
 	float3 inv_dir = 1.0 / ray_dir;
 	int gs = params.grid_size;
@@ -197,7 +214,7 @@ bool trace_ray_grid(float3 ray_origin, float3 ray_dir, out float hit_t, out uint
 				for (uint ti = 0; ti < tri_test; ti++) {
 					uint tri_idx = triangle_indices[cell_tri_start + tri_base + ti];
 					Triangle tri = triangles[tri_idx];
-						float3 v0 = vertices[tri.i0].position + vertices[tri.i0].position_lo;
+					float3 v0 = vertices[tri.i0].position + vertices[tri.i0].position_lo;
 					float3 v1 = vertices[tri.i1].position + vertices[tri.i1].position_lo;
 					float3 v2 = vertices[tri.i2].position + vertices[tri.i2].position_lo;
 
@@ -206,6 +223,7 @@ bool trace_ray_grid(float3 ray_origin, float3 ray_dir, out float hit_t, out uint
 					if (ray_triangle_intersect(ray_origin, ray_dir, v0, v1, v2, t, n) && t < hit_t) {
 						hit_t = t;
 						hit_tri = tri_idx;
+						hit_normal = n;
 					}
 				}
 			}
@@ -243,29 +261,34 @@ bool trace_ray_grid(float3 ray_origin, float3 ray_dir, out float hit_t, out uint
 	return hit_tri != 0xFFFFFFFFu;
 }
 
-[numthreads(64, 1, 1)]
-void main(uint3 tid : SV_DispatchThreadID) {
-	uint probe_index = tid.x;
+[numthreads(WORKGROUP_SIZE, 1, 1)]
+void main(uint3 gid : SV_GroupID, uint3 gtid : SV_GroupThreadID) {
+	uint probe_index = gid.y;
+	uint local_id = gtid.x;
+	uint ray_index = params.ray_from + gid.x * WORKGROUP_SIZE + local_id;
+
 	if (probe_index >= params.probe_count)
 		return;
 
 	// Reconstruct probe position from hi+lo double-float pair.
 	float3 position = probe_positions[probe_index].position + probe_positions[probe_index].position_lo;
-	uint rng = pcg_hash(probe_index * 1337u + params.ray_from * 7919u);
 
 	float local_absorbed[NUM_BANDS];
 	for (uint b = 0; b < NUM_BANDS; b++)
 		local_absorbed[b] = 0.0;
 	float local_hits = 0.0;
 
-	for (uint ray_idx = params.ray_from; ray_idx < params.ray_to; ray_idx++) {
+	// Each thread traces exactly one ray (all bounces).
+	if (ray_index < params.ray_to) {
+		uint rng = pcg_hash(probe_index * 1337u + ray_index * 7919u);
 		float3 ray_dir = random_sphere_direction(rng);
 		float3 ray_origin = position;
 
 		for (uint bounce = 0; bounce < params.max_bounces; bounce++) {
 			float hit_t;
 			uint hit_tri;
-			if (!trace_ray_grid(ray_origin, ray_dir, hit_t, hit_tri))
+			float3 hit_normal;
+			if (!trace_ray_grid(ray_origin, ray_dir, hit_t, hit_tri, hit_normal))
 				break;
 
 			uint mat_idx = triangles[hit_tri].material_index;
@@ -278,29 +301,38 @@ void main(uint3 tid : SV_DispatchThreadID) {
 			local_hits += 1.0;
 
 			// Russian roulette: after 5 bounces, probabilistically terminate.
-			// Survival probability based on reflectivity (1 - max_absorption).
 			if (bounce > 4) {
 				float survive = max(1.0 - max_alpha, 0.05);
 				if (rand_float(rng) > survive)
 					break;
 			}
 
-			// Compute hit normal for bounce.
-			Triangle tri = triangles[hit_tri];
-			float3 v0 = vertices[tri.i0].position + vertices[tri.i0].position_lo;
-			float3 v1 = vertices[tri.i1].position + vertices[tri.i1].position_lo;
-			float3 v2 = vertices[tri.i2].position + vertices[tri.i2].position_lo;
-			float3 hit_normal = normalize(cross(v1 - v0, v2 - v0));
-			if (dot(hit_normal, ray_dir) > 0.0)
-				hit_normal = -hit_normal;
-
 			ray_origin = ray_origin + ray_dir * hit_t + hit_normal * params.bias;
 			ray_dir = random_cosine_direction(hit_normal, rng);
 		}
 	}
 
-	for (uint b = 0; b < NUM_BANDS; b++) {
-		output_accum[probe_index].absorbed[b] += local_absorbed[b];
+	// Store per-thread results in shared memory for reduction.
+	for (uint b = 0; b < NUM_BANDS; b++)
+		s_absorbed[b][local_id] = local_absorbed[b];
+	s_hits[local_id] = local_hits;
+	GroupMemoryBarrierWithGroupSync();
+
+	// Parallel reduction across workgroup.
+	for (uint stride = WORKGROUP_SIZE / 2; stride > 0; stride >>= 1) {
+		if (local_id < stride) {
+			for (uint b = 0; b < NUM_BANDS; b++)
+				s_absorbed[b][local_id] += s_absorbed[b][local_id + stride];
+			s_hits[local_id] += s_hits[local_id + stride];
+		}
+		GroupMemoryBarrierWithGroupSync();
 	}
-	output_accum[probe_index].total_hits += local_hits;
+
+	// Thread 0 atomically adds the workgroup's partial sum to global output.
+	if (local_id == 0) {
+		uint base = probe_index * (NUM_BANDS + 1);
+		for (uint b = 0; b < NUM_BANDS; b++)
+			atomicAddFloat(base + b, s_absorbed[b][0]);
+		atomicAddFloat(base + NUM_BANDS, s_hits[0]);
+	}
 }
