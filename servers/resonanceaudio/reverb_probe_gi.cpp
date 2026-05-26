@@ -37,6 +37,10 @@
 #include "core/object/worker_thread_pool.h"
 #include "core/os/os.h"
 #include "scene/3d/mesh_instance_3d.h"
+#include "servers/rendering/rendering_device.h"
+#include "servers/rendering/rendering_server.h"
+
+#include "servers/resonanceaudio/shaders/reverb_bake.glsl.gen.h"
 #include "servers/resonanceaudio/resonance_audio_material_map.h"
 #include "servers/resonanceaudio/resonance_audio_wrapper.h"
 
@@ -244,6 +248,209 @@ static void _bake_probe_task(void *p_userdata, uint32_t p_index) {
 	*task.gain_out = 0.045f * CLAMP(enclosure * 4.0f, 0.01f, 1.0f);
 }
 
+bool ReverbProbeGI::_bake_gpu(const PackedVector3Array &p_probes, const Vector<Vector3> &p_vertices, const Vector<int> &p_indices, const Vector<int> &p_tri_materials, const AABB &p_bounds, int p_ray_count, int p_max_bounces, PackedFloat32Array &r_rt60, PackedFloat32Array &r_gains) {
+	static constexpr int NUM_BANDS = 9;
+
+	RenderingDevice *rd = RenderingServer::get_singleton()->create_local_rendering_device();
+	if (!rd) {
+		return false;
+	}
+
+	int probe_count = p_probes.size();
+	int tri_count = p_indices.size() / 3;
+	float volume = p_bounds.size.x * p_bounds.size.y * p_bounds.size.z;
+	float surface_area = 2.0f * (p_bounds.size.x * p_bounds.size.y + p_bounds.size.y * p_bounds.size.z + p_bounds.size.x * p_bounds.size.z);
+
+	// Compile embedded GLSL to SPIR-V, then create shader.
+	String shader_error;
+	Vector<uint8_t> spirv = rd->shader_compile_spirv_from_source(
+			RenderingDevice::SHADER_STAGE_COMPUTE, reverb_bake_glsl, RenderingDevice::SHADER_LANGUAGE_GLSL, &shader_error);
+	if (spirv.is_empty()) {
+		print_line(vformat("ReverbProbeGI: GPU shader compile error: %s", shader_error));
+		memdelete(rd);
+		return false;
+	}
+	RenderingDevice::ShaderStageSPIRVData stage;
+	stage.shader_stage = RenderingDevice::SHADER_STAGE_COMPUTE;
+	stage.spirv = spirv;
+	Vector<RenderingDevice::ShaderStageSPIRVData> stages;
+	stages.push_back(stage);
+	RID shader = rd->shader_create_from_spirv(stages);
+	if (shader.is_null()) {
+		print_line("ReverbProbeGI: GPU bake failed — shader creation error");
+		memdelete(rd);
+		return false;
+	}
+
+	RID pipeline = rd->compute_pipeline_create(shader);
+
+	// BakeParams uniform buffer (matches Slang struct layout).
+	struct BakeParamsGPU {
+		uint32_t ray_count;
+		uint32_t max_bounces;
+		uint32_t probe_count;
+		uint32_t triangle_count;
+		uint32_t ray_from;
+		uint32_t ray_to;
+		float cell_size;
+		int32_t grid_size;
+		float grid_offset[3];
+		float bias;
+	};
+	BakeParamsGPU params{};
+	params.ray_count = p_ray_count;
+	params.max_bounces = p_max_bounces;
+	params.probe_count = probe_count;
+	params.triangle_count = tri_count;
+	params.bias = 0.001f;
+
+	// Vertex buffer: position + normal as float3 + float3.
+	Vector<uint8_t> vertex_data;
+	vertex_data.resize(p_vertices.size() * sizeof(float) * 6);
+	float *vd = (float *)vertex_data.ptrw();
+	for (int i = 0; i < p_vertices.size(); i++) {
+		vd[i * 6 + 0] = p_vertices[i].x;
+		vd[i * 6 + 1] = p_vertices[i].y;
+		vd[i * 6 + 2] = p_vertices[i].z;
+		vd[i * 6 + 3] = 0; // normal x (unused for now)
+		vd[i * 6 + 4] = 1; // normal y
+		vd[i * 6 + 5] = 0; // normal z
+	}
+
+	// Triangle buffer: i0, i1, i2, material_index per triangle.
+	Vector<uint8_t> tri_data;
+	tri_data.resize(tri_count * sizeof(uint32_t) * 4);
+	uint32_t *td = (uint32_t *)tri_data.ptrw();
+	for (int i = 0; i < tri_count; i++) {
+		td[i * 4 + 0] = p_indices[i * 3 + 0];
+		td[i * 4 + 1] = p_indices[i * 3 + 1];
+		td[i * 4 + 2] = p_indices[i * 3 + 2];
+		td[i * 4 + 3] = (i < p_tri_materials.size()) ? p_tri_materials[i] : (int)wall_material;
+	}
+
+	// Probe positions as float4 (xyz + pad).
+	Vector<uint8_t> probe_data;
+	probe_data.resize(probe_count * sizeof(float) * 4);
+	float *pd = (float *)probe_data.ptrw();
+	for (int i = 0; i < probe_count; i++) {
+		pd[i * 4 + 0] = p_probes[i].x;
+		pd[i * 4 + 1] = p_probes[i].y;
+		pd[i * 4 + 2] = p_probes[i].z;
+		pd[i * 4 + 3] = 0;
+	}
+
+	// Material absorption buffer: 24 materials × 9 bands.
+	Vector<uint8_t> mat_data;
+	mat_data.resize(24 * NUM_BANDS * sizeof(float));
+	float *md = (float *)mat_data.ptrw();
+	for (int m = 0; m < 24; m++) {
+		vraudio::RoomMaterial rm = vraudio::GetRoomMaterial(m);
+		for (int b = 0; b < NUM_BANDS; b++) {
+			md[m * NUM_BANDS + b] = rm.absorption_coefficients[b];
+		}
+	}
+
+	// Output accumulator: per probe, 9 absorbed + 1 total_hits.
+	int accum_size = probe_count * (NUM_BANDS + 1) * sizeof(float);
+	Vector<uint8_t> accum_init;
+	accum_init.resize(accum_size);
+	memset(accum_init.ptrw(), 0, accum_size);
+
+	// Create GPU buffers.
+	Vector<uint8_t> params_bytes;
+	params_bytes.resize(sizeof(BakeParamsGPU));
+	memcpy(params_bytes.ptrw(), &params, sizeof(BakeParamsGPU));
+	RID params_buf = rd->uniform_buffer_create(sizeof(BakeParamsGPU), params_bytes);
+	RID vertex_buf = rd->storage_buffer_create(vertex_data.size(), vertex_data);
+	RID tri_buf = rd->storage_buffer_create(tri_data.size(), tri_data);
+	RID probe_buf = rd->storage_buffer_create(probe_data.size(), probe_data);
+	RID mat_buf = rd->storage_buffer_create(mat_data.size(), mat_data);
+	Vector<uint8_t> grid_placeholder;
+	grid_placeholder.resize(4);
+	memset(grid_placeholder.ptrw(), 0, 4);
+	RID grid_buf = rd->storage_buffer_create(4, grid_placeholder);
+	RID accum_buf = rd->storage_buffer_create(accum_size, accum_init);
+
+	// Uniform set 0: params, vertices, triangles, probes, materials, grid.
+	Vector<RenderingDevice::Uniform> set0;
+	{ RenderingDevice::Uniform u; u.uniform_type = RenderingDevice::UNIFORM_TYPE_UNIFORM_BUFFER; u.binding = 0; u.append_id(params_buf); set0.push_back(u); }
+	{ RenderingDevice::Uniform u; u.uniform_type = RenderingDevice::UNIFORM_TYPE_STORAGE_BUFFER; u.binding = 1; u.append_id(vertex_buf); set0.push_back(u); }
+	{ RenderingDevice::Uniform u; u.uniform_type = RenderingDevice::UNIFORM_TYPE_STORAGE_BUFFER; u.binding = 2; u.append_id(tri_buf); set0.push_back(u); }
+	{ RenderingDevice::Uniform u; u.uniform_type = RenderingDevice::UNIFORM_TYPE_STORAGE_BUFFER; u.binding = 3; u.append_id(grid_buf); set0.push_back(u); }
+	{ RenderingDevice::Uniform u; u.uniform_type = RenderingDevice::UNIFORM_TYPE_STORAGE_BUFFER; u.binding = 4; u.append_id(probe_buf); set0.push_back(u); }
+	{ RenderingDevice::Uniform u; u.uniform_type = RenderingDevice::UNIFORM_TYPE_STORAGE_BUFFER; u.binding = 5; u.append_id(mat_buf); set0.push_back(u); }
+	RID uniform_set0 = rd->uniform_set_create(set0, shader, 0);
+
+	// Uniform set 1: output accumulator.
+	Vector<RenderingDevice::Uniform> set1;
+	{ RenderingDevice::Uniform u; u.uniform_type = RenderingDevice::UNIFORM_TYPE_STORAGE_BUFFER; u.binding = 0; u.append_id(accum_buf); set1.push_back(u); }
+	RID uniform_set1 = rd->uniform_set_create(set1, shader, 1);
+
+	// Dispatch in batches to avoid GPU timeout.
+	int max_rays_per_batch = 8192;
+	int groups_x = Math::division_round_up(probe_count, 64);
+
+	for (int batch_from = 0; batch_from < p_ray_count; batch_from += max_rays_per_batch) {
+		int batch_to = MIN(batch_from + max_rays_per_batch, p_ray_count);
+		params.ray_from = batch_from;
+		params.ray_to = batch_to;
+		rd->buffer_update(params_buf, 0, sizeof(BakeParamsGPU), &params);
+
+		RenderingDevice::ComputeListID cl = rd->compute_list_begin();
+		rd->compute_list_bind_compute_pipeline(cl, pipeline);
+		rd->compute_list_bind_uniform_set(cl, uniform_set0, 0);
+		rd->compute_list_bind_uniform_set(cl, uniform_set1, 1);
+		rd->compute_list_dispatch(cl, groups_x, 1, 1);
+		rd->compute_list_end();
+		rd->submit();
+		rd->sync();
+	}
+
+	// Read back results.
+	Vector<uint8_t> result = rd->buffer_get_data(accum_buf);
+	const float *accum = (const float *)result.ptr();
+
+	static constexpr float kEyring = 0.161f;
+	static const float kAirAbsorption[NUM_BANDS] = {
+		0.0006f, 0.0006f, 0.0007f, 0.0008f, 0.0010f, 0.0015f, 0.0026f, 0.0060f, 0.0207f
+	};
+
+	float *rt60_w = r_rt60.ptrw();
+	float *gains_w = r_gains.ptrw();
+	for (int pi = 0; pi < probe_count; pi++) {
+		int base = pi * (NUM_BANDS + 1);
+		float total_hits = accum[base + NUM_BANDS];
+		for (int b = 0; b < NUM_BANDS; b++) {
+			if (total_hits < 1.0f) {
+				rt60_w[pi * NUM_BANDS + b] = 0.0f;
+				continue;
+			}
+			float mean_alpha = accum[base + b] / total_hits;
+			mean_alpha = CLAMP(mean_alpha, 0.001f, 0.999f);
+			float rt60 = kEyring * volume / (-surface_area * logf(1.0f - mean_alpha) + 4.0f * kAirAbsorption[b] * volume);
+			rt60_w[pi * NUM_BANDS + b] = MAX(rt60, 0.0f);
+		}
+		float enclosure = total_hits / (float)(p_ray_count * p_max_bounces);
+		gains_w[pi] = 0.045f * CLAMP(enclosure * 4.0f, 0.01f, 1.0f);
+	}
+
+	// Cleanup.
+	rd->free(accum_buf);
+	rd->free(grid_buf);
+	rd->free(mat_buf);
+	rd->free(probe_buf);
+	rd->free(tri_buf);
+	rd->free(vertex_buf);
+	rd->free(params_buf);
+	rd->free(uniform_set1);
+	rd->free(uniform_set0);
+	rd->free(pipeline);
+	rd->free(shader);
+	memdelete(rd);
+
+	return true;
+}
+
 ReverbProbeGI::BakeError ReverbProbeGI::bake(Node *p_from_node, const PackedVector3Array &p_probe_positions, int p_ray_count, int p_max_bounces) {
 	static constexpr int NUM_BANDS = 9;
 
@@ -270,6 +477,21 @@ ReverbProbeGI::BakeError ReverbProbeGI::bake(Node *p_from_node, const PackedVect
 
 	PackedFloat32Array gains;
 	gains.resize(probe_count);
+
+	uint64_t start_usec = OS::get_singleton()->get_ticks_usec();
+
+	// Try GPU first, fall back to CPU.
+	bool gpu_ok = _bake_gpu(p_probe_positions, vertices, indices, tri_materials, bounds, p_ray_count, p_max_bounces, rt60_values, gains);
+	if (gpu_ok) {
+		uint64_t elapsed_usec = OS::get_singleton()->get_ticks_usec() - start_usec;
+		double elapsed_sec = elapsed_usec / 1000000.0;
+		double total_rays = (double)probe_count * p_ray_count;
+		print_line(vformat("ReverbProbeGI GPU bake: %d probes, %d rays, %d bounces in %.2fs (%.0f probes/s, %.0f Mrays/s)",
+				probe_count, p_ray_count, p_max_bounces, elapsed_sec,
+				probe_count / elapsed_sec, total_rays / elapsed_sec / 1e6));
+	} else {
+		print_line("ReverbProbeGI: GPU bake unavailable, falling back to CPU (Embree).");
+		start_usec = OS::get_singleton()->get_ticks_usec();
 
 	// Build BVH acceleration structure via StaticRaycaster (Embree).
 	Ref<StaticRaycaster> raycaster = StaticRaycaster::create();
@@ -317,9 +539,10 @@ ReverbProbeGI::BakeError ReverbProbeGI::bake(Node *p_from_node, const PackedVect
 	uint64_t elapsed_usec = OS::get_singleton()->get_ticks_usec() - start_usec;
 	double elapsed_sec = elapsed_usec / 1000000.0;
 	double total_rays = (double)probe_count * p_ray_count;
-	print_line(vformat("ReverbProbeGI bake: %d probes, %d rays, %d bounces in %.2fs (%.0f probes/s, %.0f Mrays/s)",
+	print_line(vformat("ReverbProbeGI CPU bake: %d probes, %d rays, %d bounces in %.2fs (%.0f probes/s, %.0f Mrays/s)",
 			probe_count, p_ray_count, p_max_bounces, elapsed_sec,
 			probe_count / elapsed_sec, total_rays / elapsed_sec / 1e6));
+	} // end else (CPU fallback)
 
 	Vector<Vector3> points_vec;
 	points_vec.resize(probe_count);

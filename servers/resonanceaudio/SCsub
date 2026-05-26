@@ -114,5 +114,34 @@ env_thirdparty.Append(CPPDEFINES=["TASKING_INTERNAL"])
 env_thirdparty.Append(CPPDEFINES=["_USE_MATH_DEFINES"])
 env_thirdparty.add_source_files(env.servers_sources, thirdparty_sources)
 
+# Generate .gen.h from Slang-compiled GLSL shaders.
+import os
+
+
+def glsl_to_gen_h(target, source, env):
+    src_path = str(source[0])
+    dst_path = str(target[0])
+    var_name = os.path.basename(src_path).replace(".", "_")
+    with open(src_path, "r") as f:
+        glsl = f.read()
+    with open(dst_path, "w") as f:
+        f.write("// Generated from %s - do not edit.\n" % os.path.basename(src_path))
+        f.write('static const char %s[] = R"GLSL(\n' % var_name)
+        f.write(glsl)
+        f.write(')GLSL";\n')
+    return 0
+
+
+env_resonance.Append(
+    BUILDERS={
+        "GlslGenH": env_resonance.Builder(
+            action=env_resonance.Action(glsl_to_gen_h, "Generating $TARGET from $SOURCE"),
+            suffix=".gen.h",
+            src_suffix=".glsl",
+        )
+    }
+)
+env_resonance.GlslGenH("shaders/reverb_bake.glsl.gen.h", "shaders/reverb_bake.glsl")
+
 # Godot source files
 env_resonance.add_source_files(env.servers_sources, "*.cpp")

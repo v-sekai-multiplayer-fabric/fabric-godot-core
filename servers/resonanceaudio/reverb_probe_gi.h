@@ -79,7 +79,7 @@ private:
 	WallMaterial wall_material = MATERIAL_PLASTER_SMOOTH;
 
 	void _collect_mesh_triangles(Node *p_node, Vector<Vector3> &r_vertices, Vector<int> &r_indices, Vector<int> &r_tri_materials, AABB &r_bounds);
-	void _bake_cpu(const PackedVector3Array &p_probes, const Vector<Vector3> &p_vertices, const Vector<int> &p_indices, const AABB &p_bounds, int p_ray_count, int p_max_bounces, PackedFloat32Array &r_rt60, PackedFloat32Array &r_gains);
+	bool _bake_gpu(const PackedVector3Array &p_probes, const Vector<Vector3> &p_vertices, const Vector<int> &p_indices, const Vector<int> &p_tri_materials, const AABB &p_bounds, int p_ray_count, int p_max_bounces, PackedFloat32Array &r_rt60, PackedFloat32Array &r_gains);
 	void _update_reverb_from_listener();
 
 protected:
