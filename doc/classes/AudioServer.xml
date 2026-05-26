@@ -432,5 +432,11 @@
 		<constant name="PLAYBACK_TYPE_MAX" value="3" enum="PlaybackType" experimental="">
 			Represents the size of the [enum PlaybackType] enum.
 		</constant>
+		<constant name="BUS_TYPE_CONVENTIONAL" value="0" enum="BusType">
+			Standard audio bus with panning and volume control.
+		</constant>
+		<constant name="BUS_TYPE_SPATIAL_3D" value="1" enum="BusType">
+			Spatial 3D audio bus routed through the SpatialAudioServer for HRTF processing.
+		</constant>
 	</constants>
 </class>
