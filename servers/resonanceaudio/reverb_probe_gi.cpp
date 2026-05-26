@@ -42,6 +42,7 @@
 #include "servers/rendering/rendering_server.h"
 
 #include "servers/resonanceaudio/shaders/reverb_bake.glsl.gen.h"
+#include "servers/resonanceaudio/shaders/reverb_bake.spv.gen.h"
 #include "servers/resonanceaudio/resonance_audio_material_map.h"
 #include "servers/resonanceaudio/resonance_audio_wrapper.h"
 
@@ -257,15 +258,9 @@ void ReverbProbeGI::_ensure_gpu_resources() {
 	if (!_gpu_rd) {
 		return;
 	}
-	String shader_error;
-	Vector<uint8_t> spirv = _gpu_rd->shader_compile_spirv_from_source(
-			RenderingDevice::SHADER_STAGE_COMPUTE, reverb_bake_glsl, RenderingDevice::SHADER_LANGUAGE_GLSL, &shader_error);
-	if (spirv.is_empty()) {
-		print_line(vformat("ReverbProbeGI: GPU shader compile error: %s", shader_error));
-		memdelete(_gpu_rd);
-		_gpu_rd = nullptr;
-		return;
-	}
+	Vector<uint8_t> spirv;
+	spirv.resize(reverb_bake_spv_size);
+	memcpy(spirv.ptrw(), reverb_bake_spv, reverb_bake_spv_size);
 	RenderingDevice::ShaderStageSPIRVData stage;
 	stage.shader_stage = RenderingDevice::SHADER_STAGE_COMPUTE;
 	stage.spirv = spirv;
@@ -297,6 +292,7 @@ void ReverbProbeGI::_free_gpu_resources() {
 bool ReverbProbeGI::_bake_gpu(const PackedVector3Array &p_probes, const Vector<Vector3> &p_vertices, const Vector<int> &p_indices, const Vector<int> &p_tri_materials, const AABB &p_bounds, int p_ray_count, int p_max_bounces, PackedFloat32Array &r_rt60, PackedFloat32Array &r_gains) {
 	static constexpr int NUM_BANDS = 9;
 
+	uint64_t t_init = OS::get_singleton()->get_ticks_usec();
 	_ensure_gpu_resources();
 	if (!_gpu_rd) {
 		return false;
@@ -309,6 +305,9 @@ bool ReverbProbeGI::_bake_gpu(const PackedVector3Array &p_probes, const Vector<V
 	int tri_count = p_indices.size() / 3;
 	float volume = p_bounds.size.x * p_bounds.size.y * p_bounds.size.z;
 	float surface_area = 2.0f * (p_bounds.size.x * p_bounds.size.y + p_bounds.size.y * p_bounds.size.z + p_bounds.size.x * p_bounds.size.z);
+
+	uint64_t t0 = OS::get_singleton()->get_ticks_usec();
+	print_line(vformat("GPU init (shader compile): %.1fms", (t0 - t_init) / 1000.0));
 
 	// Build 3D grid acceleration structure (same algorithm as lightmapper_rd).
 	static constexpr uint32_t CLUSTER_SIZE = 32;
@@ -551,8 +550,11 @@ bool ReverbProbeGI::_bake_gpu(const PackedVector3Array &p_probes, const Vector<V
 		memset(cluster_aabb_bytes.ptrw(), 0, cluster_aabb_bytes.size());
 	}
 
-	print_line(vformat("GPU grid: %dx%dx%d, %d solid cells, %d clusters, %d tri refs",
-			grid_size, grid_size, grid_size, solid_cell_count, cluster_count, (int)tri_sort.size()));
+	uint64_t t1 = OS::get_singleton()->get_ticks_usec();
+
+	print_line(vformat("GPU grid: %dx%dx%d, %d solid cells, %d clusters, %d tri refs (build %.1fms)",
+			grid_size, grid_size, grid_size, solid_cell_count, cluster_count, (int)tri_sort.size(),
+			(t1 - t0) / 1000.0));
 
 	// Create GPU buffers.
 	Vector<uint8_t> params_bytes;
@@ -587,9 +589,13 @@ bool ReverbProbeGI::_bake_gpu(const PackedVector3Array &p_probes, const Vector<V
 	{ RenderingDevice::Uniform u; u.uniform_type = RenderingDevice::UNIFORM_TYPE_STORAGE_BUFFER; u.binding = 0; u.append_id(accum_buf); set1.push_back(u); }
 	RID uniform_set1 = rd->uniform_set_create(set1, shader, 1);
 
+	uint64_t t2 = OS::get_singleton()->get_ticks_usec();
+	print_line(vformat("GPU upload: %.1fms", (t2 - t1) / 1000.0));
+
 	// Dispatch in larger batches now that grid acceleration prevents TDR.
 	int max_rays_per_batch = 32768;
 	int groups_x = Math::division_round_up(probe_count, 64);
+	int num_batches = 0;
 
 	for (int batch_from = 0; batch_from < p_ray_count; batch_from += max_rays_per_batch) {
 		int batch_to = MIN(batch_from + max_rays_per_batch, p_ray_count);
@@ -605,11 +611,18 @@ bool ReverbProbeGI::_bake_gpu(const PackedVector3Array &p_probes, const Vector<V
 		rd->compute_list_end();
 		rd->submit();
 		rd->sync();
+		num_batches++;
 	}
+
+	uint64_t t3 = OS::get_singleton()->get_ticks_usec();
+	print_line(vformat("GPU dispatch: %.1fms (%d batches, %d rays)", (t3 - t2) / 1000.0, num_batches, p_ray_count));
 
 	// Read back results.
 	Vector<uint8_t> result = rd->buffer_get_data(accum_buf);
 	const float *accum = (const float *)result.ptr();
+
+	uint64_t t4 = OS::get_singleton()->get_ticks_usec();
+	print_line(vformat("GPU readback: %.1fms", (t4 - t3) / 1000.0));
 
 	static constexpr float kEyring = 0.161f;
 	static const float kAirAbsorption[NUM_BANDS] = {
@@ -635,6 +648,11 @@ bool ReverbProbeGI::_bake_gpu(const PackedVector3Array &p_probes, const Vector<V
 		gains_w[pi] = 0.045f * CLAMP(enclosure * 4.0f, 0.01f, 1.0f);
 	}
 
+	uint64_t t5 = OS::get_singleton()->get_ticks_usec();
+	print_line(vformat("RT60 compute: %.1fms", (t5 - t4) / 1000.0));
+	print_line(vformat("GPU bake total: %.1fms (grid=%.1f upload=%.1f dispatch=%.1f readback=%.1f rt60=%.1f)",
+			(t5 - t0) / 1000.0, (t1 - t0) / 1000.0, (t2 - t1) / 1000.0, (t3 - t2) / 1000.0, (t4 - t3) / 1000.0, (t5 - t4) / 1000.0));
+
 	// Cleanup.
 	rd->free(accum_buf);
 	rd->free(sorted_tri_buf);
@@ -648,9 +666,6 @@ bool ReverbProbeGI::_bake_gpu(const PackedVector3Array &p_probes, const Vector<V
 	rd->free(params_buf);
 	rd->free(uniform_set1);
 	rd->free(uniform_set0);
-	rd->free(pipeline);
-	rd->free(shader);
-	memdelete(rd);
 
 	return true;
 }

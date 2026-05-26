@@ -107,6 +107,7 @@ public:
 	BakeError bake(Node *p_from_node, const PackedVector3Array &p_probe_positions, int p_ray_count = 50000, int p_max_bounces = 100);
 
 	ReverbProbeGI() {}
+	~ReverbProbeGI() { _free_gpu_resources(); }
 };
 
 VARIANT_ENUM_CAST(ReverbProbeGI::WallMaterial)
