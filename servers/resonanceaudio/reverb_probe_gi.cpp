@@ -314,7 +314,7 @@ bool ReverbProbeGI::_bake_gpu(const PackedVector3Array &p_probes, const Vector<V
 	static constexpr uint32_t CLUSTER_SIZE = 32;
 	// Auto-tune grid: aim for ~8 triangles per occupied cell.
 	int grid_size = MAX(4, (int)Math::ceil(cbrtf((float)tri_count / 8.0f)));
-	grid_size = MIN(grid_size, 128);
+	grid_size = MIN(grid_size, 32);
 	grid_size = (int)Math::next_power_of_2((uint32_t)grid_size);
 	AABB bounds = p_bounds;
 	bounds.grow_by(0.01f);
