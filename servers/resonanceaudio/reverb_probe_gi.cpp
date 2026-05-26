@@ -37,6 +37,7 @@
 #include "core/object/worker_thread_pool.h"
 #include "core/os/os.h"
 #include "scene/3d/mesh_instance_3d.h"
+#include "servers/rendering/renderer_rd/storage_rd/material_storage.h"
 #include "servers/rendering/rendering_device.h"
 #include "servers/rendering/rendering_server.h"
 
@@ -436,6 +437,7 @@ bool ReverbProbeGI::_bake_gpu(const PackedVector3Array &p_probes, const Vector<V
 	}
 
 	// BakeParams uniform buffer.
+	// Must match std140 layout: vec3 padded to 16 bytes.
 	struct BakeParamsGPU {
 		uint32_t ray_count;
 		uint32_t max_bounces;
@@ -443,6 +445,7 @@ bool ReverbProbeGI::_bake_gpu(const PackedVector3Array &p_probes, const Vector<V
 		uint32_t triangle_count;
 		uint32_t ray_from;
 		uint32_t ray_to;
+		uint32_t _pad0[2];
 		float to_cell_offset[3];
 		int32_t grid_size_val;
 		float to_cell_size[3];
@@ -462,17 +465,23 @@ bool ReverbProbeGI::_bake_gpu(const PackedVector3Array &p_probes, const Vector<V
 	params.to_cell_size[1] = 1.0f / cell_size_y;
 	params.to_cell_size[2] = 1.0f / cell_size_z;
 
-	// Vertex buffer.
+	// Vertex buffer: position_hi + position_lo (double-float split).
 	Vector<uint8_t> vertex_data;
 	vertex_data.resize(p_vertices.size() * sizeof(float) * 6);
 	float *vd = (float *)vertex_data.ptrw();
 	for (int vi = 0; vi < p_vertices.size(); vi++) {
-		vd[vi * 6 + 0] = (float)p_vertices[vi].x;
-		vd[vi * 6 + 1] = (float)p_vertices[vi].y;
-		vd[vi * 6 + 2] = (float)p_vertices[vi].z;
+#ifdef REAL_T_IS_DOUBLE
+		RendererRD::MaterialStorage::split_double(p_vertices[vi].x, &vd[vi * 6 + 0], &vd[vi * 6 + 3]);
+		RendererRD::MaterialStorage::split_double(p_vertices[vi].y, &vd[vi * 6 + 1], &vd[vi * 6 + 4]);
+		RendererRD::MaterialStorage::split_double(p_vertices[vi].z, &vd[vi * 6 + 2], &vd[vi * 6 + 5]);
+#else
+		vd[vi * 6 + 0] = p_vertices[vi].x;
+		vd[vi * 6 + 1] = p_vertices[vi].y;
+		vd[vi * 6 + 2] = p_vertices[vi].z;
 		vd[vi * 6 + 3] = 0;
-		vd[vi * 6 + 4] = 1;
+		vd[vi * 6 + 4] = 0;
 		vd[vi * 6 + 5] = 0;
+#endif
 	}
 
 	// Triangle buffer.
@@ -486,15 +495,25 @@ bool ReverbProbeGI::_bake_gpu(const PackedVector3Array &p_probes, const Vector<V
 		td[ti * 4 + 3] = (ti < p_tri_materials.size()) ? p_tri_materials[ti] : (int)wall_material;
 	}
 
-	// Probe positions.
+	// Probe positions: hi + lo (double-float split).
 	Vector<uint8_t> probe_data;
-	probe_data.resize(probe_count * sizeof(float) * 4);
+	probe_data.resize(probe_count * sizeof(float) * 8);
 	float *pd = (float *)probe_data.ptrw();
 	for (int pi = 0; pi < probe_count; pi++) {
-		pd[pi * 4 + 0] = (float)p_probes[pi].x;
-		pd[pi * 4 + 1] = (float)p_probes[pi].y;
-		pd[pi * 4 + 2] = (float)p_probes[pi].z;
-		pd[pi * 4 + 3] = 0;
+#ifdef REAL_T_IS_DOUBLE
+		RendererRD::MaterialStorage::split_double(p_probes[pi].x, &pd[pi * 8 + 0], &pd[pi * 8 + 4]);
+		RendererRD::MaterialStorage::split_double(p_probes[pi].y, &pd[pi * 8 + 1], &pd[pi * 8 + 5]);
+		RendererRD::MaterialStorage::split_double(p_probes[pi].z, &pd[pi * 8 + 2], &pd[pi * 8 + 6]);
+#else
+		pd[pi * 8 + 0] = p_probes[pi].x;
+		pd[pi * 8 + 1] = p_probes[pi].y;
+		pd[pi * 8 + 2] = p_probes[pi].z;
+		pd[pi * 8 + 4] = 0;
+		pd[pi * 8 + 5] = 0;
+		pd[pi * 8 + 6] = 0;
+#endif
+		pd[pi * 8 + 3] = 0;
+		pd[pi * 8 + 7] = 0;
 	}
 
 	// Material absorption buffer.

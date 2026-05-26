@@ -33,6 +33,7 @@
 #include "scene/3d/node_3d.h"
 #include "servers/resonanceaudio/reverb_bake_data.h"
 
+class RenderingDevice;
 class ResonanceAudioMaterialMap;
 
 class ReverbProbeGI : public Node3D {

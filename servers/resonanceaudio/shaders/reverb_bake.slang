@@ -24,7 +24,7 @@ struct BakeParams {
 
 struct Vertex {
 	float3 position;
-	float3 normal;
+	float3 position_lo; // Double-float low bits for large-world precision.
 };
 
 struct Triangle {
@@ -50,10 +50,39 @@ struct ProbeAccum {
 	float total_hits;
 };
 
+struct ProbePosition {
+	float3 position;
+	float pad0;
+	float3 position_lo;
+	float pad1;
+};
+
+// Double-float arithmetic (matches Godot's scene_forward_clustered.glsl).
+float3 df_two_sum(float3 a, float3 b, out float3 err) {
+	float3 s = a + b;
+	float3 v = s - a;
+	err = (a - (s - v)) + (b - v);
+	return s;
+}
+
+float3 df_add(float3 a_hi, float3 a_lo, float3 b_hi, float3 b_lo) {
+	float3 se, te;
+	float3 s = df_two_sum(a_hi, b_hi, se);
+	float3 t = df_two_sum(a_lo, b_lo, te);
+	se += t;
+	float3 dummy;
+	s = df_two_sum(s, se, dummy);
+	return s;
+}
+
+float3 df_sub(float3 a_hi, float3 a_lo, float3 b_hi, float3 b_lo) {
+	return df_add(a_hi, a_lo, -b_hi, -b_lo);
+}
+
 [[vk::binding(0, 0)]] ConstantBuffer<BakeParams> params;
 [[vk::binding(1, 0)]] StructuredBuffer<Vertex> vertices;
 [[vk::binding(2, 0)]] StructuredBuffer<Triangle> triangles;
-[[vk::binding(3, 0)]] StructuredBuffer<float4> probe_positions;
+[[vk::binding(3, 0)]] StructuredBuffer<ProbePosition> probe_positions;
 [[vk::binding(4, 0)]] StructuredBuffer<MaterialAbsorption> materials;
 [[vk::binding(5, 0)]] StructuredBuffer<uint2> grid_data;
 [[vk::binding(6, 0)]] StructuredBuffer<uint2> cluster_indices;
@@ -168,9 +197,9 @@ bool trace_ray_grid(float3 ray_origin, float3 ray_dir, out float hit_t, out uint
 				for (uint ti = 0; ti < tri_test; ti++) {
 					uint tri_idx = triangle_indices[cell_tri_start + tri_base + ti];
 					Triangle tri = triangles[tri_idx];
-					float3 v0 = vertices[tri.i0].position;
-					float3 v1 = vertices[tri.i1].position;
-					float3 v2 = vertices[tri.i2].position;
+					float3 v0 = vertices[tri.i0].position + vertices[tri.i0].position_lo;
+					float3 v1 = vertices[tri.i1].position + vertices[tri.i1].position_lo;
+					float3 v2 = vertices[tri.i2].position + vertices[tri.i2].position_lo;
 
 					float t;
 					float3 n;
@@ -220,7 +249,8 @@ void main(uint3 tid : SV_DispatchThreadID) {
 	if (probe_index >= params.probe_count)
 		return;
 
-	float3 position = probe_positions[probe_index].xyz;
+	// Reconstruct probe position from hi+lo double-float pair.
+	float3 position = probe_positions[probe_index].position + probe_positions[probe_index].position_lo;
 	uint rng = pcg_hash(probe_index * 1337u + params.ray_from * 7919u);
 
 	float local_absorbed[NUM_BANDS];
@@ -257,9 +287,9 @@ void main(uint3 tid : SV_DispatchThreadID) {
 
 			// Compute hit normal for bounce.
 			Triangle tri = triangles[hit_tri];
-			float3 v0 = vertices[tri.i0].position;
-			float3 v1 = vertices[tri.i1].position;
-			float3 v2 = vertices[tri.i2].position;
+			float3 v0 = vertices[tri.i0].position + vertices[tri.i0].position_lo;
+			float3 v1 = vertices[tri.i1].position + vertices[tri.i1].position_lo;
+			float3 v2 = vertices[tri.i2].position + vertices[tri.i2].position_lo;
 			float3 hit_normal = normalize(cross(v1 - v0, v2 - v0));
 			if (dot(hit_normal, ray_dir) > 0.0)
 				hit_normal = -hit_normal;
