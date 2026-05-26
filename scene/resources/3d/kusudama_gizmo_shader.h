@@ -38,7 +38,7 @@ render_mode depth_draw_always;
 uniform vec4 kusudama_color : source_color = vec4(1.0, 1.0, 1.0, 1.0);
 uniform vec4 boundary_outline_color : source_color = vec4(1.0, 1.0, 1.0, 1.0);
 uniform int cone_count = 0;
-uniform vec4 cone_sequence[30];
+uniform vec4 cone_sequence[91]; // MAX_KUSUDAMA_CONES(30) * 3 + 1
 
 varying vec3 normal_model_dir;
 varying vec4 vert_model_color;
@@ -104,7 +104,7 @@ int get_condition(in vec3 normal_dir, in int cone_counts, in float boundary_widt
 		}
 		current_condition = get_allowability_condition(current_condition, in_cone);
 	} else {
-		for(int i = 0; i < (cone_counts - 1) * 3; i = i + 3) {
+		for(int i = 0; i < cone_counts * 3; i = i + 3) {
 			normal_dir = normalize(normal_dir);
 
 			vec4 cone_1 = cone_sequence[i + 0];

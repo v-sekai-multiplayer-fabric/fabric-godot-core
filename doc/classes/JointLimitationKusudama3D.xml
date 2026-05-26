@@ -7,7 +7,7 @@
 		JointLimitationKusudama3D represents a spherical constraint region using multiple sequence cones that are automatically connected by smooth tangent paths. The term "Kusudama" originates from Japanese papercraft models made by sewing or gluing pyramidal units through a common vertex, which this constraint visually resembles.
 		[b]How Kusudamas Work:[/b]
 		Each cone is defined by a center direction and a radius (radii may vary per cone). The constraint allows bone orientations within any of these cones. Additionally, adjacent cones in the sequence are automatically connected by tangent paths, creating a smooth transition region between cones. The inside of tangent circles is forbidden, while the region outside both tangent circles (between the cones) forms the allowed path.
-		[b]Important:[/b] Cones form a linear sequence, not a closed loop. The last cone in the array does not automatically connect back to the first cone. To create a closed constraint region, you must explicitly add a final cone that connects back to the first, or arrange your cones so the last one naturally connects to the first.
+		[b]Important:[/b] With 2 or more cones, the constraint automatically sorts cones into convex hull order on the sphere and connects them in a closed loop (including wrap-around from the last cone back to the first). This forms a convex spherical polygon as the constraint boundary, ensuring flicker-free animation interpolation with any number of cones.
 		[b]Constraint Solving Process:[/b]
 		If there are no cones ([code]cone_count[/code] is 0), the constraint is effectively disabled and the bone direction is returned unchanged. Otherwise:
 		1. First, the solver checks if the bone direction is within any sequence cone. If so, the orientation is allowed.
@@ -52,7 +52,7 @@
 			<return type="void" />
 			<param index="0" name="count" type="int" />
 			<description>
-				Sets the number of cones (0 to 10). If the count is [code]0[/code], all cones are cleared. If increasing the count, new cones are added with default values (center at the +Y axis, radius of [code]0.785398[/code] radians, approximately [code]45[/code] degrees). If decreasing, excess cones are removed. Tangent paths between adjacent cones are automatically recalculated.
+				Sets the number of cones. If the count is [code]0[/code], all cones are cleared. If increasing the count, new cones are added with default values (center at the +Y axis, radius of [code]0.785398[/code] radians, approximately [code]45[/code] degrees). If decreasing, excess cones are removed. The constraint boundary polygon is automatically rebuilt.
 			</description>
 		</method>
 		<method name="set_cone_radius">
@@ -66,7 +66,7 @@
 	</methods>
 	<members>
 		<member name="cones" type="PackedVector4Array" setter="set_cones" getter="get_cones" default="PackedVector4Array()">
-			The array of cones that define this kusudama constraint. Each cone is stored as a Vector4 where the XYZ components represent the center direction (stored raw; normalized internally) and the W component is the cone radius in radians (engine property range 1° to 180°). Cone count is 0 to 10. The cones form a linear sequence where adjacent cones are automatically connected by smooth tangent paths. When this property is modified, tangent paths between adjacent cones are automatically recalculated.
+			The array of cones that define this kusudama constraint. Each cone is stored as a Vector4 where the XYZ components represent the center direction (stored raw; normalized internally) and the W component is the cone radius in radians (engine property range 1° to 180°). The cones are automatically sorted into convex hull order and connected in a closed loop to form a convex spherical polygon constraint boundary.
 		</member>
 	</members>
 </class>

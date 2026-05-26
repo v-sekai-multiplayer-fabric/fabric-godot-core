@@ -1568,6 +1568,218 @@ TEST_CASE("[Scene][JointLimitationKusudama3D] Test tangent path - small cone rad
 	CHECK(result.is_finite());
 	CHECK(result.is_normalized());
 }
+// Helper: generate N approximately equidistant cones on the unit sphere using Fibonacci spiral.
+static Vector<Vector4> make_fibonacci_cones(int n, real_t radius) {
+	Vector<Vector4> cones;
+	const real_t golden_ratio = (1.0 + Math::sqrt(5.0)) / 2.0;
+	for (int i = 0; i < n; i++) {
+		real_t theta = Math::acos(1.0 - 2.0 * (i + 0.5) / n);
+		real_t phi = Math::TAU * i / golden_ratio;
+		Vector3 center(Math::sin(theta) * Math::cos(phi), Math::sin(theta) * Math::sin(phi), Math::cos(theta));
+		center.normalize();
+		cones.push_back(Vector4(center.x, center.y, center.z, radius));
+	}
+	return cones;
+}
+
+TEST_CASE("[Scene][JointLimitationKusudama3D] Test 10 equidistant cones - deterministic and continuous") {
+	Ref<JointLimitationKusudama3D> limitation;
+	limitation.instantiate();
+
+	Vector<Vector4> cones = make_fibonacci_cones(10, Math::deg_to_rad(30.0));
+	set_cones_from_vector4(limitation, cones);
+
+	Vector3 forward = Vector3(0, 0, 1);
+	Vector3 right = Vector3(1, 0, 0);
+	Quaternion rot = Quaternion();
+
+	// Determinism: same input yields same output every time.
+	Vector3 input_dir = Vector3(0.57735, 0.57735, 0.57735).normalized();
+	Vector3 first = limitation->solve(forward, right, rot, input_dir);
+	for (int i = 0; i < 99; i++) {
+		Vector3 again = limitation->solve(forward, right, rot, input_dir);
+		CHECK(again.is_equal_approx(first));
+	}
+
+	// Continuity: tiny perturbation should not cause a large jump.
+	real_t eps = 1e-5f;
+	Vector3 perturbed = (input_dir + Vector3(eps, 0, 0)).normalized();
+	Vector3 out_perturbed = limitation->solve(forward, right, rot, perturbed);
+	real_t angle_change = first.angle_to(out_perturbed);
+	CHECK(angle_change < Math::deg_to_rad(2.0));
+}
+
+TEST_CASE("[Scene][JointLimitationKusudama3D] Test 10 cones - no opposite-side snap") {
+	Ref<JointLimitationKusudama3D> limitation;
+	limitation.instantiate();
+
+	Vector<Vector4> cones = make_fibonacci_cones(10, Math::deg_to_rad(25.0));
+	set_cones_from_vector4(limitation, cones);
+
+	Vector3 forward = Vector3(0, 0, 1);
+	Vector3 right = Vector3(1, 0, 0);
+	Quaternion rot = Quaternion();
+
+	const int n_theta = 40;
+	const int n_phi = 20;
+	int checked = 0;
+	for (int i = 0; i < n_theta; i++) {
+		real_t theta = (real_t)i / (real_t)n_theta * Math::TAU;
+		for (int j = 0; j < n_phi; j++) {
+			real_t phi = (real_t)(j + 1) / (real_t)(n_phi + 1) * Math::PI;
+			Vector3 input_dir(
+					Math::sin(phi) * Math::cos(theta),
+					Math::sin(phi) * Math::sin(theta),
+					Math::cos(phi));
+			input_dir.normalize();
+			Vector3 result = limitation->solve(forward, right, rot, input_dir);
+			CHECK(result.is_finite());
+			CHECK(result.length() > 0.9f);
+			real_t dot_in_out = input_dir.dot(result);
+			CHECK(dot_in_out >= 0.0f);
+			checked++;
+		}
+	}
+	CHECK(checked == n_theta * n_phi);
+}
+
+TEST_CASE("[Scene][JointLimitationKusudama3D] Test 10 cones - interpolation path no high jerk") {
+	Ref<JointLimitationKusudama3D> limitation;
+	limitation.instantiate();
+
+	Vector<Vector4> cones = make_fibonacci_cones(10, Math::deg_to_rad(25.0));
+	set_cones_from_vector4(limitation, cones);
+
+	Vector3 forward = Vector3(0, 0, 1);
+	Vector3 right = Vector3(1, 0, 0);
+	Quaternion rot = Quaternion();
+
+	const int steps = 100;
+	const real_t max_angular_step_rad = Math::deg_to_rad(8.0);
+	Vector3 start = Vector3(1, 0, 0).normalized();
+	Vector3 end = Vector3(-1, 0, 0).normalized();
+	Vector3 prev_out;
+	for (int i = 0; i <= steps; i++) {
+		real_t t = (real_t)i / (real_t)steps;
+		Vector3 input_dir = slerp_unit(start, end, t);
+		Vector3 out = limitation->solve(forward, right, rot, input_dir);
+		CHECK(out.is_finite());
+		CHECK(out.length() > 0.9f);
+		if (i > 0) {
+			real_t step_angle = prev_out.angle_to(out);
+			CHECK(step_angle < max_angular_step_rad);
+		}
+		prev_out = out;
+	}
+}
+
+TEST_CASE("[Scene][JointLimitationKusudama3D] Test closed-loop wrap-around") {
+	Ref<JointLimitationKusudama3D> limitation;
+	limitation.instantiate();
+
+	// 4 cones in a square — with closed loop, the path from last to first should be connected.
+	Vector3 cp1 = Vector3(1, 0, 0).normalized();
+	Vector3 cp2 = Vector3(0, 1, 0).normalized();
+	Vector3 cp3 = Vector3(-1, 0, 0).normalized();
+	Vector3 cp4 = Vector3(0, -1, 0).normalized();
+	real_t radius = Math::deg_to_rad(35.0);
+
+	Vector<Vector4> cones;
+	cones.push_back(Vector4(cp1.x, cp1.y, cp1.z, radius));
+	cones.push_back(Vector4(cp2.x, cp2.y, cp2.z, radius));
+	cones.push_back(Vector4(cp3.x, cp3.y, cp3.z, radius));
+	cones.push_back(Vector4(cp4.x, cp4.y, cp4.z, radius));
+	set_cones_from_vector4(limitation, cones);
+
+	Vector3 forward = Vector3(0, 0, 1);
+	Vector3 right = Vector3(1, 0, 0);
+	Quaternion rot = Quaternion();
+
+	// Point between cp4 and cp1 (the wrap-around region).
+	Vector3 wrap_point = (cp4 + cp1).normalized();
+	Vector3 result = limitation->solve(forward, right, rot, wrap_point);
+	CHECK(result.is_finite());
+	CHECK(result.is_normalized());
+
+	// In the equatorial plane, the allowed region should be the entire equator ring
+	// (4 cones at 90-degree intervals with 35-degree radius, plus tangent paths).
+	// A point on the equator between cp4 and cp1 should be in the allowed region.
+	real_t angle_to_cp1 = result.angle_to(cp1);
+	real_t angle_to_cp4 = result.angle_to(cp4);
+	CHECK((angle_to_cp1 < Math::PI / 2 || angle_to_cp4 < Math::PI / 2));
+}
+
+TEST_CASE("[Scene][JointLimitationKusudama3D] Test scaling - various cone counts") {
+	Vector3 forward = Vector3(0, 0, 1);
+	Vector3 right = Vector3(1, 0, 0);
+	Quaternion rot = Quaternion();
+
+	int counts[] = { 4, 7, 15, 30 };
+	for (int c = 0; c < 4; c++) {
+		int n = counts[c];
+		Ref<JointLimitationKusudama3D> limitation;
+		limitation.instantiate();
+		Vector<Vector4> cones = make_fibonacci_cones(n, Math::deg_to_rad(20.0));
+		set_cones_from_vector4(limitation, cones);
+
+		// Test a grid of directions — all outputs must be finite and normalized.
+		int failures = 0;
+		for (int i = 0; i < 20; i++) {
+			real_t theta = (real_t)i / 20.0f * Math::TAU;
+			for (int j = 0; j < 10; j++) {
+				real_t phi = (real_t)(j + 1) / 11.0f * Math::PI;
+				Vector3 input_dir(
+						Math::sin(phi) * Math::cos(theta),
+						Math::sin(phi) * Math::sin(theta),
+						Math::cos(phi));
+				input_dir.normalize();
+				Vector3 result = limitation->solve(forward, right, rot, input_dir);
+				if (!result.is_finite() || result.length() < 0.9f) {
+					failures++;
+				}
+			}
+		}
+		CHECK(failures == 0);
+	}
+}
+
+TEST_CASE("[Scene][JointLimitationKusudama3D] Test convex hull ordering") {
+	Ref<JointLimitationKusudama3D> limitation;
+	limitation.instantiate();
+
+	// Input cones in non-convex-hull order — the solver should reorder them.
+	Vector3 cp1 = Vector3(1, 0, 0).normalized();
+	Vector3 cp2 = Vector3(-1, 0, 0).normalized(); // opposite of cp1
+	Vector3 cp3 = Vector3(0, 1, 0).normalized();
+	Vector3 cp4 = Vector3(0, -1, 0).normalized(); // opposite of cp3
+	real_t radius = Math::deg_to_rad(40.0);
+
+	// Scrambled order: cp1, cp3, cp2, cp4 (not sequential around the sphere).
+	Vector<Vector4> cones;
+	cones.push_back(Vector4(cp1.x, cp1.y, cp1.z, radius));
+	cones.push_back(Vector4(cp3.x, cp3.y, cp3.z, radius));
+	cones.push_back(Vector4(cp2.x, cp2.y, cp2.z, radius));
+	cones.push_back(Vector4(cp4.x, cp4.y, cp4.z, radius));
+	set_cones_from_vector4(limitation, cones);
+
+	Vector3 forward = Vector3(0, 0, 1);
+	Vector3 right = Vector3(1, 0, 0);
+	Quaternion rot = Quaternion();
+
+	// Despite scrambled input, the solver should work correctly.
+	// Test points near each cone center — should be returned unchanged.
+	Vector3 result1 = limitation->solve(forward, right, rot, cp1);
+	CHECK(result1.is_equal_approx(cp1));
+	Vector3 result2 = limitation->solve(forward, right, rot, cp3);
+	CHECK(result2.is_equal_approx(cp3));
+
+	// Test a point between cp1 and cp3 — should be valid.
+	Vector3 between = (cp1 + cp3).normalized();
+	Vector3 result3 = limitation->solve(forward, right, rot, between);
+	CHECK(result3.is_finite());
+	CHECK(result3.is_normalized());
+}
+
 } // namespace TestJointLimitationKusudama3D
 
 #endif // _3D_DISABLED

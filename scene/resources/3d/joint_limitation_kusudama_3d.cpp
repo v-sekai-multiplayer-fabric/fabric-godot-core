@@ -58,6 +58,7 @@ void JointLimitationKusudama3D::set_cones(const Vector<Vector4> &p_cones) {
 		cones.push_back(p_cones[i]);
 	}
 	_invalidate_normalized_cache();
+	_invalidate_polygon_cache();
 	emit_changed();
 }
 
@@ -82,11 +83,11 @@ void JointLimitationKusudama3D::set_cone_count(int p_count) {
 		return;
 	}
 	cones.resize(p_count);
-	// Initialize new cones with default values (+Y axis, 45 degree cone)
 	for (uint32_t i = old_size; i < cones.size(); i++) {
 		cones[i] = Vector4(0, 1, 0, Math::PI * 0.25);
 	}
 	_invalidate_normalized_cache();
+	_invalidate_polygon_cache();
 	notify_property_list_changed();
 	emit_changed();
 }
@@ -97,13 +98,12 @@ int JointLimitationKusudama3D::get_cone_count() const {
 
 void JointLimitationKusudama3D::set_cone_center(int p_index, const Vector3 &p_center) {
 	ERR_FAIL_INDEX(p_index, (int)cones.size());
-	// Store raw for serialization and direct input (like gravity_direction in SpringBoneSimulator).
-	// Normalization is applied internally via cached values.
 	Vector4 &cone = cones[p_index];
 	cone.x = p_center.x;
 	cone.y = p_center.y;
 	cone.z = p_center.z;
 	_invalidate_normalized_cache();
+	_invalidate_polygon_cache();
 	emit_changed();
 }
 
@@ -115,6 +115,10 @@ Vector3 JointLimitationKusudama3D::get_cone_center(int p_index) const {
 
 void JointLimitationKusudama3D::_invalidate_normalized_cache() const {
 	_normalized_cone_centers_cache.clear();
+}
+
+void JointLimitationKusudama3D::_invalidate_polygon_cache() const {
+	_polygon_dirty = true;
 }
 
 Vector3 JointLimitationKusudama3D::_get_cone_center_normalized(int p_index) const {
@@ -136,6 +140,7 @@ Vector3 JointLimitationKusudama3D::_get_cone_center_normalized(int p_index) cons
 void JointLimitationKusudama3D::set_cone_radius(int p_index, real_t p_radius) {
 	ERR_FAIL_INDEX(p_index, (int)cones.size());
 	cones[p_index].w = p_radius;
+	_invalidate_polygon_cache();
 	emit_changed();
 }
 
@@ -187,7 +192,7 @@ bool JointLimitationKusudama3D::_get(const StringName &p_name, Variant &r_ret) c
 }
 
 void JointLimitationKusudama3D::_get_property_list(List<PropertyInfo> *p_list) const {
-	p_list->push_back(PropertyInfo(Variant::INT, PNAME("cone_count"), PROPERTY_HINT_RANGE, "0,10,1", PROPERTY_USAGE_DEFAULT | PROPERTY_USAGE_ARRAY, "Cones," + String(PNAME("cones")) + "/"));
+	p_list->push_back(PropertyInfo(Variant::INT, PNAME("cone_count"), PROPERTY_HINT_RANGE, "0,30,1", PROPERTY_USAGE_DEFAULT | PROPERTY_USAGE_ARRAY, "Cones," + String(PNAME("cones")) + "/"));
 	for (int i = 0; i < get_cone_count(); i++) {
 		const String prefix = vformat("%s/%d/", PNAME("cones"), i);
 		p_list->push_back(PropertyInfo(Variant::VECTOR3, prefix + PNAME("center"), PROPERTY_HINT_NONE, ""));
@@ -196,43 +201,277 @@ void JointLimitationKusudama3D::_get_property_list(List<PropertyInfo> *p_list) c
 }
 
 
+void JointLimitationKusudama3D::_compute_hull_order() const {
+	uint32_t n = cones.size();
+	_hull_order.resize(n);
+	if (n <= 2) {
+		for (uint32_t i = 0; i < n; i++) {
+			_hull_order[i] = i;
+		}
+		return;
+	}
+	Vector3 centroid;
+	for (uint32_t i = 0; i < n; i++) {
+		centroid += _get_cone_center_normalized(i);
+	}
+	centroid /= (real_t)n;
+	if (centroid.is_zero_approx()) {
+		centroid = Vector3(0, 1, 0);
+	}
+	centroid.normalize();
+
+	Vector3 u = centroid.get_any_perpendicular().normalized();
+	Vector3 v = centroid.cross(u).normalized();
+
+	LocalVector<real_t> angles;
+	angles.resize(n);
+	for (uint32_t i = 0; i < n; i++) {
+		_hull_order[i] = i;
+		Vector3 c = _get_cone_center_normalized(i);
+		angles[i] = Math::atan2(c.dot(v), c.dot(u));
+	}
+	// Sort indices by angle.
+	for (uint32_t i = 1; i < n; i++) {
+		uint32_t key_idx = _hull_order[i];
+		real_t key_angle = angles[key_idx];
+		int j = (int)i - 1;
+		while (j >= 0 && angles[_hull_order[j]] > key_angle) {
+			_hull_order[j + 1] = _hull_order[j];
+			j--;
+		}
+		_hull_order[j + 1] = key_idx;
+	}
+}
+
+void JointLimitationKusudama3D::_rebuild_polygon_cache() const {
+	if (!_polygon_dirty) {
+		return;
+	}
+	_polygon_dirty = false;
+	_polygon_vertices.clear();
+	_polygon_normals.clear();
+	_tangent_centers_1.clear();
+	_tangent_centers_2.clear();
+	_tangent_radii.clear();
+
+	uint32_t n = cones.size();
+	if (n < 2) {
+		return;
+	}
+
+	_compute_hull_order();
+
+	// Compute tangent circles for each adjacent pair in hull order (closed loop).
+	_tangent_centers_1.resize(n);
+	_tangent_centers_2.resize(n);
+	_tangent_radii.resize(n);
+	for (uint32_t i = 0; i < n; i++) {
+		uint32_t idx_a = _hull_order[i];
+		uint32_t idx_b = _hull_order[(i + 1) % n];
+		compute_tangent_circles(
+				_get_cone_center_normalized(idx_a), cones[idx_a].w,
+				_get_cone_center_normalized(idx_b), cones[idx_b].w,
+				_tangent_centers_1[i], _tangent_centers_2[i], _tangent_radii[i]);
+	}
+
+	// Compute centroid of all cone centers.
+	Vector3 centroid;
+	for (uint32_t i = 0; i < n; i++) {
+		centroid += _get_cone_center_normalized(i);
+	}
+	centroid /= (real_t)n;
+	if (centroid.is_zero_approx()) {
+		centroid = Vector3(0, 1, 0);
+	}
+	centroid.normalize();
+
+	// For each cone in hull order, compute the point on its rim furthest from the
+	// centroid.  These trace the convex hull boundary — one vertex per cone.
+	_polygon_vertices.resize(n);
+	for (uint32_t i = 0; i < n; i++) {
+		uint32_t idx = _hull_order[i];
+		Vector3 c = _get_cone_center_normalized(idx);
+		real_t r = cones[idx].w;
+
+		Vector3 proj = centroid - c * centroid.dot(c);
+		Vector3 away;
+		if (proj.is_zero_approx()) {
+			away = c.get_any_perpendicular().normalized();
+		} else {
+			away = -proj.normalized();
+		}
+		_polygon_vertices[i] = (c * Math::cos(r) + away * Math::sin(r)).normalized();
+	}
+
+	// Edge normals with orientation check.
+	_polygon_normals.resize(n);
+	for (uint32_t i = 0; i < n; i++) {
+		Vector3 edge_normal = _polygon_vertices[i].cross(_polygon_vertices[(i + 1) % n]);
+		if (edge_normal.is_zero_approx()) {
+			edge_normal = _polygon_vertices[i].get_any_perpendicular();
+		}
+		_polygon_normals[i] = edge_normal.normalized();
+	}
+
+	bool centroid_inside = true;
+	for (uint32_t i = 0; i < n; i++) {
+		if (centroid.dot(_polygon_normals[i]) < 0) {
+			centroid_inside = false;
+			break;
+		}
+	}
+	if (!centroid_inside) {
+		for (uint32_t i = 0; i < n; i++) {
+			_polygon_normals[i] = -_polygon_normals[i];
+		}
+	}
+}
+
+bool JointLimitationKusudama3D::_is_in_tangent_path(const Vector3 &p_point, uint32_t p_pair_index) const {
+	uint32_t n = _hull_order.size();
+	uint32_t idx_a = _hull_order[p_pair_index];
+	uint32_t idx_b = _hull_order[(p_pair_index + 1) % n];
+	Vector3 center1 = _get_cone_center_normalized(idx_a);
+	Vector3 center2 = _get_cone_center_normalized(idx_b);
+	Vector3 tan1 = _tangent_centers_1[p_pair_index];
+	Vector3 tan2 = _tangent_centers_2[p_pair_index];
+	real_t tan_radius_cos = Math::cos(_tangent_radii[p_pair_index]);
+
+	// Inside a tangent circle = forbidden.
+	if (p_point.dot(tan1) > tan_radius_cos) {
+		return false;
+	}
+	if (p_point.dot(tan2) > tan_radius_cos) {
+		return false;
+	}
+
+	// Check which side of the arc (center1 × center2) we're on, then verify
+	// the point is inside the tangent triangle on that side.
+	Vector3 arc_normal = center1.cross(center2);
+	real_t side = p_point.dot(arc_normal);
+
+	if (side < 0.0) {
+		return p_point.dot(center1.cross(tan1)) > 0 && p_point.dot(tan1.cross(center2)) > 0;
+	} else {
+		return p_point.dot(tan2.cross(center1)) > 0 && p_point.dot(center2.cross(tan2)) > 0;
+	}
+}
+
+bool JointLimitationKusudama3D::_polygon_contains(const Vector3 &p_point) const {
+	uint32_t m = _polygon_normals.size();
+	for (uint32_t i = 0; i < m; i++) {
+		if (p_point.dot(_polygon_normals[i]) < 0) {
+			return false;
+		}
+	}
+	return true;
+}
+
+Vector3 JointLimitationKusudama3D::_polygon_project(const Vector3 &p_point) const {
+	real_t best_dot = -2.0f;
+	Vector3 best = p_point;
+	uint32_t n = _polygon_vertices.size();
+
+	// Project onto each polygon edge (great circle arc between consecutive vertices).
+	for (uint32_t i = 0; i < n; i++) {
+		Vector3 v0 = _polygon_vertices[i];
+		Vector3 v1 = _polygon_vertices[(i + 1) % n];
+		Vector3 arc_normal = v0.cross(v1);
+		if (arc_normal.is_zero_approx()) {
+			continue;
+		}
+		arc_normal.normalize();
+
+		Vector3 proj = (p_point - arc_normal * p_point.dot(arc_normal));
+		if (proj.is_zero_approx()) {
+			continue;
+		}
+		proj.normalize();
+
+		Vector3 edge_dir = v0.cross(v1);
+		real_t d0 = v0.cross(proj).dot(edge_dir);
+		real_t d1 = proj.cross(v1).dot(edge_dir);
+
+		Vector3 candidate;
+		if (d0 >= 0 && d1 >= 0) {
+			candidate = proj;
+		} else {
+			real_t dot0 = p_point.dot(v0);
+			real_t dot1 = p_point.dot(v1);
+			candidate = (dot0 >= dot1) ? v0 : v1;
+		}
+
+		real_t d = p_point.dot(candidate);
+		if (d > best_dot) {
+			best_dot = d;
+			best = candidate;
+		}
+	}
+
+	// Also check per-cone boundary projections — the actual allowed region
+	// includes cone interiors plus the polygon interior.  When outside both, the
+	// nearest cone rim may be closer than any polygon edge.
+	uint32_t nc = cones.size();
+	for (uint32_t i = 0; i < nc; i++) {
+		Vector3 c = _get_cone_center_normalized(i);
+		real_t r = cones[i].w;
+		Vector3 ortho = (p_point - p_point.project(c)).normalized();
+		if (!ortho.is_finite()) {
+			ortho = (Math::abs(c.z) < 0.9f) ? c.cross(Vector3(0, 0, 1)).normalized() : c.cross(Vector3(1, 0, 0)).normalized();
+		}
+		Vector3 boundary_pt = c * Math::cos(r) + ortho * Math::sin(r);
+		real_t d = p_point.dot(boundary_pt);
+		if (d > best_dot) {
+			best_dot = d;
+			best = boundary_pt;
+		}
+	}
+
+	return best;
+}
+
 Vector3 JointLimitationKusudama3D::_solve(const Vector3 &p_direction) const {
 	Vector3 p = p_direction.normalized();
 	uint32_t n = cones.size();
-	if (n == 0) return p;
-	for (uint32_t i = 0; i < n; i++) {
-		if (is_point_in_cone(p, _get_cone_center_normalized(i), cones[i].w)) return p;
-		if (i + 1 < n && is_point_in_tangent_path(p, _get_cone_center_normalized(i), cones[i].w, _get_cone_center_normalized(i + 1), cones[i + 1].w)) return p;
+	if (n == 0) {
+		return p;
 	}
-	real_t min_d = 1e18f;
-	Vector3 best = p;
 
+	// Fast accept: point inside any cone.
 	for (uint32_t i = 0; i < n; i++) {
-		Vector3 c = _get_cone_center_normalized(i);
-		real_t r = cones[i].w;
+		if (is_point_in_cone(p, _get_cone_center_normalized(i), cones[i].w)) {
+			return p;
+		}
+	}
+
+	if (n == 1) {
+		Vector3 c = _get_cone_center_normalized(0);
+		real_t r = cones[0].w;
 		Vector3 ortho = (p - p.project(c)).normalized();
 		if (!ortho.is_finite()) {
 			ortho = (Math::abs(c.z) < 0.9f) ? c.cross(Vector3(0, 0, 1)).normalized() : c.cross(Vector3(1, 0, 0)).normalized();
 		}
-		Vector3 b = c * Math::cos(r) + ortho * Math::sin(r);
-		real_t d = p.distance_squared_to(b);
-		if (d < min_d) {
-			min_d = d;
-			best = b;
-		}
+		return c * Math::cos(r) + ortho * Math::sin(r);
+	}
 
-		if (i + 1 < n) {
-			Vector3 b_path = get_on_great_tangent_triangle(p, c, r, _get_cone_center_normalized(i + 1), cones[i + 1].w);
-			if (!Math::is_nan(b_path.x)) {
-				real_t d_p = p.distance_squared_to(b_path);
-				if (d_p < min_d) {
-					min_d = d_p;
-					best = b_path;
-				}
-			}
+	// Multiple cones: rebuild cache, then check tangent paths (closed loop).
+	_rebuild_polygon_cache();
+
+	for (uint32_t i = 0; i < n; i++) {
+		if (_is_in_tangent_path(p, i)) {
+			return p;
 		}
 	}
-	return best;
+
+	// Also accept if inside the convex polygon (covers small gaps between
+	// tangent paths that arise from the polygon being slightly larger than the
+	// union of tangent triangles).
+	if (_polygon_contains(p)) {
+		return p;
+	}
+
+	// Outside all allowed regions — project to nearest boundary (flicker-free).
+	return _polygon_project(p);
 }
 
 // Helper functions for kusudama solving
@@ -241,27 +480,34 @@ Vector3 JointLimitationKusudama3D::_solve(const Vector3 &p_direction) const {
 
 int JointLimitationKusudama3D::get_cone_sequence_for_shader(PackedVector4Array &r_cone_sequence) const {
 	r_cone_sequence.clear();
-	uint32_t n = MIN(cones.size(), (uint32_t)MAX_KUSUDAMA_CONES);
+	uint32_t n = cones.size();
 	if (n == 0) {
 		return 0;
 	}
-	// Layout: cone0, tangent0_1, tangent0_2, cone1, tangent1_1, tangent1_2, cone2, ...
-	for (uint32_t i = 0; i < n; i++) {
-		Vector3 center_i = _get_cone_center_normalized(i);
-		real_t radius_i = cones[i].w;
+	// Rebuild polygon cache to get hull order.
+	_rebuild_polygon_cache();
+	uint32_t hull_n = _hull_order.size();
+	if (hull_n == 0) {
+		hull_n = n;
+	}
+	// Layout: cone0, tangent0_1, tangent0_2, cone1, tangent1_1, tangent1_2, ..., tangentN_1, tangentN_2, cone0 (wrap)
+	// Use hull order for closed loop.
+	for (uint32_t i = 0; i < hull_n; i++) {
+		uint32_t idx = (hull_n > 0 && _hull_order.size() == hull_n) ? _hull_order[i] : i;
+		Vector3 center_i = _get_cone_center_normalized(idx);
+		real_t radius_i = cones[idx].w;
 		if (i == 0) {
 			r_cone_sequence.push_back(Vector4(center_i.x, center_i.y, center_i.z, radius_i));
 		}
-		if (i + 1 < n) {
-			Vector3 center_next = _get_cone_center_normalized(i + 1);
-			real_t radius_next = cones[i + 1].w;
-			Vector3 tan1, tan2;
-			real_t trad;
-			compute_tangent_circles(center_i, radius_i, center_next, radius_next, tan1, tan2, trad);
-			r_cone_sequence.push_back(Vector4(tan1.x, tan1.y, tan1.z, (real_t)trad));
-			r_cone_sequence.push_back(Vector4(tan2.x, tan2.y, tan2.z, (real_t)trad));
-			r_cone_sequence.push_back(Vector4(center_next.x, center_next.y, center_next.z, radius_next));
-		}
+		uint32_t idx_next = (hull_n > 0 && _hull_order.size() == hull_n) ? _hull_order[(i + 1) % hull_n] : (i + 1) % n;
+		Vector3 center_next = _get_cone_center_normalized(idx_next);
+		real_t radius_next = cones[idx_next].w;
+		Vector3 tan1, tan2;
+		real_t trad;
+		compute_tangent_circles(center_i, radius_i, center_next, radius_next, tan1, tan2, trad);
+		r_cone_sequence.push_back(Vector4(tan1.x, tan1.y, tan1.z, trad));
+		r_cone_sequence.push_back(Vector4(tan2.x, tan2.y, tan2.z, trad));
+		r_cone_sequence.push_back(Vector4(center_next.x, center_next.y, center_next.z, radius_next));
 	}
 	return n;
 }
@@ -391,89 +637,6 @@ bool JointLimitationKusudama3D::is_point_in_cone(const Vector3 &p_point, const V
 		return false;
 	}
 	return p_point.normalized().angle_to(p_cone_center) <= p_cone_radius;
-}
-
-bool JointLimitationKusudama3D::is_point_in_tangent_path(const Vector3 &p_point, const Vector3 &p_center1, real_t p_radius1, const Vector3 &p_center2, real_t p_radius2) const {
-	Vector3 dir = p_point.normalized();
-
-	// Check if point is in the inter-cone path region using get_on_great_tangent_triangle
-	// This function handles all the geometric checks including whether the point is inside tangent circles
-	Vector3 path_point = get_on_great_tangent_triangle(dir, p_center1, p_radius1, p_center2, p_radius2);
-
-	// If NaN, point is not in path region
-	if (Math::is_nan(path_point.x)) {
-		return false;
-	}
-
-	// If the returned point is approximately equal to the input point, point is in the path region.
-	// Use a threshold with small margin to avoid flips when cosine is near the boundary (3+ cone stability).
-	// get_on_great_tangent_triangle returns the input if in path, or a boundary point if inside a tangent circle.
-	real_t cosine = path_point.dot(dir);
-	const real_t in_path_cosine_min = 1.0 - 1e-4;
-	return cosine >= in_path_cosine_min;
-}
-
-Vector3 JointLimitationKusudama3D::get_on_great_tangent_triangle(const Vector3 &p_point, const Vector3 &p_center1, real_t p_radius1, const Vector3 &p_center2, real_t p_radius2) const {
-	Vector3 center1 = p_center1.normalized();
-	Vector3 center2 = p_center2.normalized();
-	Vector3 input = p_point.normalized();
-
-	// Compute tangent circles
-	Vector3 tan1, tan2;
-	real_t tan_radius;
-	compute_tangent_circles(center1, p_radius1, center2, p_radius2, tan1, tan2, tan_radius);
-
-	real_t tan_radius_cos = Math::cos(tan_radius);
-
-	// Determine which side of the arc we're on (tie-break arc_side_dot == 0 with second branch for stability).
-	Vector3 arc_normal = center1.cross(center2);
-	real_t arc_side_dot = input.dot(arc_normal);
-
-	if (arc_side_dot <= 0.0) {
-		// Use first tangent circle
-		Vector3 cone1_cross_tangent1 = center1.cross(tan1);
-		Vector3 tangent1_cross_cone2 = tan1.cross(center2);
-		if (input.dot(cone1_cross_tangent1) > 0 && input.dot(tangent1_cross_cone2) > 0) {
-			real_t to_next_cos = input.dot(tan1);
-			if (to_next_cos > tan_radius_cos) {
-				// Project onto tangent circle, but move slightly outside to ensure it's in the allowed region
-				Vector3 plane_normal = tan1.cross(input);
-				if (!plane_normal.is_finite() || plane_normal.is_zero_approx()) {
-					plane_normal = Vector3::UP;
-				}
-				plane_normal.normalize();
-				// Use slightly larger angle to move point outside the tangent circle (into allowed region)
-				real_t adjusted_tan_radius = tan_radius + 5e-5;
-				Quaternion rotate_about_by = Quaternion(plane_normal, adjusted_tan_radius);
-				return rotate_about_by.xform(tan1).normalized();
-			} else {
-				return input;
-			}
-		}
-	} else {
-		// Use second tangent circle
-		Vector3 tangent2_cross_cone1 = tan2.cross(center1);
-		Vector3 cone2_cross_tangent2 = center2.cross(tan2);
-		if (input.dot(tangent2_cross_cone1) > 0 && input.dot(cone2_cross_tangent2) > 0) {
-			real_t to_next_cos = input.dot(tan2);
-			if (to_next_cos > tan_radius_cos) {
-				// Project onto tangent circle, but move slightly outside to ensure it's in the allowed region
-				Vector3 plane_normal = tan2.cross(input);
-				if (!plane_normal.is_finite() || plane_normal.is_zero_approx()) {
-					plane_normal = Vector3::UP;
-				}
-				plane_normal.normalize();
-				// Use slightly larger angle to move point outside the tangent circle (into allowed region)
-				real_t adjusted_tan_radius = tan_radius + 5e-5;
-				Quaternion rotate_about_by = Quaternion(plane_normal, adjusted_tan_radius);
-				return rotate_about_by.xform(tan2).normalized();
-			} else {
-				return input;
-			}
-		}
-	}
-
-	return Vector3(NAN, NAN, NAN);
 }
 
 void JointLimitationKusudama3D::extend_ray(Vector3 &r_start, Vector3 &r_end, real_t p_amount) const {
