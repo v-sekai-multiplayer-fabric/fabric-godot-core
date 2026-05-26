@@ -1,0 +1,411 @@
+/**************************************************************************/
+/*  reverb_probe_gi.cpp                                                   */
+/**************************************************************************/
+/*                         This file is part of:                          */
+/*                             GODOT ENGINE                               */
+/*                        https://godotengine.org                         */
+/**************************************************************************/
+/* Copyright (c) 2014-present Godot Engine contributors (see AUTHORS.md). */
+/* Copyright (c) 2007-2014 Juan Linietsky, Ariel Manzur.                  */
+/*                                                                        */
+/* Permission is hereby granted, free of charge, to any person obtaining  */
+/* a copy of this software and associated documentation files (the        */
+/* "Software"), to deal in the Software without restriction, including    */
+/* without limitation the rights to use, copy, modify, merge, publish,    */
+/* distribute, sublicense, and/or sell copies of the Software, and to     */
+/* permit persons to whom the Software is furnished to do so, subject to  */
+/* the following conditions:                                              */
+/*                                                                        */
+/* The above copyright notice and this permission notice shall be         */
+/* included in all copies or substantial portions of the Software.        */
+/*                                                                        */
+/* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,        */
+/* EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF     */
+/* MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. */
+/* IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY   */
+/* CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,   */
+/* TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE      */
+/* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                 */
+/**************************************************************************/
+
+#include "reverb_probe_gi.h"
+
+#include "core/math/delaunay_3d.h"
+#include "core/math/geometry_3d.h"
+#include "core/math/static_raycaster.h"
+#include "core/object/class_db.h"
+#include "core/object/worker_thread_pool.h"
+#include "core/os/os.h"
+#include "scene/3d/mesh_instance_3d.h"
+#include "servers/resonanceaudio/resonance_audio_material_map.h"
+#include "servers/resonanceaudio/resonance_audio_wrapper.h"
+
+#define _USE_MATH_DEFINES
+#include "platforms/common/room_effects_utils.h"
+
+#include <cmath>
+
+void ReverbProbeGI::_collect_mesh_triangles(Node *p_node, Vector<Vector3> &r_vertices, Vector<int> &r_indices, Vector<int> &r_tri_materials, AABB &r_bounds) {
+	MeshInstance3D *mi = Object::cast_to<MeshInstance3D>(p_node);
+	if (mi && mi->get_mesh().is_valid()) {
+		Ref<Mesh> mesh = mi->get_mesh();
+		Transform3D xform = mi->get_global_transform();
+
+		for (int s = 0; s < mesh->get_surface_count(); s++) {
+			if (mesh->surface_get_primitive_type(s) != Mesh::PRIMITIVE_TRIANGLES) {
+				continue;
+			}
+			Array arrays = mesh->surface_get_arrays(s);
+			if (arrays.size() == 0) {
+				continue;
+			}
+			PackedVector3Array verts = arrays[Mesh::ARRAY_VERTEX];
+			PackedInt32Array idx = arrays[Mesh::ARRAY_INDEX];
+
+			// Determine acoustic material for this surface.
+			int acoustic_mat = (int)wall_material;
+			if (material_map.is_valid()) {
+				Ref<Material> mat = mi->get_active_material(s);
+				if (mat.is_valid()) {
+					String mat_key = mat->get_path();
+					if (mat_key.is_empty()) {
+						mat_key = mat->get_name();
+					}
+					if (!mat_key.is_empty()) {
+						acoustic_mat = (int)material_map->get_material_mapping(mat_key);
+					}
+				}
+			}
+
+			int base = r_vertices.size();
+			for (int v = 0; v < verts.size(); v++) {
+				Vector3 world_v = xform.xform(verts[v]);
+				r_vertices.push_back(world_v);
+				if (r_vertices.size() == 1) {
+					r_bounds.position = world_v;
+				} else {
+					r_bounds.expand_to(world_v);
+				}
+			}
+
+			int num_tris = 0;
+			if (idx.size() > 0) {
+				for (int t = 0; t < idx.size(); t++) {
+					r_indices.push_back(base + idx[t]);
+				}
+				num_tris = idx.size() / 3;
+			} else {
+				for (int v = 0; v < verts.size(); v++) {
+					r_indices.push_back(base + v);
+				}
+				num_tris = verts.size() / 3;
+			}
+			for (int t = 0; t < num_tris; t++) {
+				r_tri_materials.push_back(acoustic_mat);
+			}
+		}
+	}
+
+	for (int i = 0; i < p_node->get_child_count(); i++) {
+		_collect_mesh_triangles(p_node->get_child(i), r_vertices, r_indices, r_tri_materials, r_bounds);
+	}
+}
+
+void ReverbProbeGI::_notification(int p_what) {
+	switch (p_what) {
+		case NOTIFICATION_ENTER_TREE: {
+			set_process_internal(true);
+		} break;
+		case NOTIFICATION_INTERNAL_PROCESS: {
+			_update_reverb_from_listener();
+		} break;
+	}
+}
+
+void ReverbProbeGI::_update_reverb_from_listener() {
+	if (bake_data.is_null() || bake_data->get_probe_count() == 0) {
+		static bool data_warned = false;
+		if (!data_warned) {
+			print_line("ReverbProbeGI: no bake data");
+			data_warned = true;
+		}
+		return;
+	}
+
+	ResonanceAudioServer *server = ResonanceAudioServer::get_singleton();
+	if (!server) {
+		static bool server_warned = false;
+		if (!server_warned) {
+			print_line("ReverbProbeGI: no ResonanceAudioServer");
+			server_warned = true;
+		}
+		return;
+	}
+
+	// Use this node's position as the listener position.
+	// Attach ReverbProbeGI as a child of the camera/player node.
+	Vector3 listener_pos = get_global_position();
+	float rt60[9];
+	float gain;
+
+	if (bake_data->lookup_reverb(listener_pos, rt60, gain)) {
+		static int debug_count = 0;
+		if (debug_count < 5 || debug_count % 300 == 0) {
+			print_line(vformat("ReverbProbeGI: pos=(%.1f,%.1f,%.1f) rt60_1k=%.3f gain=%.4f", listener_pos.x, listener_pos.y, listener_pos.z, rt60[5], gain));
+		}
+		debug_count++;
+		server->set_reverb_properties(rt60, gain);
+	}
+}
+
+struct BakeProbeTask {
+	int probe_index;
+	Vector3 probe_pos;
+	Ref<StaticRaycaster> raycaster;
+	int ray_count;
+	int max_bounces;
+	int default_material;
+	const int *tri_materials;
+	int tri_count;
+	float volume;
+	float surface_area;
+	float *rt60_out;
+	float *gain_out;
+};
+
+static void _bake_probe_task(void *p_userdata, uint32_t p_index) {
+	static constexpr int NUM_BANDS = 9;
+	BakeProbeTask *tasks = (BakeProbeTask *)p_userdata;
+	BakeProbeTask &task = tasks[p_index];
+
+	float absorbed[NUM_BANDS] = {};
+	float total_hits = 0;
+
+	uint32_t rng = (uint32_t)(task.probe_index * 1337 + 49502741);
+	auto pcg = [](uint32_t &s) -> float {
+		s = s * 747796405u + 2891336453u;
+		uint32_t word = ((s >> ((s >> 28u) + 4u)) ^ s) * 277803737u;
+		word = (word >> 22u) ^ word;
+		return (float)word / (float)0xFFFFFFFFu;
+	};
+
+	for (int ray = 0; ray < task.ray_count; ray++) {
+		float z = 2.0f * pcg(rng) - 1.0f;
+		float phi = 2.0f * (float)M_PI * pcg(rng);
+		float r = sqrtf(MAX(0.0f, 1.0f - z * z));
+		Vector3 ray_dir(r * cosf(phi), r * sinf(phi), z);
+		Vector3 ray_origin = task.probe_pos;
+
+		for (int bounce = 0; bounce < task.max_bounces; bounce++) {
+			StaticRaycaster::Ray sr(ray_origin, ray_dir, 1e-4f);
+			if (!task.raycaster->intersect(sr)) {
+				break;
+			}
+
+			int hit_mat = task.default_material;
+			if (task.tri_materials && sr.primID < (unsigned int)task.tri_count) {
+				hit_mat = task.tri_materials[sr.primID];
+			}
+			vraudio::RoomMaterial rm = vraudio::GetRoomMaterial(hit_mat);
+			for (int b = 0; b < NUM_BANDS; b++) {
+				absorbed[b] += rm.absorption_coefficients[b];
+			}
+			total_hits += 1.0f;
+
+			Vector3 hit_normal = sr.normal.normalized();
+			if (hit_normal.dot(ray_dir) > 0.0f) {
+				hit_normal = -hit_normal;
+			}
+			ray_origin = ray_origin + ray_dir * sr.tfar + hit_normal * 0.001f;
+			float bz = 2.0f * pcg(rng) - 1.0f;
+			float bphi = 2.0f * (float)M_PI * pcg(rng);
+			float br = sqrtf(MAX(0.0f, 1.0f - bz * bz));
+			Vector3 rand_dir(br * cosf(bphi), br * sinf(bphi), bz);
+			ray_dir = (rand_dir + hit_normal).normalized();
+		}
+	}
+
+	static constexpr float kEyring = 0.161f;
+	static const float kAirAbsorption[NUM_BANDS] = {
+		0.0006f, 0.0006f, 0.0007f, 0.0008f, 0.0010f, 0.0015f, 0.0026f, 0.0060f, 0.0207f
+	};
+
+	for (int b = 0; b < NUM_BANDS; b++) {
+		if (total_hits < 1.0f) {
+			task.rt60_out[b] = 0.0f;
+			continue;
+		}
+		float mean_alpha = absorbed[b] / total_hits;
+		mean_alpha = CLAMP(mean_alpha, 0.001f, 0.999f);
+		float rt60 = kEyring * task.volume / (-task.surface_area * logf(1.0f - mean_alpha) + 4.0f * kAirAbsorption[b] * task.volume);
+		task.rt60_out[b] = MAX(rt60, 0.0f);
+	}
+	float enclosure = total_hits / (float)(task.ray_count * task.max_bounces);
+	*task.gain_out = 0.045f * CLAMP(enclosure * 4.0f, 0.01f, 1.0f);
+}
+
+ReverbProbeGI::BakeError ReverbProbeGI::bake(Node *p_from_node, const PackedVector3Array &p_probe_positions, int p_ray_count, int p_max_bounces) {
+	static constexpr int NUM_BANDS = 9;
+
+	Vector<Vector3> vertices;
+	Vector<int> indices;
+	Vector<int> tri_materials;
+	AABB bounds;
+	_collect_mesh_triangles(p_from_node, vertices, indices, tri_materials, bounds);
+
+	if (indices.size() < 3) {
+		return BAKE_ERROR_NO_MESHES;
+	}
+
+	int probe_count = p_probe_positions.size();
+	if (probe_count == 0) {
+		return BAKE_ERROR_NO_PROBES;
+	}
+
+	float volume = bounds.size.x * bounds.size.y * bounds.size.z;
+	float surface_area = 2.0f * (bounds.size.x * bounds.size.y + bounds.size.y * bounds.size.z + bounds.size.x * bounds.size.z);
+
+	PackedFloat32Array rt60_values;
+	rt60_values.resize(probe_count * NUM_BANDS);
+
+	PackedFloat32Array gains;
+	gains.resize(probe_count);
+
+	// Build BVH acceleration structure via StaticRaycaster (Embree).
+	Ref<StaticRaycaster> raycaster = StaticRaycaster::create();
+	if (raycaster.is_null()) {
+		print_line("ReverbProbeGI: StaticRaycaster not available (Embree not compiled in). Cannot bake.");
+		return BAKE_ERROR_NO_MESHES;
+	}
+
+	PackedVector3Array mesh_verts;
+	PackedInt32Array mesh_indices;
+	mesh_verts.resize(vertices.size());
+	mesh_indices.resize(indices.size());
+	for (int i = 0; i < vertices.size(); i++) {
+		mesh_verts.write[i] = vertices[i];
+	}
+	for (int i = 0; i < indices.size(); i++) {
+		mesh_indices.write[i] = indices[i];
+	}
+	raycaster->add_mesh(mesh_verts, mesh_indices, 0);
+	raycaster->commit();
+
+	uint64_t start_usec = OS::get_singleton()->get_ticks_usec();
+
+	LocalVector<BakeProbeTask> tasks;
+	tasks.resize(probe_count);
+	for (int i = 0; i < probe_count; i++) {
+		tasks[i].probe_index = i;
+		tasks[i].probe_pos = p_probe_positions[i];
+		tasks[i].raycaster = raycaster;
+		tasks[i].ray_count = p_ray_count;
+		tasks[i].max_bounces = p_max_bounces;
+		tasks[i].default_material = (int)wall_material;
+		tasks[i].tri_materials = tri_materials.size() > 0 ? tri_materials.ptr() : nullptr;
+		tasks[i].tri_count = tri_materials.size();
+		tasks[i].volume = volume;
+		tasks[i].surface_area = surface_area;
+		tasks[i].rt60_out = rt60_values.ptrw() + i * NUM_BANDS;
+		tasks[i].gain_out = gains.ptrw() + i;
+	}
+
+	WorkerThreadPool::GroupID group = WorkerThreadPool::get_singleton()->add_native_group_task(
+			_bake_probe_task, tasks.ptr(), probe_count, -1, true);
+	WorkerThreadPool::get_singleton()->wait_for_group_task_completion(group);
+
+	uint64_t elapsed_usec = OS::get_singleton()->get_ticks_usec() - start_usec;
+	double elapsed_sec = elapsed_usec / 1000000.0;
+	double total_rays = (double)probe_count * p_ray_count;
+	print_line(vformat("ReverbProbeGI bake: %d probes, %d rays, %d bounces in %.2fs (%.0f probes/s, %.0f Mrays/s)",
+			probe_count, p_ray_count, p_max_bounces, elapsed_sec,
+			probe_count / elapsed_sec, total_rays / elapsed_sec / 1e6));
+
+	Vector<Vector3> points_vec;
+	points_vec.resize(probe_count);
+	for (int i = 0; i < probe_count; i++) {
+		points_vec.write[i] = p_probe_positions[i];
+	}
+	Vector<Delaunay3D::OutputSimplex> simplices = Delaunay3D::tetrahedralize(points_vec);
+
+	PackedInt32Array tetrahedra;
+	tetrahedra.resize(simplices.size() * 4);
+	int32_t *tet_w = tetrahedra.ptrw();
+	for (int i = 0; i < simplices.size(); i++) {
+		tet_w[i * 4 + 0] = simplices[i].points[0];
+		tet_w[i * 4 + 1] = simplices[i].points[1];
+		tet_w[i * 4 + 2] = simplices[i].points[2];
+		tet_w[i * 4 + 3] = simplices[i].points[3];
+	}
+
+	PackedInt32Array bsp_tree;
+
+	Ref<ReverbBakeData> data;
+	data.instantiate();
+	data->set_data(bounds, p_probe_positions, rt60_values, gains, tetrahedra, bsp_tree);
+	set_bake_data(data);
+
+	return BAKE_ERROR_OK;
+}
+
+void ReverbProbeGI::set_bake_data(const Ref<ReverbBakeData> &p_data) {
+	bake_data = p_data;
+}
+
+void ReverbProbeGI::set_wall_material(WallMaterial p_material) {
+	wall_material = p_material;
+}
+
+void ReverbProbeGI::set_material_map(const Ref<ResonanceAudioMaterialMap> &p_map) {
+	material_map = p_map;
+}
+
+Ref<ResonanceAudioMaterialMap> ReverbProbeGI::get_material_map() const {
+	return material_map;
+}
+
+void ReverbProbeGI::_bind_methods() {
+	ClassDB::bind_method(D_METHOD("set_bake_data", "data"), &ReverbProbeGI::set_bake_data);
+	ClassDB::bind_method(D_METHOD("get_bake_data"), &ReverbProbeGI::get_bake_data);
+
+	ClassDB::bind_method(D_METHOD("set_wall_material", "material"), &ReverbProbeGI::set_wall_material);
+	ClassDB::bind_method(D_METHOD("get_wall_material"), &ReverbProbeGI::get_wall_material);
+
+	ClassDB::bind_method(D_METHOD("set_material_map", "map"), &ReverbProbeGI::set_material_map);
+	ClassDB::bind_method(D_METHOD("get_material_map"), &ReverbProbeGI::get_material_map);
+
+	ClassDB::bind_method(D_METHOD("bake", "from_node", "probe_positions", "ray_count", "max_bounces"), &ReverbProbeGI::bake, DEFVAL(50000), DEFVAL(100));
+
+	ADD_PROPERTY(PropertyInfo(Variant::OBJECT, "bake_data", PROPERTY_HINT_RESOURCE_TYPE, "ReverbBakeData"), "set_bake_data", "get_bake_data");
+	ADD_PROPERTY(PropertyInfo(Variant::INT, "wall_material", PROPERTY_HINT_ENUM, "Transparent,Acoustic Ceiling Tiles,Brick Bare,Brick Painted,Concrete Block Coarse,Concrete Block Painted,Curtain Heavy,Fiber Glass Insulation,Glass Thin,Glass Thick,Grass,Linoleum On Concrete,Marble,Metal,Parquet On Concrete,Plaster Rough,Plaster Smooth,Plywood Panel,Polished Concrete Or Tile,Sheetrock,Water Or Ice Surface,Wood Ceiling,Wood Panel,Uniform"), "set_wall_material", "get_wall_material");
+	ADD_PROPERTY(PropertyInfo(Variant::OBJECT, "material_map", PROPERTY_HINT_RESOURCE_TYPE, "ResonanceAudioMaterialMap", PROPERTY_USAGE_DEFAULT | PROPERTY_USAGE_EDITOR_INSTANTIATE_OBJECT), "set_material_map", "get_material_map");
+
+	BIND_ENUM_CONSTANT(MATERIAL_TRANSPARENT);
+	BIND_ENUM_CONSTANT(MATERIAL_ACOUSTIC_CEILING_TILES);
+	BIND_ENUM_CONSTANT(MATERIAL_BRICK_BARE);
+	BIND_ENUM_CONSTANT(MATERIAL_BRICK_PAINTED);
+	BIND_ENUM_CONSTANT(MATERIAL_CONCRETE_BLOCK_COARSE);
+	BIND_ENUM_CONSTANT(MATERIAL_CONCRETE_BLOCK_PAINTED);
+	BIND_ENUM_CONSTANT(MATERIAL_CURTAIN_HEAVY);
+	BIND_ENUM_CONSTANT(MATERIAL_FIBER_GLASS_INSULATION);
+	BIND_ENUM_CONSTANT(MATERIAL_GLASS_THIN);
+	BIND_ENUM_CONSTANT(MATERIAL_GLASS_THICK);
+	BIND_ENUM_CONSTANT(MATERIAL_GRASS);
+	BIND_ENUM_CONSTANT(MATERIAL_LINOLEUM_ON_CONCRETE);
+	BIND_ENUM_CONSTANT(MATERIAL_MARBLE);
+	BIND_ENUM_CONSTANT(MATERIAL_METAL);
+	BIND_ENUM_CONSTANT(MATERIAL_PARQUET_ON_CONCRETE);
+	BIND_ENUM_CONSTANT(MATERIAL_PLASTER_ROUGH);
+	BIND_ENUM_CONSTANT(MATERIAL_PLASTER_SMOOTH);
+	BIND_ENUM_CONSTANT(MATERIAL_PLYWOOD_PANEL);
+	BIND_ENUM_CONSTANT(MATERIAL_POLISHED_CONCRETE_OR_TILE);
+	BIND_ENUM_CONSTANT(MATERIAL_SHEETROCK);
+	BIND_ENUM_CONSTANT(MATERIAL_WATER_OR_ICE_SURFACE);
+	BIND_ENUM_CONSTANT(MATERIAL_WOOD_CEILING);
+	BIND_ENUM_CONSTANT(MATERIAL_WOOD_PANEL);
+	BIND_ENUM_CONSTANT(MATERIAL_UNIFORM);
+
+	BIND_ENUM_CONSTANT(BAKE_ERROR_OK);
+	BIND_ENUM_CONSTANT(BAKE_ERROR_NO_MESHES);
+	BIND_ENUM_CONSTANT(BAKE_ERROR_NO_PROBES);
+}
