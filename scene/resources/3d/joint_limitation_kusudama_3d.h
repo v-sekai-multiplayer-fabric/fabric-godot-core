@@ -42,9 +42,24 @@ class JointLimitationKusudama3D : public JointLimitation3D {
 	LocalVector<Vector4> cones;
 	// Cached normalized centers for internal use; invalidated when cones change.
 	mutable LocalVector<Vector3> _normalized_cone_centers_cache;
+	// Polygon cache: built from cones in convex hull order to form a closed boundary.
+	mutable LocalVector<uint32_t> _hull_order;
+	mutable LocalVector<Vector3> _polygon_vertices;
+	mutable LocalVector<Vector3> _polygon_normals;
+	// Per-pair tangent data (hull-ordered, closed loop): tan1, tan2, tan_radius for each pair.
+	mutable LocalVector<Vector3> _tangent_centers_1;
+	mutable LocalVector<Vector3> _tangent_centers_2;
+	mutable LocalVector<real_t> _tangent_radii;
+	mutable bool _polygon_dirty = true;
 
 	void _invalidate_normalized_cache() const;
 	Vector3 _get_cone_center_normalized(int p_index) const;
+	void _invalidate_polygon_cache() const;
+	void _rebuild_polygon_cache() const;
+	void _compute_hull_order() const;
+	bool _is_in_tangent_path(const Vector3 &p_point, uint32_t p_pair_index) const;
+	bool _polygon_contains(const Vector3 &p_point) const;
+	Vector3 _polygon_project(const Vector3 &p_point) const;
 
 #ifdef TOOLS_ENABLED
 	typedef Pair<Vector3, Vector3> Segment;
@@ -60,8 +75,6 @@ protected:
 
 private:
 	bool is_point_in_cone(const Vector3 &p_point, const Vector3 &p_cone_center, real_t p_cone_radius) const;
-	bool is_point_in_tangent_path(const Vector3 &p_point, const Vector3 &p_center1, real_t p_radius1, const Vector3 &p_center2, real_t p_radius2) const;
-	Vector3 get_on_great_tangent_triangle(const Vector3 &p_point, const Vector3 &p_center1, real_t p_radius1, const Vector3 &p_center2, real_t p_radius2) const;
 	void extend_ray(Vector3 &r_start, Vector3 &r_end, real_t p_amount) const;
 	int ray_sphere_intersection_full(const Vector3 &p_ray_start, const Vector3 &p_ray_end, const Vector3 &p_sphere_center, real_t p_radius, Vector3 *r_intersection1, Vector3 *r_intersection2) const;
 	void compute_tangent_circles(const Vector3 &p_center1, real_t p_radius1, const Vector3 &p_center2, real_t p_radius2, Vector3 &r_tangent1, Vector3 &r_tangent2, real_t &r_tangent_radius) const;
@@ -79,7 +92,7 @@ public:
 	void set_cone_radius(int p_index, real_t p_radius);
 	real_t get_cone_radius(int p_index) const;
 
-	static const int MAX_KUSUDAMA_CONES = 3;
+	static const int MAX_KUSUDAMA_CONES = 30;
 
 #ifdef TOOLS_ENABLED
 	int get_cone_sequence_for_shader(PackedVector4Array &r_cone_sequence) const;
