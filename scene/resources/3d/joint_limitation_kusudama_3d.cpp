@@ -204,8 +204,42 @@ void JointLimitationKusudama3D::_get_property_list(List<PropertyInfo> *p_list) c
 void JointLimitationKusudama3D::_compute_hull_order() const {
 	uint32_t n = cones.size();
 	_hull_order.resize(n);
+	if (n <= 2) {
+		for (uint32_t i = 0; i < n; i++) {
+			_hull_order[i] = i;
+		}
+		return;
+	}
+	Vector3 centroid;
+	for (uint32_t i = 0; i < n; i++) {
+		centroid += _get_cone_center_normalized(i);
+	}
+	centroid /= (real_t)n;
+	if (centroid.is_zero_approx()) {
+		centroid = Vector3(0, 1, 0);
+	}
+	centroid.normalize();
+
+	Vector3 u = centroid.get_any_perpendicular().normalized();
+	Vector3 v = centroid.cross(u).normalized();
+
+	LocalVector<real_t> angles;
+	angles.resize(n);
 	for (uint32_t i = 0; i < n; i++) {
 		_hull_order[i] = i;
+		Vector3 c = _get_cone_center_normalized(i);
+		angles[i] = Math::atan2(c.dot(v), c.dot(u));
+	}
+	// Sort indices by angle.
+	for (uint32_t i = 1; i < n; i++) {
+		uint32_t key_idx = _hull_order[i];
+		real_t key_angle = angles[key_idx];
+		int j = (int)i - 1;
+		while (j >= 0 && angles[_hull_order[j]] > key_angle) {
+			_hull_order[j + 1] = _hull_order[j];
+			j--;
+		}
+		_hull_order[j + 1] = key_idx;
 	}
 }
 
