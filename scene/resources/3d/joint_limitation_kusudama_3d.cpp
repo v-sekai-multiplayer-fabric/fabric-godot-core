@@ -207,40 +207,6 @@ void JointLimitationKusudama3D::_compute_hull_order() const {
 	for (uint32_t i = 0; i < n; i++) {
 		_hull_order[i] = i;
 	}
-	if (n <= 2) {
-		return;
-	}
-	// Sort into convex hull order for polygon construction only.
-	// Tangent path checks still use the original input order (0→1→2→...).
-	Vector3 centroid;
-	for (uint32_t i = 0; i < n; i++) {
-		centroid += _get_cone_center_normalized(i);
-	}
-	centroid /= (real_t)n;
-	if (centroid.is_zero_approx()) {
-		centroid = Vector3(0, 1, 0);
-	}
-	centroid.normalize();
-
-	Vector3 u = centroid.get_any_perpendicular().normalized();
-	Vector3 v = centroid.cross(u).normalized();
-
-	LocalVector<real_t> angles;
-	angles.resize(n);
-	for (uint32_t i = 0; i < n; i++) {
-		Vector3 c = _get_cone_center_normalized(i);
-		angles[i] = Math::atan2(c.dot(v), c.dot(u));
-	}
-	for (uint32_t i = 1; i < n; i++) {
-		uint32_t key_idx = _hull_order[i];
-		real_t key_angle = angles[key_idx];
-		int j = (int)i - 1;
-		while (j >= 0 && angles[_hull_order[j]] > key_angle) {
-			_hull_order[j + 1] = _hull_order[j];
-			j--;
-		}
-		_hull_order[j + 1] = key_idx;
-	}
 }
 
 void JointLimitationKusudama3D::_rebuild_polygon_cache() const {
@@ -261,16 +227,17 @@ void JointLimitationKusudama3D::_rebuild_polygon_cache() const {
 
 	_compute_hull_order();
 
-	// Compute tangent circles for each adjacent pair in INPUT order (open chain).
-	// Tangent paths respect user's sequence: 0→1, 1→2, ..., N-2→N-1.
+	// Compute tangent circles for each adjacent pair in hull order (open chain: no wrap-around).
 	uint32_t num_pairs = n - 1;
 	_tangent_centers_1.resize(num_pairs);
 	_tangent_centers_2.resize(num_pairs);
 	_tangent_radii.resize(num_pairs);
 	for (uint32_t i = 0; i < num_pairs; i++) {
+		uint32_t idx_a = _hull_order[i];
+		uint32_t idx_b = _hull_order[i + 1];
 		compute_tangent_circles(
-				_get_cone_center_normalized(i), cones[i].w,
-				_get_cone_center_normalized(i + 1), cones[i + 1].w,
+				_get_cone_center_normalized(idx_a), cones[idx_a].w,
+				_get_cone_center_normalized(idx_b), cones[idx_b].w,
 				_tangent_centers_1[i], _tangent_centers_2[i], _tangent_radii[i]);
 	}
 
@@ -328,8 +295,10 @@ void JointLimitationKusudama3D::_rebuild_polygon_cache() const {
 }
 
 bool JointLimitationKusudama3D::_is_in_tangent_path(const Vector3 &p_point, uint32_t p_pair_index) const {
-	Vector3 center1 = _get_cone_center_normalized(p_pair_index);
-	Vector3 center2 = _get_cone_center_normalized(p_pair_index + 1);
+	uint32_t idx_a = _hull_order[p_pair_index];
+	uint32_t idx_b = _hull_order[p_pair_index + 1];
+	Vector3 center1 = _get_cone_center_normalized(idx_a);
+	Vector3 center2 = _get_cone_center_normalized(idx_b);
 	Vector3 tan1 = _tangent_centers_1[p_pair_index];
 	Vector3 tan2 = _tangent_centers_2[p_pair_index];
 	real_t tan_radius_cos = Math::cos(_tangent_radii[p_pair_index]);
@@ -482,16 +451,25 @@ int JointLimitationKusudama3D::get_cone_sequence_for_shader(PackedVector4Array &
 	if (n == 0) {
 		return 0;
 	}
-	// Layout: cone0, tangent0_1, tangent0_2, cone1, ..., coneN-1 (input order, open chain).
-	for (uint32_t i = 0; i < n; i++) {
-		Vector3 center_i = _get_cone_center_normalized(i);
-		real_t radius_i = cones[i].w;
+	// Rebuild polygon cache to get hull order.
+	_rebuild_polygon_cache();
+	uint32_t hull_n = _hull_order.size();
+	if (hull_n == 0) {
+		hull_n = n;
+	}
+	// Layout: cone0, tangent0_1, tangent0_2, cone1, tangent1_1, tangent1_2, ..., coneN-1 (open chain).
+	// Use hull order, no wrap-around from last to first.
+	for (uint32_t i = 0; i < hull_n; i++) {
+		uint32_t idx = (_hull_order.size() == hull_n) ? _hull_order[i] : i;
+		Vector3 center_i = _get_cone_center_normalized(idx);
+		real_t radius_i = cones[idx].w;
 		if (i == 0) {
 			r_cone_sequence.push_back(Vector4(center_i.x, center_i.y, center_i.z, radius_i));
 		}
-		if (i + 1 < n) {
-			Vector3 center_next = _get_cone_center_normalized(i + 1);
-			real_t radius_next = cones[i + 1].w;
+		if (i + 1 < hull_n) {
+			uint32_t idx_next = (_hull_order.size() == hull_n) ? _hull_order[i + 1] : i + 1;
+			Vector3 center_next = _get_cone_center_normalized(idx_next);
+			real_t radius_next = cones[idx_next].w;
 			Vector3 tan1, tan2;
 			real_t trad;
 			compute_tangent_circles(center_i, radius_i, center_next, radius_next, tan1, tan2, trad);
