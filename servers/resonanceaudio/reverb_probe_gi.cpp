@@ -284,7 +284,131 @@ bool ReverbProbeGI::_bake_gpu(const PackedVector3Array &p_probes, const Vector<V
 
 	RID pipeline = rd->compute_pipeline_create(shader);
 
-	// BakeParams uniform buffer (matches Slang struct layout).
+	// Build 3D grid acceleration structure (same algorithm as lightmapper_rd).
+	static constexpr uint32_t CLUSTER_SIZE = 32;
+	int grid_size = MAX(2, (int)Math::ceil(cbrtf((float)tri_count / 4.0f)));
+	grid_size = (int)Math::next_power_of_2((uint32_t)grid_size);
+	AABB bounds = p_bounds;
+	bounds.grow_by(0.01f);
+
+	float cell_size_x = bounds.size.x / grid_size;
+	float cell_size_y = bounds.size.y / grid_size;
+	float cell_size_z = bounds.size.z / grid_size;
+
+	// Plot triangles into grid cells.
+	struct TriSort {
+		uint32_t cell_index;
+		uint32_t triangle_index;
+		AABB tri_aabb;
+		bool operator<(const TriSort &o) const { return cell_index < o.cell_index; }
+	};
+	LocalVector<TriSort> tri_sort;
+
+	for (int t = 0; t < tri_count; t++) {
+		Vector3 v0 = p_vertices[p_indices[t * 3 + 0]];
+		Vector3 v1 = p_vertices[p_indices[t * 3 + 1]];
+		Vector3 v2 = p_vertices[p_indices[t * 3 + 2]];
+		AABB tri_aabb;
+		tri_aabb.position = v0;
+		tri_aabb.expand_to(v1);
+		tri_aabb.expand_to(v2);
+		// Find all grid cells this triangle overlaps.
+		int min_x = CLAMP((int)((tri_aabb.position.x - bounds.position.x) / cell_size_x), 0, grid_size - 1);
+		int min_y = CLAMP((int)((tri_aabb.position.y - bounds.position.y) / cell_size_y), 0, grid_size - 1);
+		int min_z = CLAMP((int)((tri_aabb.position.z - bounds.position.z) / cell_size_z), 0, grid_size - 1);
+		int max_x = CLAMP((int)((tri_aabb.position.x + tri_aabb.size.x - bounds.position.x) / cell_size_x), 0, grid_size - 1);
+		int max_y = CLAMP((int)((tri_aabb.position.y + tri_aabb.size.y - bounds.position.y) / cell_size_y), 0, grid_size - 1);
+		int max_z = CLAMP((int)((tri_aabb.position.z + tri_aabb.size.z - bounds.position.z) / cell_size_z), 0, grid_size - 1);
+		for (int z = min_z; z <= max_z; z++) {
+			for (int y = min_y; y <= max_y; y++) {
+				for (int x = min_x; x <= max_x; x++) {
+					TriSort ts;
+					ts.cell_index = x + y * grid_size + z * grid_size * grid_size;
+					ts.triangle_index = t;
+					ts.tri_aabb = tri_aabb;
+					tri_sort.push_back(ts);
+				}
+			}
+		}
+	}
+	tri_sort.sort();
+
+	// Build grid data: per cell (triangle_count, solid_cell_index).
+	int total_cells = grid_size * grid_size * grid_size;
+	Vector<uint8_t> grid_data_bytes;
+	grid_data_bytes.resize(total_cells * sizeof(uint32_t) * 2);
+	uint32_t *grid_w = (uint32_t *)grid_data_bytes.ptrw();
+	memset(grid_w, 0, total_cells * sizeof(uint32_t) * 2);
+
+	// Build cluster indices and AABBs.
+	struct ClusterAABBData {
+		float min_bounds[3];
+		float pad0 = 0;
+		float max_bounds[3];
+		float pad1 = 0;
+	};
+	LocalVector<uint32_t> cluster_idx_data; // pairs: (cluster_start, tri_start)
+	LocalVector<ClusterAABBData> cluster_aabb_data;
+	Vector<uint8_t> sorted_tri_indices_bytes;
+	sorted_tri_indices_bytes.resize(tri_sort.size() * sizeof(uint32_t));
+	uint32_t *sti = (uint32_t *)sorted_tri_indices_bytes.ptrw();
+
+	uint32_t last_cell = 0xFFFFFFFF;
+	uint32_t solid_cell_count = 0;
+	uint32_t cluster_count = 0;
+
+	// First pass: count triangles per cell and solid cells.
+	for (uint32_t i = 0; i < tri_sort.size(); i++) {
+		uint32_t cell = tri_sort[i].cell_index;
+		if (cell != last_cell) {
+			grid_w[cell * 2 + 1] = solid_cell_count;
+			solid_cell_count++;
+		}
+		if ((grid_w[cell * 2] % CLUSTER_SIZE) == 0) {
+			cluster_count++;
+		}
+		grid_w[cell * 2]++;
+		last_cell = cell;
+	}
+
+	cluster_idx_data.resize(solid_cell_count * 2);
+	cluster_aabb_data.resize(cluster_count);
+
+	// Second pass: fill sorted indices and cluster AABBs.
+	uint32_t i = 0;
+	uint32_t ci = 0;
+	uint32_t si = 0;
+	while (i < tri_sort.size()) {
+		uint32_t cell = tri_sort[i].cell_index;
+		uint32_t count = grid_w[cell * 2];
+		cluster_idx_data[si * 2] = ci;
+		cluster_idx_data[si * 2 + 1] = i;
+		uint32_t cell_clusters = (count + CLUSTER_SIZE - 1) / CLUSTER_SIZE;
+		for (uint32_t c = 0; c < cell_clusters; c++) {
+			uint32_t start = c * CLUSTER_SIZE;
+			uint32_t end = MIN(start + CLUSTER_SIZE, count);
+			AABB caabb = tri_sort[i + start].tri_aabb;
+			for (uint32_t j = start + 1; j < end; j++) {
+				caabb.merge_with(tri_sort[i + j].tri_aabb);
+			}
+			ClusterAABBData &ca = cluster_aabb_data[ci + c];
+			Vector3 ca_end = caabb.get_end();
+			ca.min_bounds[0] = caabb.position.x;
+			ca.min_bounds[1] = caabb.position.y;
+			ca.min_bounds[2] = caabb.position.z;
+			ca.max_bounds[0] = ca_end.x;
+			ca.max_bounds[1] = ca_end.y;
+			ca.max_bounds[2] = ca_end.z;
+		}
+		for (uint32_t j = 0; j < count; j++) {
+			sti[i + j] = tri_sort[i + j].triangle_index;
+		}
+		i += count;
+		ci += cell_clusters;
+		si++;
+	}
+
+	// BakeParams uniform buffer.
 	struct BakeParamsGPU {
 		uint32_t ray_count;
 		uint32_t max_bounces;
@@ -292,9 +416,9 @@ bool ReverbProbeGI::_bake_gpu(const PackedVector3Array &p_probes, const Vector<V
 		uint32_t triangle_count;
 		uint32_t ray_from;
 		uint32_t ray_to;
-		float cell_size;
-		int32_t grid_size;
-		float grid_offset[3];
+		float to_cell_offset[3];
+		int32_t grid_size_val;
+		float to_cell_size[3];
 		float bias;
 	};
 	BakeParamsGPU params{};
@@ -303,43 +427,50 @@ bool ReverbProbeGI::_bake_gpu(const PackedVector3Array &p_probes, const Vector<V
 	params.probe_count = probe_count;
 	params.triangle_count = tri_count;
 	params.bias = 0.001f;
+	params.grid_size_val = grid_size;
+	params.to_cell_offset[0] = bounds.position.x;
+	params.to_cell_offset[1] = bounds.position.y;
+	params.to_cell_offset[2] = bounds.position.z;
+	params.to_cell_size[0] = 1.0f / cell_size_x;
+	params.to_cell_size[1] = 1.0f / cell_size_y;
+	params.to_cell_size[2] = 1.0f / cell_size_z;
 
-	// Vertex buffer: position + normal as float3 + float3.
+	// Vertex buffer.
 	Vector<uint8_t> vertex_data;
 	vertex_data.resize(p_vertices.size() * sizeof(float) * 6);
 	float *vd = (float *)vertex_data.ptrw();
-	for (int i = 0; i < p_vertices.size(); i++) {
-		vd[i * 6 + 0] = p_vertices[i].x;
-		vd[i * 6 + 1] = p_vertices[i].y;
-		vd[i * 6 + 2] = p_vertices[i].z;
-		vd[i * 6 + 3] = 0; // normal x (unused for now)
-		vd[i * 6 + 4] = 1; // normal y
-		vd[i * 6 + 5] = 0; // normal z
+	for (int vi = 0; vi < p_vertices.size(); vi++) {
+		vd[vi * 6 + 0] = p_vertices[vi].x;
+		vd[vi * 6 + 1] = p_vertices[vi].y;
+		vd[vi * 6 + 2] = p_vertices[vi].z;
+		vd[vi * 6 + 3] = 0;
+		vd[vi * 6 + 4] = 1;
+		vd[vi * 6 + 5] = 0;
 	}
 
-	// Triangle buffer: i0, i1, i2, material_index per triangle.
+	// Triangle buffer.
 	Vector<uint8_t> tri_data;
 	tri_data.resize(tri_count * sizeof(uint32_t) * 4);
 	uint32_t *td = (uint32_t *)tri_data.ptrw();
-	for (int i = 0; i < tri_count; i++) {
-		td[i * 4 + 0] = p_indices[i * 3 + 0];
-		td[i * 4 + 1] = p_indices[i * 3 + 1];
-		td[i * 4 + 2] = p_indices[i * 3 + 2];
-		td[i * 4 + 3] = (i < p_tri_materials.size()) ? p_tri_materials[i] : (int)wall_material;
+	for (int ti = 0; ti < tri_count; ti++) {
+		td[ti * 4 + 0] = p_indices[ti * 3 + 0];
+		td[ti * 4 + 1] = p_indices[ti * 3 + 1];
+		td[ti * 4 + 2] = p_indices[ti * 3 + 2];
+		td[ti * 4 + 3] = (ti < p_tri_materials.size()) ? p_tri_materials[ti] : (int)wall_material;
 	}
 
-	// Probe positions as float4 (xyz + pad).
+	// Probe positions.
 	Vector<uint8_t> probe_data;
 	probe_data.resize(probe_count * sizeof(float) * 4);
 	float *pd = (float *)probe_data.ptrw();
-	for (int i = 0; i < probe_count; i++) {
-		pd[i * 4 + 0] = p_probes[i].x;
-		pd[i * 4 + 1] = p_probes[i].y;
-		pd[i * 4 + 2] = p_probes[i].z;
-		pd[i * 4 + 3] = 0;
+	for (int pi = 0; pi < probe_count; pi++) {
+		pd[pi * 4 + 0] = p_probes[pi].x;
+		pd[pi * 4 + 1] = p_probes[pi].y;
+		pd[pi * 4 + 2] = p_probes[pi].z;
+		pd[pi * 4 + 3] = 0;
 	}
 
-	// Material absorption buffer: 24 materials × 9 bands.
+	// Material absorption buffer.
 	Vector<uint8_t> mat_data;
 	mat_data.resize(24 * NUM_BANDS * sizeof(float));
 	float *md = (float *)mat_data.ptrw();
@@ -350,11 +481,32 @@ bool ReverbProbeGI::_bake_gpu(const PackedVector3Array &p_probes, const Vector<V
 		}
 	}
 
-	// Output accumulator: per probe, 9 absorbed + 1 total_hits.
+	// Output accumulator.
 	int accum_size = probe_count * (NUM_BANDS + 1) * sizeof(float);
 	Vector<uint8_t> accum_init;
 	accum_init.resize(accum_size);
 	memset(accum_init.ptrw(), 0, accum_size);
+
+	// Cluster indices as uint2 pairs.
+	Vector<uint8_t> cluster_idx_bytes;
+	cluster_idx_bytes.resize(MAX(1u, (uint32_t)cluster_idx_data.size()) * sizeof(uint32_t));
+	if (cluster_idx_data.size() > 0) {
+		memcpy(cluster_idx_bytes.ptrw(), cluster_idx_data.ptr(), cluster_idx_data.size() * sizeof(uint32_t));
+	} else {
+		memset(cluster_idx_bytes.ptrw(), 0, cluster_idx_bytes.size());
+	}
+
+	// Cluster AABBs.
+	Vector<uint8_t> cluster_aabb_bytes;
+	cluster_aabb_bytes.resize(MAX(1u, (uint32_t)cluster_aabb_data.size()) * sizeof(ClusterAABBData));
+	if (cluster_aabb_data.size() > 0) {
+		memcpy(cluster_aabb_bytes.ptrw(), cluster_aabb_data.ptr(), cluster_aabb_data.size() * sizeof(ClusterAABBData));
+	} else {
+		memset(cluster_aabb_bytes.ptrw(), 0, cluster_aabb_bytes.size());
+	}
+
+	print_line(vformat("GPU grid: %dx%dx%d, %d solid cells, %d clusters, %d tri refs",
+			grid_size, grid_size, grid_size, solid_cell_count, cluster_count, (int)tri_sort.size()));
 
 	// Create GPU buffers.
 	Vector<uint8_t> params_bytes;
@@ -365,20 +517,23 @@ bool ReverbProbeGI::_bake_gpu(const PackedVector3Array &p_probes, const Vector<V
 	RID tri_buf = rd->storage_buffer_create(tri_data.size(), tri_data);
 	RID probe_buf = rd->storage_buffer_create(probe_data.size(), probe_data);
 	RID mat_buf = rd->storage_buffer_create(mat_data.size(), mat_data);
-	Vector<uint8_t> grid_placeholder;
-	grid_placeholder.resize(4);
-	memset(grid_placeholder.ptrw(), 0, 4);
-	RID grid_buf = rd->storage_buffer_create(4, grid_placeholder);
+	RID grid_buf = rd->storage_buffer_create(grid_data_bytes.size(), grid_data_bytes);
+	RID cluster_idx_buf = rd->storage_buffer_create(cluster_idx_bytes.size(), cluster_idx_bytes);
+	RID cluster_aabb_buf = rd->storage_buffer_create(cluster_aabb_bytes.size(), cluster_aabb_bytes);
+	RID sorted_tri_buf = rd->storage_buffer_create(MAX((int)sorted_tri_indices_bytes.size(), 4), sorted_tri_indices_bytes.size() > 0 ? sorted_tri_indices_bytes : Vector<uint8_t>({ 0, 0, 0, 0 }));
 	RID accum_buf = rd->storage_buffer_create(accum_size, accum_init);
 
-	// Uniform set 0: params, vertices, triangles, probes, materials, grid.
+	// Uniform set 0: matches Slang bindings.
 	Vector<RenderingDevice::Uniform> set0;
 	{ RenderingDevice::Uniform u; u.uniform_type = RenderingDevice::UNIFORM_TYPE_UNIFORM_BUFFER; u.binding = 0; u.append_id(params_buf); set0.push_back(u); }
 	{ RenderingDevice::Uniform u; u.uniform_type = RenderingDevice::UNIFORM_TYPE_STORAGE_BUFFER; u.binding = 1; u.append_id(vertex_buf); set0.push_back(u); }
 	{ RenderingDevice::Uniform u; u.uniform_type = RenderingDevice::UNIFORM_TYPE_STORAGE_BUFFER; u.binding = 2; u.append_id(tri_buf); set0.push_back(u); }
-	{ RenderingDevice::Uniform u; u.uniform_type = RenderingDevice::UNIFORM_TYPE_STORAGE_BUFFER; u.binding = 3; u.append_id(grid_buf); set0.push_back(u); }
-	{ RenderingDevice::Uniform u; u.uniform_type = RenderingDevice::UNIFORM_TYPE_STORAGE_BUFFER; u.binding = 4; u.append_id(probe_buf); set0.push_back(u); }
-	{ RenderingDevice::Uniform u; u.uniform_type = RenderingDevice::UNIFORM_TYPE_STORAGE_BUFFER; u.binding = 5; u.append_id(mat_buf); set0.push_back(u); }
+	{ RenderingDevice::Uniform u; u.uniform_type = RenderingDevice::UNIFORM_TYPE_STORAGE_BUFFER; u.binding = 3; u.append_id(probe_buf); set0.push_back(u); }
+	{ RenderingDevice::Uniform u; u.uniform_type = RenderingDevice::UNIFORM_TYPE_STORAGE_BUFFER; u.binding = 4; u.append_id(mat_buf); set0.push_back(u); }
+	{ RenderingDevice::Uniform u; u.uniform_type = RenderingDevice::UNIFORM_TYPE_STORAGE_BUFFER; u.binding = 5; u.append_id(grid_buf); set0.push_back(u); }
+	{ RenderingDevice::Uniform u; u.uniform_type = RenderingDevice::UNIFORM_TYPE_STORAGE_BUFFER; u.binding = 6; u.append_id(cluster_idx_buf); set0.push_back(u); }
+	{ RenderingDevice::Uniform u; u.uniform_type = RenderingDevice::UNIFORM_TYPE_STORAGE_BUFFER; u.binding = 7; u.append_id(cluster_aabb_buf); set0.push_back(u); }
+	{ RenderingDevice::Uniform u; u.uniform_type = RenderingDevice::UNIFORM_TYPE_STORAGE_BUFFER; u.binding = 8; u.append_id(sorted_tri_buf); set0.push_back(u); }
 	RID uniform_set0 = rd->uniform_set_create(set0, shader, 0);
 
 	// Uniform set 1: output accumulator.
@@ -436,6 +591,9 @@ bool ReverbProbeGI::_bake_gpu(const PackedVector3Array &p_probes, const Vector<V
 
 	// Cleanup.
 	rd->free(accum_buf);
+	rd->free(sorted_tri_buf);
+	rd->free(cluster_aabb_buf);
+	rd->free(cluster_idx_buf);
 	rd->free(grid_buf);
 	rd->free(mat_buf);
 	rd->free(probe_buf);
