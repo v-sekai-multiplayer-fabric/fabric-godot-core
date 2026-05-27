@@ -460,16 +460,21 @@ int JointLimitationKusudama3D::get_cone_sequence_for_shader(PackedVector4Array &
 	if (n == 0) {
 		return 0;
 	}
-	// Layout: cone0, tangent0_1, tangent0_2, cone1, ..., coneN-1 (open chain, input order).
-	for (uint32_t i = 0; i < n; i++) {
-		Vector3 center_i = _get_cone_center_normalized(i);
-		real_t radius_i = cones[i].w;
+	// Use hull order to match the solver's polygon.
+	// Open chain: N-1 tangent pairs between adjacent cones in hull order.
+	_rebuild_polygon_cache();
+	uint32_t hull_n = _hull_order.size();
+	for (uint32_t i = 0; i < hull_n; i++) {
+		uint32_t idx = _hull_order[i];
+		Vector3 center_i = _get_cone_center_normalized(idx);
+		real_t radius_i = cones[idx].w;
 		if (i == 0) {
 			r_cone_sequence.push_back(Vector4(center_i.x, center_i.y, center_i.z, radius_i));
 		}
-		if (i + 1 < n) {
-			Vector3 center_next = _get_cone_center_normalized(i + 1);
-			real_t radius_next = cones[i + 1].w;
+		if (i + 1 < hull_n) {
+			uint32_t idx_next = _hull_order[i + 1];
+			Vector3 center_next = _get_cone_center_normalized(idx_next);
+			real_t radius_next = cones[idx_next].w;
 			Vector3 tan1, tan2;
 			real_t trad;
 			compute_tangent_circles(center_i, radius_i, center_next, radius_next, tan1, tan2, trad);
