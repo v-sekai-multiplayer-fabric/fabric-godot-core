@@ -289,3 +289,7 @@
 *.py                                          @godotengine/buildsystem
 SConstruct                                    @godotengine/buildsystem
 SCsub                                         @godotengine/buildsystem
+
+# V-Sekai Speech
+
+/modules/speech/                              @fire
