@@ -346,6 +346,8 @@ public:
 	Vector3 get_joint_limitation_right_axis_vector(int p_index, int p_joint) const;
 	void set_joint_limitation_rotation_offset(int p_index, int p_joint, const Quaternion &p_offset);
 	Quaternion get_joint_limitation_rotation_offset(int p_index, int p_joint) const;
+	void set_joint_limitation_rotate_downstream_chain(int p_index, int p_joint, bool p_enabled);
+	bool get_joint_limitation_rotate_downstream_chain(int p_index, int p_joint) const;
 
 	// Helper.
 	Quaternion get_joint_limitation_space(int p_index, int p_joint, const Vector3 &p_forward) const;
