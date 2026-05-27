@@ -40,10 +40,9 @@
 #include "servers/rendering/renderer_rd/storage_rd/material_storage.h"
 #include "servers/rendering/rendering_device.h"
 #include "servers/rendering/rendering_server.h"
-
-#include "servers/resonanceaudio/shaders/reverb_bake.spv.gen.h"
 #include "servers/resonanceaudio/resonance_audio_material_map.h"
 #include "servers/resonanceaudio/resonance_audio_wrapper.h"
+#include "servers/resonanceaudio/shaders/reverb_bake.spv.gen.h"
 
 #define _USE_MATH_DEFINES
 #include "platforms/common/room_effects_utils.h"
@@ -567,20 +566,80 @@ bool ReverbProbeGI::_bake_gpu(const PackedVector3Array &p_probes, const Vector<V
 
 	// Uniform set 0: matches Slang bindings.
 	Vector<RenderingDevice::Uniform> set0;
-	{ RenderingDevice::Uniform u; u.uniform_type = RenderingDevice::UNIFORM_TYPE_UNIFORM_BUFFER; u.binding = 0; u.append_id(params_buf); set0.push_back(u); }
-	{ RenderingDevice::Uniform u; u.uniform_type = RenderingDevice::UNIFORM_TYPE_STORAGE_BUFFER; u.binding = 1; u.append_id(vertex_buf); set0.push_back(u); }
-	{ RenderingDevice::Uniform u; u.uniform_type = RenderingDevice::UNIFORM_TYPE_STORAGE_BUFFER; u.binding = 2; u.append_id(tri_buf); set0.push_back(u); }
-	{ RenderingDevice::Uniform u; u.uniform_type = RenderingDevice::UNIFORM_TYPE_STORAGE_BUFFER; u.binding = 3; u.append_id(probe_buf); set0.push_back(u); }
-	{ RenderingDevice::Uniform u; u.uniform_type = RenderingDevice::UNIFORM_TYPE_STORAGE_BUFFER; u.binding = 4; u.append_id(mat_buf); set0.push_back(u); }
-	{ RenderingDevice::Uniform u; u.uniform_type = RenderingDevice::UNIFORM_TYPE_STORAGE_BUFFER; u.binding = 5; u.append_id(grid_buf); set0.push_back(u); }
-	{ RenderingDevice::Uniform u; u.uniform_type = RenderingDevice::UNIFORM_TYPE_STORAGE_BUFFER; u.binding = 6; u.append_id(cluster_idx_buf); set0.push_back(u); }
-	{ RenderingDevice::Uniform u; u.uniform_type = RenderingDevice::UNIFORM_TYPE_STORAGE_BUFFER; u.binding = 7; u.append_id(cluster_aabb_buf); set0.push_back(u); }
-	{ RenderingDevice::Uniform u; u.uniform_type = RenderingDevice::UNIFORM_TYPE_STORAGE_BUFFER; u.binding = 8; u.append_id(sorted_tri_buf); set0.push_back(u); }
+	{
+		RenderingDevice::Uniform u;
+		u.uniform_type = RenderingDevice::UNIFORM_TYPE_UNIFORM_BUFFER;
+		u.binding = 0;
+		u.append_id(params_buf);
+		set0.push_back(u);
+	}
+	{
+		RenderingDevice::Uniform u;
+		u.uniform_type = RenderingDevice::UNIFORM_TYPE_STORAGE_BUFFER;
+		u.binding = 1;
+		u.append_id(vertex_buf);
+		set0.push_back(u);
+	}
+	{
+		RenderingDevice::Uniform u;
+		u.uniform_type = RenderingDevice::UNIFORM_TYPE_STORAGE_BUFFER;
+		u.binding = 2;
+		u.append_id(tri_buf);
+		set0.push_back(u);
+	}
+	{
+		RenderingDevice::Uniform u;
+		u.uniform_type = RenderingDevice::UNIFORM_TYPE_STORAGE_BUFFER;
+		u.binding = 3;
+		u.append_id(probe_buf);
+		set0.push_back(u);
+	}
+	{
+		RenderingDevice::Uniform u;
+		u.uniform_type = RenderingDevice::UNIFORM_TYPE_STORAGE_BUFFER;
+		u.binding = 4;
+		u.append_id(mat_buf);
+		set0.push_back(u);
+	}
+	{
+		RenderingDevice::Uniform u;
+		u.uniform_type = RenderingDevice::UNIFORM_TYPE_STORAGE_BUFFER;
+		u.binding = 5;
+		u.append_id(grid_buf);
+		set0.push_back(u);
+	}
+	{
+		RenderingDevice::Uniform u;
+		u.uniform_type = RenderingDevice::UNIFORM_TYPE_STORAGE_BUFFER;
+		u.binding = 6;
+		u.append_id(cluster_idx_buf);
+		set0.push_back(u);
+	}
+	{
+		RenderingDevice::Uniform u;
+		u.uniform_type = RenderingDevice::UNIFORM_TYPE_STORAGE_BUFFER;
+		u.binding = 7;
+		u.append_id(cluster_aabb_buf);
+		set0.push_back(u);
+	}
+	{
+		RenderingDevice::Uniform u;
+		u.uniform_type = RenderingDevice::UNIFORM_TYPE_STORAGE_BUFFER;
+		u.binding = 8;
+		u.append_id(sorted_tri_buf);
+		set0.push_back(u);
+	}
 	RID uniform_set0 = rd->uniform_set_create(set0, shader, 0);
 
 	// Uniform set 1: output accumulator.
 	Vector<RenderingDevice::Uniform> set1;
-	{ RenderingDevice::Uniform u; u.uniform_type = RenderingDevice::UNIFORM_TYPE_STORAGE_BUFFER; u.binding = 0; u.append_id(accum_buf); set1.push_back(u); }
+	{
+		RenderingDevice::Uniform u;
+		u.uniform_type = RenderingDevice::UNIFORM_TYPE_STORAGE_BUFFER;
+		u.binding = 0;
+		u.append_id(accum_buf);
+		set1.push_back(u);
+	}
 	RID uniform_set1 = rd->uniform_set_create(set1, shader, 1);
 
 	// Dispatch parallelized over (rays, probes): groups_x = rays, groups_y = probes.
@@ -693,55 +752,55 @@ ReverbProbeGI::BakeError ReverbProbeGI::bake(Node *p_from_node, const PackedVect
 		print_line("ReverbProbeGI: GPU bake unavailable, falling back to CPU (Embree).");
 		start_usec = OS::get_singleton()->get_ticks_usec();
 
-	// Build BVH acceleration structure via StaticRaycaster (Embree).
-	Ref<StaticRaycaster> raycaster = StaticRaycaster::create();
-	if (raycaster.is_null()) {
-		print_line("ReverbProbeGI: StaticRaycaster not available (Embree not compiled in). Cannot bake.");
-		return BAKE_ERROR_NO_MESHES;
-	}
+		// Build BVH acceleration structure via StaticRaycaster (Embree).
+		Ref<StaticRaycaster> raycaster = StaticRaycaster::create();
+		if (raycaster.is_null()) {
+			print_line("ReverbProbeGI: StaticRaycaster not available (Embree not compiled in). Cannot bake.");
+			return BAKE_ERROR_NO_MESHES;
+		}
 
-	PackedVector3Array mesh_verts;
-	PackedInt32Array mesh_indices;
-	mesh_verts.resize(vertices.size());
-	mesh_indices.resize(indices.size());
-	for (int i = 0; i < vertices.size(); i++) {
-		mesh_verts.write[i] = vertices[i];
-	}
-	for (int i = 0; i < indices.size(); i++) {
-		mesh_indices.write[i] = indices[i];
-	}
-	raycaster->add_mesh(mesh_verts, mesh_indices, 0);
-	raycaster->commit();
+		PackedVector3Array mesh_verts;
+		PackedInt32Array mesh_indices;
+		mesh_verts.resize(vertices.size());
+		mesh_indices.resize(indices.size());
+		for (int i = 0; i < vertices.size(); i++) {
+			mesh_verts.write[i] = vertices[i];
+		}
+		for (int i = 0; i < indices.size(); i++) {
+			mesh_indices.write[i] = indices[i];
+		}
+		raycaster->add_mesh(mesh_verts, mesh_indices, 0);
+		raycaster->commit();
 
-	uint64_t start_usec = OS::get_singleton()->get_ticks_usec();
+		uint64_t start_usec = OS::get_singleton()->get_ticks_usec();
 
-	LocalVector<BakeProbeTask> tasks;
-	tasks.resize(probe_count);
-	for (int i = 0; i < probe_count; i++) {
-		tasks[i].probe_index = i;
-		tasks[i].probe_pos = p_probe_positions[i];
-		tasks[i].raycaster = raycaster;
-		tasks[i].ray_count = p_ray_count;
-		tasks[i].max_bounces = p_max_bounces;
-		tasks[i].default_material = (int)wall_material;
-		tasks[i].tri_materials = tri_materials.size() > 0 ? tri_materials.ptr() : nullptr;
-		tasks[i].tri_count = tri_materials.size();
-		tasks[i].volume = volume;
-		tasks[i].surface_area = surface_area;
-		tasks[i].rt60_out = rt60_values.ptrw() + i * NUM_BANDS;
-		tasks[i].gain_out = gains.ptrw() + i;
-	}
+		LocalVector<BakeProbeTask> tasks;
+		tasks.resize(probe_count);
+		for (int i = 0; i < probe_count; i++) {
+			tasks[i].probe_index = i;
+			tasks[i].probe_pos = p_probe_positions[i];
+			tasks[i].raycaster = raycaster;
+			tasks[i].ray_count = p_ray_count;
+			tasks[i].max_bounces = p_max_bounces;
+			tasks[i].default_material = (int)wall_material;
+			tasks[i].tri_materials = tri_materials.size() > 0 ? tri_materials.ptr() : nullptr;
+			tasks[i].tri_count = tri_materials.size();
+			tasks[i].volume = volume;
+			tasks[i].surface_area = surface_area;
+			tasks[i].rt60_out = rt60_values.ptrw() + i * NUM_BANDS;
+			tasks[i].gain_out = gains.ptrw() + i;
+		}
 
-	WorkerThreadPool::GroupID group = WorkerThreadPool::get_singleton()->add_native_group_task(
-			_bake_probe_task, tasks.ptr(), probe_count, -1, true);
-	WorkerThreadPool::get_singleton()->wait_for_group_task_completion(group);
+		WorkerThreadPool::GroupID group = WorkerThreadPool::get_singleton()->add_native_group_task(
+				_bake_probe_task, tasks.ptr(), probe_count, -1, true);
+		WorkerThreadPool::get_singleton()->wait_for_group_task_completion(group);
 
-	uint64_t elapsed_usec = OS::get_singleton()->get_ticks_usec() - start_usec;
-	double elapsed_sec = elapsed_usec / 1000000.0;
-	double total_rays = (double)probe_count * p_ray_count;
-	print_line(vformat("ReverbProbeGI CPU bake: %d probes, %d rays, %d bounces in %.2fs (%.0f probes/s, %.0f Mrays/s)",
-			probe_count, p_ray_count, p_max_bounces, elapsed_sec,
-			probe_count / elapsed_sec, total_rays / elapsed_sec / 1e6));
+		uint64_t elapsed_usec = OS::get_singleton()->get_ticks_usec() - start_usec;
+		double elapsed_sec = elapsed_usec / 1000000.0;
+		double total_rays = (double)probe_count * p_ray_count;
+		print_line(vformat("ReverbProbeGI CPU bake: %d probes, %d rays, %d bounces in %.2fs (%.0f probes/s, %.0f Mrays/s)",
+				probe_count, p_ray_count, p_max_bounces, elapsed_sec,
+				probe_count / elapsed_sec, total_rays / elapsed_sec / 1e6));
 	} // end else (CPU fallback)
 
 	Vector<Vector3> points_vec;
