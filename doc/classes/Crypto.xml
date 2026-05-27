@@ -105,7 +105,17 @@
 		<method name="generate_ecdsa">
 			<return type="CryptoKey" />
 			<description>
-				Generates an ECDSA [CryptoKey] on the [code]secp256r1[/code] (P-256 / prime256v1) curve. The returned key contains both the private and public components, and can be used the same way as a key produced by [method generate_rsa].
+				Generates a P-256 ECDSA [CryptoKey] pair. Returns [code]null[/code] if unsupported by the current crypto backend.
+				ECDSA keys are smaller than RSA keys and are required for WebTransport's [code]serverCertificateHashes[/code] certificate pinning, which only accepts P-256 public keys.
+				[codeblocks]
+				[gdscript]
+				var crypto = Crypto.new()
+				var key = crypto.generate_ecdsa()
+				var cert = crypto.generate_self_signed_certificate_san(key, "CN=localhost",
+				    "20240101000000", "20240114000000",
+				    PackedStringArray(["DNS:localhost", "IP:127.0.0.1"]))
+				[/gdscript]
+				[/codeblocks]
 			</description>
 		</method>
 		<method name="generate_random_bytes">
@@ -158,6 +168,16 @@
 			<param index="4" name="san" type="PackedStringArray" default="PackedStringArray()" />
 			<description>
 				Same as [method generate_self_signed_certificate], but also embeds a SubjectAlternativeName (SAN) extension built from [param san]. Each entry must use the form [code]"DNS:hostname"[/code] or [code]"IP:address"[/code]. IPv4 dotted-quad addresses are parsed; only [code]::1[/code] is supported for IPv6.
+				[codeblocks]
+				[gdscript]
+				var crypto = Crypto.new()
+				var key = crypto.generate_ecdsa()
+				var san = PackedStringArray(["DNS:localhost", "IP:127.0.0.1", "IP:::1"])
+				var cert = crypto.generate_self_signed_certificate_san(key,
+				    "CN=godot-server", "20240101000000", "20240114000000", san)
+				[/gdscript]
+				[/codeblocks]
+				Falls back to [method generate_self_signed_certificate] (no SAN) if unsupported by the current crypto backend.
 			</description>
 		</method>
 		<method name="hmac_digest">
