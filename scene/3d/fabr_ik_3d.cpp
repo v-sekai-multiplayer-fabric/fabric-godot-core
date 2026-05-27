@@ -30,6 +30,8 @@
 
 #include "fabr_ik_3d.h"
 
+#include "scene/resources/3d/joint_limitation_kusudama_3d.h"
+
 void FABRIK3D::_solve_iteration(double p_delta, Skeleton3D *p_skeleton, IterateIK3DSetting *p_setting, const Vector3 &p_destination) {
 	int joint_size = (int)p_setting->joints.size();
 
@@ -82,14 +84,17 @@ void FABRIK3D::_solve_iteration(double p_delta, Skeleton3D *p_skeleton, IterateI
 		}
 		if (p_setting->joint_settings[HEAD]->limitation.is_valid()) {
 			Vector3 old_vec = p_setting->chain[TAIL] - p_setting->chain[HEAD];
-			Vector3 new_vec = p_setting->joint_settings[HEAD]->get_limited_rotation(solver_info->current_grest, old_vec, solver_info->forward_vector) - p_setting->chain[HEAD];
-			// Apply constraint rotation to ALL downstream joints to avoid twist.
-			Quaternion correction = p_setting->joint_settings[HEAD]->get_limited_rotation_quat(solver_info->current_grest, old_vec, solver_info->forward_vector);
-			if (correction != Quaternion()) {
-				for (int j = TAIL; j < p_setting->chain.size(); j++) {
-					p_setting->chain[j] = p_setting->chain[HEAD] + correction.xform(p_setting->chain[j] - p_setting->chain[HEAD]);
+			if (Object::cast_to<JointLimitationKusudama3D>(p_setting->joint_settings[HEAD]->limitation.ptr())) {
+				// Kusudama: apply constraint rotation to ALL downstream joints to avoid twist.
+				Quaternion correction = p_setting->joint_settings[HEAD]->get_limited_rotation_quat(solver_info->current_grest, old_vec, solver_info->forward_vector);
+				if (correction != Quaternion()) {
+					for (int j = TAIL; j < (int)p_setting->chain.size(); j++) {
+						p_setting->chain[j] = p_setting->chain[HEAD] + correction.xform(p_setting->chain[j] - p_setting->chain[HEAD]);
+					}
 				}
-				p_setting->update_chain_transforms(p_skeleton, TAIL, p_setting->chain.size() - 1);
+			} else {
+				// Other limitations: reposition tail only.
+				p_setting->update_chain_coordinate_fw(p_skeleton, TAIL, p_setting->chain[HEAD] + p_setting->joint_settings[HEAD]->get_limited_rotation(solver_info->current_grest, old_vec, solver_info->forward_vector));
 			}
 		}
 	}
