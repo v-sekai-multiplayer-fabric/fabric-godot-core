@@ -329,7 +329,6 @@ Quaternion IterateIK3D::get_joint_limitation_rotation_offset(int p_index, int p_
 	return joint_settings[p_joint]->limitation_rotation_offset;
 }
 
-
 void IterateIK3D::_set_joint_count(int p_index, int p_count) {
 	_unbind_joint_limitations(p_index);
 	LocalVector<IterateIK3DJointSetting *> &joint_settings = iterate_settings[p_index]->joint_settings;
