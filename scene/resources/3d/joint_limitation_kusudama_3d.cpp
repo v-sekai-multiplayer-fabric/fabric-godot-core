@@ -408,25 +408,6 @@ Vector3 JointLimitationKusudama3D::_polygon_project(const Vector3 &p_point) cons
 		}
 	}
 
-	// Also check per-cone boundary projections — the actual allowed region
-	// includes cone interiors plus the polygon interior.  When outside both, the
-	// nearest cone rim may be closer than any polygon edge.
-	uint32_t nc = cones.size();
-	for (uint32_t i = 0; i < nc; i++) {
-		Vector3 c = _get_cone_center_normalized(i);
-		real_t r = cones[i].w;
-		Vector3 ortho = (p_point - p_point.project(c)).normalized();
-		if (!ortho.is_finite()) {
-			ortho = (Math::abs(c.z) < 0.9f) ? c.cross(Vector3(0, 0, 1)).normalized() : c.cross(Vector3(1, 0, 0)).normalized();
-		}
-		Vector3 boundary_pt = c * Math::cos(r) + ortho * Math::sin(r);
-		real_t d = p_point.dot(boundary_pt);
-		if (d > best_dot) {
-			best_dot = d;
-			best = boundary_pt;
-		}
-	}
-
 	return best;
 }
 
