@@ -51,6 +51,8 @@ class JointLimitationKusudama3D : public JointLimitation3D {
 	mutable LocalVector<Vector3> _tangent_centers_2;
 	mutable LocalVector<real_t> _tangent_radii;
 	mutable bool _polygon_dirty = true;
+	mutable Vector3 _previous_result;
+	mutable bool _has_previous = false;
 
 	void _invalidate_normalized_cache() const;
 	Vector3 _get_cone_center_normalized(int p_index) const;
