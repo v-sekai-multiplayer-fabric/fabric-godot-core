@@ -430,42 +430,51 @@ Vector3 JointLimitationKusudama3D::_solve(const Vector3 &p_direction) const {
 	Vector3 projected = _polygon_project(p);
 
 	if (!_has_previous) {
-		_previous_result = projected;
-		_previous_velocity = Vector3();
+		_hermite_p0 = projected;
+		_hermite_v0 = Vector3();
+		_hermite_target = projected;
+		_hermite_frame = 0;
 		_has_previous = true;
 		return projected;
 	}
 
-	// Quintic Hermite interpolation for C³ differential continuity.
-	// State: previous position P0, previous velocity V0.
-	// Target: projected position P1, target velocity V1 = 0 (at rest on boundary).
-	// Evaluate at t = blend_t to get the smoothed output.
-	//
-	// h00(t) = 1 - 10t³ + 15t⁴ - 6t⁵       (position weight at P0)
-	// h01(t) = 10t³ - 15t⁴ + 6t⁵            (position weight at P1)
-	// h10(t) = t - 6t³ + 8t⁴ - 3t⁵          (velocity weight at P0, ×T)
-	// h11(t) = -4t³ + 7t⁴ - 3t⁵             (velocity weight at P1, ×T)
-	//
-	// result = h00*P0 + h01*P1 + h10*V0 + h11*V1
-	// With V1 = 0: result = h00*P0 + h01*P1 + h10*V0
+	// Detect target change: if the projected direction moved significantly,
+	// a new keyframe arrived.  Chain: current interpolated state becomes
+	// the new start (P0, V0), preserving C³ continuity at the junction.
+	if (projected.dot(_hermite_target) < 0.999f) {
+		// Compute current interpolated state before resetting.
+		real_t t_old = MIN((real_t)_hermite_frame / (real_t)_hermite_duration, (real_t)1.0);
+		real_t t2 = t_old * t_old, t3 = t2 * t_old, t4 = t3 * t_old, t5 = t4 * t_old;
+		real_t h00 = 1.0f - 10.0f * t3 + 15.0f * t4 - 6.0f * t5;
+		real_t h01 = 10.0f * t3 - 15.0f * t4 + 6.0f * t5;
+		real_t h10 = t_old - 6.0f * t3 + 8.0f * t4 - 3.0f * t5;
+		// Velocity basis derivative: h10'(t) = 1 - 18t² + 32t³ - 15t⁴
+		real_t h10_dt = 1.0f - 18.0f * t2 + 32.0f * t3 - 15.0f * t4;
+		real_t h00_dt = -30.0f * t2 + 60.0f * t3 - 30.0f * t4;
+		real_t h01_dt = 30.0f * t2 - 60.0f * t3 + 30.0f * t4;
 
-	// Blend rate: how fast we approach the target per frame.
-	// Higher = faster convergence but less smooth.  0.4 gives ~3 frame settling.
-	real_t t = 0.4f;
-	real_t t2 = t * t;
-	real_t t3 = t2 * t;
-	real_t t4 = t3 * t;
-	real_t t5 = t4 * t;
+		Vector3 current_pos = (_hermite_p0 * h00 + _hermite_target * h01 + _hermite_v0 * h10).normalized();
+		Vector3 current_vel = _hermite_p0 * h00_dt + _hermite_target * h01_dt + _hermite_v0 * h10_dt;
+
+		_hermite_p0 = current_pos;
+		_hermite_v0 = current_vel / (real_t)_hermite_duration;
+		_hermite_target = projected;
+		_hermite_frame = 0;
+	}
+
+	_hermite_frame++;
+
+	// Quintic Hermite: interpolate from (P0, V0) to (P1=target, V1=0) over
+	// _hermite_duration frames.  At t=1 the output IS the target — converged
+	// exactly at the next keyframe boundary.
+	real_t t = MIN((real_t)_hermite_frame / (real_t)_hermite_duration, (real_t)1.0);
+	real_t t2 = t * t, t3 = t2 * t, t4 = t3 * t, t5 = t4 * t;
 
 	real_t h00 = 1.0f - 10.0f * t3 + 15.0f * t4 - 6.0f * t5;
 	real_t h01 = 10.0f * t3 - 15.0f * t4 + 6.0f * t5;
 	real_t h10 = t - 6.0f * t3 + 8.0f * t4 - 3.0f * t5;
 
-	Vector3 result = (_previous_result * h00 + projected * h01 + _previous_velocity * h10).normalized();
-
-	// Update velocity: angular difference between consecutive outputs.
-	_previous_velocity = result - _previous_result;
-	_previous_result = result;
+	Vector3 result = (_hermite_p0 * h00 + _hermite_target * h01 + _hermite_v0 * h10).normalized();
 	return result;
 }
 

@@ -51,8 +51,12 @@ class JointLimitationKusudama3D : public JointLimitation3D {
 	mutable LocalVector<Vector3> _tangent_centers_2;
 	mutable LocalVector<real_t> _tangent_radii;
 	mutable bool _polygon_dirty = true;
-	mutable Vector3 _previous_result;
-	mutable Vector3 _previous_velocity;
+	// Quintic Hermite state for C³ differential continuity.
+	mutable Vector3 _hermite_p0;       // Start position (at keyframe boundary).
+	mutable Vector3 _hermite_v0;       // Start velocity.
+	mutable Vector3 _hermite_target;   // Target position (projected).
+	mutable uint32_t _hermite_frame = 0;  // Frames since last target change.
+	mutable uint32_t _hermite_duration = 60; // Frames to converge (= keyframe interval).
 	mutable bool _has_previous = false;
 
 	void _invalidate_normalized_cache() const;
