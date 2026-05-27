@@ -125,8 +125,8 @@ public:
 		}
 
 		// Get limited rotation from forward axis in local rest space.
-		// Uses parallel transport to avoid geometric phase (twist accumulation
-		// along equatorial paths).
+		// Applies the constraint as a change-of-basis rotation so the
+		// entire downstream chain rotates consistently — no twist.
 		Vector3 get_limited_rotation(const Quaternion &p_offset, const Vector3 &p_vector, const Vector3 &p_forward) const {
 			ERR_FAIL_COND_V(limitation.is_null(), p_vector);
 			Vector3 local_vector = p_offset.xform_inv(p_vector);
@@ -136,12 +136,19 @@ public:
 			}
 			Vector3 input_dir = local_vector.normalized();
 			Vector3 constrained_dir = limitation->solve(p_forward, get_limitation_right_axis_vector(), limitation_rotation_offset, input_dir);
-			// Return the constrained direction at original length.
-			// The caller must apply the constraint as a direction change,
-			// using the rest-pose basis to reconstruct the bone rotation —
-			// NOT by chaining frame-to-frame rotations (which accumulates
-			// geometric phase / twist along equatorial paths).
-			return p_offset.xform(constrained_dir * length);
+			if (input_dir.is_equal_approx(constrained_dir)) {
+				return p_vector;
+			}
+			// Change of basis: compute the rotation from the REST forward to the
+			// constrained direction, and from REST forward to the input direction.
+			// The DIFFERENCE is the pure correction that preserves twist.
+			Quaternion rest_to_input = Quaternion(p_forward, input_dir);
+			Quaternion rest_to_constrained = Quaternion(p_forward, constrained_dir);
+			// Correction = rest_to_constrained * inverse(rest_to_input)
+			// This rotates the input frame to the constrained frame without twist.
+			Quaternion correction = rest_to_constrained * rest_to_input.inverse();
+			Vector3 result = correction.xform(local_vector);
+			return p_offset.xform(result);
 		}
 
 		~IterateIK3DJointSetting() {
