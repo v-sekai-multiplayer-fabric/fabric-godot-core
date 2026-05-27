@@ -76,6 +76,10 @@
 #include "servers/rendering/storage/render_data_extension.h"
 #include "servers/rendering/storage/render_scene_buffers.h"
 #include "servers/rendering/storage/render_scene_data.h"
+#include "servers/resonanceaudio/resonance_audio_material_map.h"
+#include "servers/resonanceaudio/resonance_audio_room.h"
+#include "servers/resonanceaudio/reverb_bake_data.h"
+#include "servers/resonanceaudio/reverb_probe_gi.h"
 #include "servers/text/text_server.h"
 #include "servers/text/text_server_dummy.h"
 #include "servers/text/text_server_extension.h"
@@ -200,6 +204,11 @@ void register_server_types() {
 		GDREGISTER_CLASS(AudioEffectBandLimitFilter);
 		GDREGISTER_CLASS(AudioEffectLowShelfFilter);
 		GDREGISTER_CLASS(AudioEffectHighShelfFilter);
+
+		GDREGISTER_CLASS(ResonanceAudioMaterialMap);
+	GDREGISTER_CLASS(ResonanceAudioRoom);
+		GDREGISTER_CLASS(ReverbBakeData);
+		GDREGISTER_CLASS(ReverbProbeGI);
 
 		GDREGISTER_CLASS(AudioEffectEQ6);
 		GDREGISTER_CLASS(AudioEffectEQ10);
