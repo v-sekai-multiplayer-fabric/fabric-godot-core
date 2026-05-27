@@ -346,8 +346,12 @@ Vector3 JointLimitationKusudama3D::_polygon_project(const Vector3 &p_point) cons
 	Vector3 best = p_point;
 	uint32_t n = _polygon_vertices.size();
 
-	// Project onto each polygon edge (great circle arc between consecutive vertices).
+	// Only project to violated edges (dot(p, normal) < 0).
+	// This keeps the singularity at the polygon's antipode (unreachable by the bone).
 	for (uint32_t i = 0; i < n; i++) {
+		if (p_point.dot(_polygon_normals[i]) >= 0) {
+			continue;
+		}
 		Vector3 v0 = _polygon_vertices[i];
 		Vector3 v1 = _polygon_vertices[(i + 1) % n];
 		Vector3 arc_normal = v0.cross(v1);
