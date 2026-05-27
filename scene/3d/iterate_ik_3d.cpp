@@ -60,6 +60,11 @@ bool IterateIK3D::_set(const StringName &p_path, const Variant &p_value) {
 					set_joint_limitation_right_axis_vector(which, idx, p_value);
 				} else if (opt == "rotation_offset") {
 					set_joint_limitation_rotation_offset(which, idx, p_value);
+				} else if (opt == "rotate_downstream_chain") {
+					ERR_FAIL_INDEX_V(which, (int)settings.size(), false);
+					LocalVector<IterateIK3DJointSetting *> &joint_settings = settings[which]->joint_settings;
+					ERR_FAIL_INDEX_V(idx, (int)joint_settings.size(), false);
+					joint_settings[idx]->rotate_downstream_chain = p_value;
 				} else {
 					return false;
 				}
@@ -100,6 +105,11 @@ bool IterateIK3D::_get(const StringName &p_path, Variant &r_ret) const {
 					r_ret = get_joint_limitation_right_axis_vector(which, idx);
 				} else if (opt == "rotation_offset") {
 					r_ret = get_joint_limitation_rotation_offset(which, idx);
+				} else if (opt == "rotate_downstream_chain") {
+					ERR_FAIL_INDEX_V(which, (int)settings.size(), false);
+					const LocalVector<IterateIK3DJointSetting *> &joint_settings = settings[which]->joint_settings;
+					ERR_FAIL_INDEX_V(idx, (int)joint_settings.size(), false);
+					r_ret = joint_settings[idx]->rotate_downstream_chain;
 				} else {
 					return false;
 				}
@@ -126,6 +136,7 @@ void IterateIK3D::_get_property_list(List<PropertyInfo> *p_list) const {
 			props.push_back(PropertyInfo(Variant::INT, joint_path + "limitation/right_axis", PROPERTY_HINT_ENUM, SkeletonModifier3D::get_hint_secondary_direction()));
 			props.push_back(PropertyInfo(Variant::VECTOR3, joint_path + "limitation/right_axis_vector"));
 			props.push_back(PropertyInfo(Variant::QUATERNION, joint_path + "limitation/rotation_offset"));
+			props.push_back(PropertyInfo(Variant::BOOL, joint_path + "limitation/rotate_downstream_chain"));
 		}
 	}
 

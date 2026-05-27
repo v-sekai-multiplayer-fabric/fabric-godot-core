@@ -45,6 +45,7 @@ public:
 		SecondaryDirection limitation_right_axis = SECONDARY_DIRECTION_NONE;
 		Vector3 limitation_right_axis_vector = Vector3(1, 0, 0);
 		Quaternion limitation_rotation_offset;
+		bool rotate_downstream_chain = false;
 
 		// Rotation axis.
 		Vector3 get_rotation_axis_vector() const {
