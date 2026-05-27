@@ -420,7 +420,8 @@ Vector3 JointLimitationKusudama3D::_solve(const Vector3 &p_direction) const {
 	uint32_t num_pairs = n - 1;
 	for (uint32_t i = 0; i < num_pairs; i++) {
 		if (_is_in_tangent_path(p, i)) {
-			_previous_result = p;
+			_hermite_pos = p;
+			_hermite_vel = Vector3();
 			_has_previous = true;
 			return p;
 		}
