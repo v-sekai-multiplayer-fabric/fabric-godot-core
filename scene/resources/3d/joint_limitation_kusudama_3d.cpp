@@ -332,6 +332,7 @@ bool JointLimitationKusudama3D::_is_in_tangent_path(const Vector3 &p_point, uint
 }
 
 bool JointLimitationKusudama3D::_polygon_contains(const Vector3 &p_point) const {
+	// Half-space intersection test (unchanged — this is exact on the sphere).
 	uint32_t m = _polygon_normals.size();
 	for (uint32_t i = 0; i < m; i++) {
 		if (p_point.dot(_polygon_normals[i]) < 0) {
@@ -342,51 +343,74 @@ bool JointLimitationKusudama3D::_polygon_contains(const Vector3 &p_point) const 
 }
 
 Vector3 JointLimitationKusudama3D::_polygon_project(const Vector3 &p_point) const {
-	real_t best_dot = -2.0f;
-	Vector3 best = p_point;
 	uint32_t n = _polygon_vertices.size();
+	if (n == 0) {
+		return p_point;
+	}
 
-	// Only project to violated edges (dot(p, normal) < 0).
-	// This keeps the singularity at the polygon's antipode (unreachable by the bone).
+	// Gnomonic projection: map everything to the 2D tangent plane at the polygon
+	// center.  2D convex polygon projection is always continuous (no teleportation).
+	// The singularity of gnomonic is at the antipode of center — unreachable.
+
+	// Compute polygon center (average of vertices, normalized).
+	Vector3 center;
 	for (uint32_t i = 0; i < n; i++) {
-		if (p_point.dot(_polygon_normals[i]) >= 0) {
-			continue;
-		}
-		Vector3 v0 = _polygon_vertices[i];
-		Vector3 v1 = _polygon_vertices[(i + 1) % n];
-		Vector3 arc_normal = v0.cross(v1);
-		if (arc_normal.is_zero_approx()) {
-			continue;
-		}
-		arc_normal.normalize();
+		center += _polygon_vertices[i];
+	}
+	if (center.is_zero_approx()) {
+		center = Vector3(0, 1, 0);
+	}
+	center.normalize();
 
-		Vector3 proj = (p_point - arc_normal * p_point.dot(arc_normal));
-		if (proj.is_zero_approx()) {
-			continue;
+	// Build orthonormal basis on the tangent plane.
+	Vector3 u_axis = center.get_any_perpendicular().normalized();
+	Vector3 v_axis = center.cross(u_axis).normalized();
+
+	// Project input onto tangent plane.
+	real_t p_dot_c = p_point.dot(center);
+	if (Math::is_zero_approx(p_dot_c)) {
+		p_dot_c = 1e-6f;
+	}
+	Vector2 p2(p_point.dot(u_axis) / p_dot_c, p_point.dot(v_axis) / p_dot_c);
+
+	// Project polygon vertices onto tangent plane.
+	LocalVector<Vector2> verts2d;
+	verts2d.resize(n);
+	for (uint32_t i = 0; i < n; i++) {
+		real_t d = _polygon_vertices[i].dot(center);
+		if (Math::is_zero_approx(d)) {
+			d = 1e-6f;
 		}
-		proj.normalize();
+		verts2d[i] = Vector2(_polygon_vertices[i].dot(u_axis) / d, _polygon_vertices[i].dot(v_axis) / d);
+	}
 
-		Vector3 edge_dir = v0.cross(v1);
-		real_t d0 = v0.cross(proj).dot(edge_dir);
-		real_t d1 = proj.cross(v1).dot(edge_dir);
+	// 2D nearest point on convex polygon boundary.
+	real_t best_dist_sq = 1e18f;
+	Vector2 best2d = p2;
 
-		Vector3 candidate;
-		if (d0 >= 0 && d1 >= 0) {
-			candidate = proj;
+	for (uint32_t i = 0; i < n; i++) {
+		Vector2 a = verts2d[i];
+		Vector2 b = verts2d[(i + 1) % n];
+		Vector2 edge = b - a;
+		real_t edge_len_sq = edge.dot(edge);
+		Vector2 candidate;
+		if (Math::is_zero_approx(edge_len_sq)) {
+			candidate = a;
 		} else {
-			real_t dot0 = p_point.dot(v0);
-			real_t dot1 = p_point.dot(v1);
-			candidate = (dot0 >= dot1) ? v0 : v1;
+			real_t t = (p2 - a).dot(edge) / edge_len_sq;
+			t = CLAMP(t, (real_t)0.0, (real_t)1.0);
+			candidate = a + edge * t;
 		}
-
-		real_t d = p_point.dot(candidate);
-		if (d > best_dot) {
-			best_dot = d;
-			best = candidate;
+		real_t dist_sq = (p2 - candidate).length_squared();
+		if (dist_sq < best_dist_sq) {
+			best_dist_sq = dist_sq;
+			best2d = candidate;
 		}
 	}
 
-	return best;
+	// Inverse gnomonic: map 2D back to 3D unit sphere.
+	Vector3 result = (center + u_axis * best2d.x + v_axis * best2d.y).normalized();
+	return result;
 }
 
 Vector3 JointLimitationKusudama3D::_solve(const Vector3 &p_direction) const {
