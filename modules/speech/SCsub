@@ -41,6 +41,7 @@ else:  # including if env["platform"] == "javascript":
 module_env.Prepend(CPPPATH=["thirdparty/libsamplerate/src"])
 module_env.Prepend(CPPPATH=["thirdparty/opus"])
 module_env.Prepend(CPPPATH=["thirdparty/opus/opus"])
+module_env.Prepend(CPPPATH=["thirdparty/opus/celt"])
 module_env.Prepend(CPPPATH=["include"])
 module_env.Prepend(CPPPATH=["include"])
 
