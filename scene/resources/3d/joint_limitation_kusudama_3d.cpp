@@ -437,23 +437,15 @@ Vector3 JointLimitationKusudama3D::_solve(const Vector3 &p_direction) const {
 		return c * Math::cos(r) + ortho * Math::sin(r);
 	}
 
-	// Multiple cones: rebuild cache, then check tangent paths (closed loop).
+	// Multiple cones: use polygon for a single continuous constraint boundary.
+	// No tangent path check — tangent paths create a non-convex acceptance
+	// boundary that doesn't match the polygon, causing discontinuous jumps.
 	_rebuild_polygon_cache();
 
-	for (uint32_t i = 0; i < n; i++) {
-		if (_is_in_tangent_path(p, i)) {
-			return p;
-		}
-	}
-
-	// Also accept if inside the convex polygon (covers small gaps between
-	// tangent paths that arise from the polygon being slightly larger than the
-	// union of tangent triangles).
 	if (_polygon_contains(p)) {
 		return p;
 	}
 
-	// Outside all allowed regions — project to nearest boundary (flicker-free).
 	return _polygon_project(p);
 }
 
