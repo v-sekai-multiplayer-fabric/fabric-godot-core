@@ -256,13 +256,14 @@ void JointLimitationKusudama3D::_rebuild_polygon_cache() const {
 
 	_compute_hull_order();
 
-	// Compute tangent circles for each adjacent pair in hull order (closed loop).
-	_tangent_centers_1.resize(n);
-	_tangent_centers_2.resize(n);
-	_tangent_radii.resize(n);
-	for (uint32_t i = 0; i < n; i++) {
+	// Compute tangent circles for each adjacent pair in hull order (open chain).
+	uint32_t num_pairs = n - 1;
+	_tangent_centers_1.resize(num_pairs);
+	_tangent_centers_2.resize(num_pairs);
+	_tangent_radii.resize(num_pairs);
+	for (uint32_t i = 0; i < num_pairs; i++) {
 		uint32_t idx_a = _hull_order[i];
-		uint32_t idx_b = _hull_order[(i + 1) % n];
+		uint32_t idx_b = _hull_order[i + 1];
 		compute_tangent_circles(
 				_get_cone_center_normalized(idx_a), cones[idx_a].w,
 				_get_cone_center_normalized(idx_b), cones[idx_b].w,
@@ -275,27 +276,27 @@ void JointLimitationKusudama3D::_rebuild_polygon_cache() const {
 		_polygon_vertices[i] = _get_cone_center_normalized(_hull_order[i]);
 	}
 
-	// Edge normals.
-	_polygon_normals.resize(n);
-	for (uint32_t i = 0; i < n; i++) {
-		Vector3 edge_normal = _polygon_vertices[i].cross(_polygon_vertices[(i + 1) % n]);
+	// Edge normals (open chain: n-1 edges, no last-to-first).
+	_polygon_normals.resize(num_pairs);
+	for (uint32_t i = 0; i < num_pairs; i++) {
+		Vector3 edge_normal = _polygon_vertices[i].cross(_polygon_vertices[i + 1]);
 		if (edge_normal.is_zero_approx()) {
 			edge_normal = _polygon_vertices[i].get_any_perpendicular();
 		}
 		_polygon_normals[i] = edge_normal.normalized();
 	}
 
-	// Orientation check via winding sum: the sum of cross products gives the
-	// polygon's area-normal.  If it points opposite to the sum of vertices
-	// (the "outward" direction), normals face the wrong way — flip them.
+	// Orientation check via winding sum.
 	Vector3 winding_sum;
 	Vector3 vertex_sum;
+	for (uint32_t i = 0; i < num_pairs; i++) {
+		winding_sum += _polygon_vertices[i].cross(_polygon_vertices[i + 1]);
+	}
 	for (uint32_t i = 0; i < n; i++) {
-		winding_sum += _polygon_vertices[i].cross(_polygon_vertices[(i + 1) % n]);
 		vertex_sum += _polygon_vertices[i];
 	}
 	if (winding_sum.dot(vertex_sum) < 0) {
-		for (uint32_t i = 0; i < n; i++) {
+		for (uint32_t i = 0; i < num_pairs; i++) {
 			_polygon_normals[i] = -_polygon_normals[i];
 		}
 	}
@@ -384,13 +385,13 @@ Vector3 JointLimitationKusudama3D::_polygon_project(const Vector3 &p_point) cons
 		verts2d[i] = Vector2(_polygon_vertices[i].dot(u_axis) / d, _polygon_vertices[i].dot(v_axis) / d);
 	}
 
-	// 2D nearest point on convex polygon boundary.
+	// 2D nearest point on polygon boundary (open chain: n-1 edges).
 	real_t best_dist_sq = 1e18f;
 	Vector2 best2d = p2;
 
-	for (uint32_t i = 0; i < n; i++) {
+	for (uint32_t i = 0; i + 1 < n; i++) {
 		Vector2 a = verts2d[i];
-		Vector2 b = verts2d[(i + 1) % n];
+		Vector2 b = verts2d[i + 1];
 		Vector2 edge = b - a;
 		real_t edge_len_sq = edge.dot(edge);
 		Vector2 candidate;
