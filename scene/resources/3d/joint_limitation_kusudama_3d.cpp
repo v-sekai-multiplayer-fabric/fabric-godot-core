@@ -429,22 +429,44 @@ Vector3 JointLimitationKusudama3D::_solve(const Vector3 &p_direction) const {
 	// Project to nearest polygon edge (gnomonic 2D).
 	Vector3 projected = _polygon_project(p);
 
-	// Differential continuity: if we have a previous result and the projection
-	// would teleport (large angular jump), instead project from the previous
-	// result toward the input — slide along the boundary rather than jump.
-	if (_has_previous && projected.dot(_previous_result) < 0.5f) {
-		// Teleport detected. Find the nearest polygon edge to _previous_result
-		// and slide along it toward the input direction.
-		Vector3 prev_proj = _polygon_project(_previous_result);
-		// Blend: move from previous projection toward the new one, clamped.
-		Vector3 blended = prev_proj.lerp(projected, 0.3f).normalized();
-		_previous_result = blended;
-		return blended;
+	if (!_has_previous) {
+		_previous_result = projected;
+		_previous_velocity = Vector3();
+		_has_previous = true;
+		return projected;
 	}
 
-	_previous_result = projected;
-	_has_previous = true;
-	return projected;
+	// Quintic Hermite interpolation for C³ differential continuity.
+	// State: previous position P0, previous velocity V0.
+	// Target: projected position P1, target velocity V1 = 0 (at rest on boundary).
+	// Evaluate at t = blend_t to get the smoothed output.
+	//
+	// h00(t) = 1 - 10t³ + 15t⁴ - 6t⁵       (position weight at P0)
+	// h01(t) = 10t³ - 15t⁴ + 6t⁵            (position weight at P1)
+	// h10(t) = t - 6t³ + 8t⁴ - 3t⁵          (velocity weight at P0, ×T)
+	// h11(t) = -4t³ + 7t⁴ - 3t⁵             (velocity weight at P1, ×T)
+	//
+	// result = h00*P0 + h01*P1 + h10*V0 + h11*V1
+	// With V1 = 0: result = h00*P0 + h01*P1 + h10*V0
+
+	// Blend rate: how fast we approach the target per frame.
+	// Higher = faster convergence but less smooth.  0.4 gives ~3 frame settling.
+	real_t t = 0.4f;
+	real_t t2 = t * t;
+	real_t t3 = t2 * t;
+	real_t t4 = t3 * t;
+	real_t t5 = t4 * t;
+
+	real_t h00 = 1.0f - 10.0f * t3 + 15.0f * t4 - 6.0f * t5;
+	real_t h01 = 10.0f * t3 - 15.0f * t4 + 6.0f * t5;
+	real_t h10 = t - 6.0f * t3 + 8.0f * t4 - 3.0f * t5;
+
+	Vector3 result = (_previous_result * h00 + projected * h01 + _previous_velocity * h10).normalized();
+
+	// Update velocity: angular difference between consecutive outputs.
+	_previous_velocity = result - _previous_result;
+	_previous_result = result;
+	return result;
 }
 
 // Helper functions for kusudama solving
