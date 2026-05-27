@@ -52,6 +52,7 @@ class JointLimitationKusudama3D : public JointLimitation3D {
 	mutable LocalVector<real_t> _tangent_radii;
 	mutable bool _polygon_dirty = true;
 	mutable Vector3 _previous_result;
+	mutable Vector3 _previous_velocity;
 	mutable bool _has_previous = false;
 
 	void _invalidate_normalized_cache() const;
