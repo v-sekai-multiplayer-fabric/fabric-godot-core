@@ -1804,7 +1804,7 @@ TEST_CASE("[Scene][JointLimitationKusudama3D] Exhaustive great-circle sweep - no
 	for (int c = 0; c < num_circles; c++) {
 		// Generate a random great circle axis using Fibonacci-like distribution.
 		real_t theta = Math::acos(1.0 - 2.0 * (c + 0.5) / num_circles);
-		real_t phi = Math_TAU * c * 0.618033988;
+		real_t phi = Math::TAU * c * 0.618033988;
 		Vector3 axis(Math::sin(theta) * Math::cos(phi),
 				Math::sin(theta) * Math::sin(phi),
 				Math::cos(theta));
@@ -1816,7 +1816,7 @@ TEST_CASE("[Scene][JointLimitationKusudama3D] Exhaustive great-circle sweep - no
 
 		Vector3 prev_out;
 		for (int s = 0; s <= steps_per_circle; s++) {
-			real_t angle = Math_TAU * (real_t)s / (real_t)steps_per_circle;
+			real_t angle = Math::TAU * (real_t)s / (real_t)steps_per_circle;
 			Vector3 input_dir = (u * Math::cos(angle) + v * Math::sin(angle)).normalized();
 			Vector3 out = limitation->solve(forward, right, rot, input_dir);
 
@@ -1857,11 +1857,11 @@ TEST_CASE("[Scene][JointLimitationKusudama3D] Exhaustive latitude sweeps - no te
 	int total_teleports = 0;
 
 	for (int lat = 1; lat < num_latitudes; lat++) {
-		real_t theta = Math_PI * (real_t)lat / (real_t)num_latitudes;
+		real_t theta = Math::PI * (real_t)lat / (real_t)num_latitudes;
 
 		Vector3 prev_out;
 		for (int s = 0; s <= steps_per_latitude; s++) {
-			real_t phi = Math_TAU * (real_t)s / (real_t)steps_per_latitude;
+			real_t phi = Math::TAU * (real_t)s / (real_t)steps_per_latitude;
 			Vector3 input_dir(
 					Math::sin(theta) * Math::cos(phi),
 					Math::sin(theta) * Math::sin(phi),
