@@ -46,7 +46,7 @@
 			<return type="int" enum="Error" />
 			<param index="0" name="port" type="int" />
 			<description>
-				Creates a server bound to [param port] with a maximum of [param max_clients] connections. Returns [constant OK] on success.
+				Creates a server bound to [param port]. Returns [constant OK] on success.
 			</description>
 		</method>
 		<method name="drain_channel">
