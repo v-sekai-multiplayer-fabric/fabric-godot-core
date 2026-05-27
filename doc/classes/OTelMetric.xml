@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8" ?>
-<class name="OTelMetric" inherits="Resource" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="../class.xsd">
+<class name="OTelMetric" inherits="Resource" api_type="core" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="../class.xsd">
 	<brief_description>
 		A single named metric with typed data points.
 	</brief_description>
@@ -16,6 +16,17 @@
 				Appends [param data_point] to [member data_points].
 			</description>
 		</method>
+		<method name="get_is_monotonic" qualifiers="const">
+			<return type="bool" />
+			<description>
+			</description>
+		</method>
+		<method name="set_is_monotonic">
+			<return type="void" />
+			<param index="0" name="monotonic" type="bool" />
+			<description>
+			</description>
+		</method>
 		<method name="to_otlp_dict" qualifiers="const">
 			<return type="Dictionary" />
 			<description>
@@ -28,11 +39,9 @@
 		</member>
 		<member name="description" type="String" setter="set_description" getter="get_description" default="&quot;&quot;">
 		</member>
-		<member name="name" type="String" setter="set_name" getter="get_name" default="&quot;&quot;">
-		</member>
 		<member name="temporality" type="int" setter="set_temporality" getter="get_temporality" enum="OTelMetric.AggregationTemporality" default="2">
 		</member>
-		<member name="type" type="int" setter="set_type" getter="get_type" enum="OTelMetric.MetricType" default="0">
+		<member name="type" type="int" setter="set_metric_type" getter="get_metric_type" enum="OTelMetric.MetricType" default="0">
 		</member>
 		<member name="unit" type="String" setter="set_unit" getter="get_unit" default="&quot;&quot;">
 		</member>

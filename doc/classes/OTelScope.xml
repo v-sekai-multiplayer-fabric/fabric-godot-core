@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8" ?>
-<class name="OTelScope" inherits="Resource" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="../class.xsd">
+<class name="OTelScope" inherits="Resource" api_type="core" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="../class.xsd">
 	<brief_description>
 		Instrumentation scope identifying the library that produced a signal.
 	</brief_description>
@@ -26,8 +26,6 @@
 	</methods>
 	<members>
 		<member name="attributes" type="Dictionary" setter="set_attributes" getter="get_attributes" default="{}">
-		</member>
-		<member name="name" type="String" setter="set_name" getter="get_name" default="&quot;&quot;">
 		</member>
 		<member name="version" type="String" setter="set_version" getter="get_version" default="&quot;&quot;">
 		</member>
