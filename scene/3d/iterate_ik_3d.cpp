@@ -60,8 +60,6 @@ bool IterateIK3D::_set(const StringName &p_path, const Variant &p_value) {
 					set_joint_limitation_right_axis_vector(which, idx, p_value);
 				} else if (opt == "rotation_offset") {
 					set_joint_limitation_rotation_offset(which, idx, p_value);
-				} else if (opt == "rotate_downstream_chain") {
-					set_joint_limitation_rotate_downstream_chain(which, idx, p_value);
 				} else {
 					return false;
 				}
@@ -102,8 +100,6 @@ bool IterateIK3D::_get(const StringName &p_path, Variant &r_ret) const {
 					r_ret = get_joint_limitation_right_axis_vector(which, idx);
 				} else if (opt == "rotation_offset") {
 					r_ret = get_joint_limitation_rotation_offset(which, idx);
-				} else if (opt == "rotate_downstream_chain") {
-					r_ret = get_joint_limitation_rotate_downstream_chain(which, idx);
 				} else {
 					return false;
 				}
@@ -130,7 +126,6 @@ void IterateIK3D::_get_property_list(List<PropertyInfo> *p_list) const {
 			props.push_back(PropertyInfo(Variant::INT, joint_path + "limitation/right_axis", PROPERTY_HINT_ENUM, SkeletonModifier3D::get_hint_secondary_direction()));
 			props.push_back(PropertyInfo(Variant::VECTOR3, joint_path + "limitation/right_axis_vector"));
 			props.push_back(PropertyInfo(Variant::QUATERNION, joint_path + "limitation/rotation_offset"));
-			props.push_back(PropertyInfo(Variant::BOOL, joint_path + "limitation/rotate_downstream_chain"));
 		}
 	}
 
@@ -334,19 +329,6 @@ Quaternion IterateIK3D::get_joint_limitation_rotation_offset(int p_index, int p_
 	return joint_settings[p_joint]->limitation_rotation_offset;
 }
 
-void IterateIK3D::set_joint_limitation_rotate_downstream_chain(int p_index, int p_joint, bool p_enabled) {
-	ERR_FAIL_INDEX(p_index, (int)settings.size());
-	LocalVector<IterateIK3DJointSetting *> &joint_settings = iterate_settings[p_index]->joint_settings;
-	ERR_FAIL_INDEX(p_joint, (int)joint_settings.size());
-	joint_settings[p_joint]->rotate_downstream_chain = p_enabled;
-}
-
-bool IterateIK3D::get_joint_limitation_rotate_downstream_chain(int p_index, int p_joint) const {
-	ERR_FAIL_INDEX_V(p_index, (int)settings.size(), false);
-	const LocalVector<IterateIK3DJointSetting *> &joint_settings = iterate_settings[p_index]->joint_settings;
-	ERR_FAIL_INDEX_V(p_joint, (int)joint_settings.size(), false);
-	return joint_settings[p_joint]->rotate_downstream_chain;
-}
 
 void IterateIK3D::_set_joint_count(int p_index, int p_count) {
 	_unbind_joint_limitations(p_index);
@@ -415,8 +397,6 @@ void IterateIK3D::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("get_joint_limitation_right_axis_vector", "index", "joint"), &IterateIK3D::get_joint_limitation_right_axis_vector);
 	ClassDB::bind_method(D_METHOD("set_joint_limitation_rotation_offset", "index", "joint", "offset"), &IterateIK3D::set_joint_limitation_rotation_offset);
 	ClassDB::bind_method(D_METHOD("get_joint_limitation_rotation_offset", "index", "joint"), &IterateIK3D::get_joint_limitation_rotation_offset);
-	ClassDB::bind_method(D_METHOD("set_joint_limitation_rotate_downstream_chain", "index", "joint", "enabled"), &IterateIK3D::set_joint_limitation_rotate_downstream_chain);
-	ClassDB::bind_method(D_METHOD("get_joint_limitation_rotate_downstream_chain", "index", "joint"), &IterateIK3D::get_joint_limitation_rotate_downstream_chain);
 
 	ADD_PROPERTY(PropertyInfo(Variant::INT, "max_iterations", PROPERTY_HINT_RANGE, "0,100,or_greater"), "set_max_iterations", "get_max_iterations");
 	ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "min_distance", PROPERTY_HINT_RANGE, "0,1,0.001,or_greater"), "set_min_distance", "get_min_distance");

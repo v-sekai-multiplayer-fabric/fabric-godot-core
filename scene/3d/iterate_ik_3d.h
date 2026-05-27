@@ -45,7 +45,6 @@ public:
 		SecondaryDirection limitation_right_axis = SECONDARY_DIRECTION_NONE;
 		Vector3 limitation_right_axis_vector = Vector3(1, 0, 0);
 		Quaternion limitation_rotation_offset;
-		bool rotate_downstream_chain = false;
 
 		// Rotation axis.
 		Vector3 get_rotation_axis_vector() const {
@@ -137,28 +136,6 @@ public:
 			Vector3 input_dir = local_vector.normalized();
 			Vector3 constrained_dir = limitation->solve(p_forward, get_limitation_right_axis_vector(), limitation_rotation_offset, input_dir);
 			return p_offset.xform(constrained_dir * length);
-		}
-
-		// Get the constraint correction as a quaternion rotation.
-		// The IK solver applies this to ALL downstream chain positions
-		// to avoid twist accumulation.
-		Quaternion get_limited_rotation_quat(const Quaternion &p_offset, const Vector3 &p_vector, const Vector3 &p_forward) const {
-			if (limitation.is_null()) {
-				return Quaternion();
-			}
-			Vector3 local_vector = p_offset.xform_inv(p_vector);
-			if (local_vector.is_zero_approx()) {
-				return Quaternion();
-			}
-			Vector3 input_dir = local_vector.normalized();
-			Vector3 constrained_dir = limitation->solve(p_forward, get_limitation_right_axis_vector(), limitation_rotation_offset, input_dir);
-			if (input_dir.is_equal_approx(constrained_dir)) {
-				return Quaternion();
-			}
-			// Shortest-arc rotation from input to constrained in local space,
-			// then conjugate by p_offset to get world-space rotation.
-			Quaternion local_rot = Quaternion(input_dir, constrained_dir);
-			return p_offset * local_rot * p_offset.inverse();
 		}
 
 		~IterateIK3DJointSetting() {
@@ -346,8 +323,6 @@ public:
 	Vector3 get_joint_limitation_right_axis_vector(int p_index, int p_joint) const;
 	void set_joint_limitation_rotation_offset(int p_index, int p_joint, const Quaternion &p_offset);
 	Quaternion get_joint_limitation_rotation_offset(int p_index, int p_joint) const;
-	void set_joint_limitation_rotate_downstream_chain(int p_index, int p_joint, bool p_enabled);
-	bool get_joint_limitation_rotate_downstream_chain(int p_index, int p_joint) const;
 
 	// Helper.
 	Quaternion get_joint_limitation_space(int p_index, int p_joint, const Vector3 &p_forward) const;
