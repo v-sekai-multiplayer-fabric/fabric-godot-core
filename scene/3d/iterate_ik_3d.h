@@ -125,7 +125,8 @@ public:
 		}
 
 		// Get limited rotation from forward axis in local rest space.
-		// Uses shortest-arc rotation to preserve twist (no twist flip at equator).
+		// Uses parallel transport to avoid geometric phase (twist accumulation
+		// along equatorial paths).
 		Vector3 get_limited_rotation(const Quaternion &p_offset, const Vector3 &p_vector, const Vector3 &p_forward) const {
 			ERR_FAIL_COND_V(limitation.is_null(), p_vector);
 			Vector3 local_vector = p_offset.xform_inv(p_vector);
@@ -135,13 +136,12 @@ public:
 			}
 			Vector3 input_dir = local_vector.normalized();
 			Vector3 constrained_dir = limitation->solve(p_forward, get_limitation_right_axis_vector(), limitation_rotation_offset, input_dir);
-			if (input_dir.is_equal_approx(constrained_dir)) {
-				return p_vector;
-			}
-			// Shortest-arc rotation from input to constrained: pure swing, no twist.
-			Quaternion swing = Quaternion(input_dir, constrained_dir);
-			Vector3 result = swing.xform(local_vector);
-			return p_offset.xform(result);
+			// Return the constrained direction at original length.
+			// The caller must apply the constraint as a direction change,
+			// using the rest-pose basis to reconstruct the bone rotation —
+			// NOT by chaining frame-to-frame rotations (which accumulates
+			// geometric phase / twist along equatorial paths).
+			return p_offset.xform(constrained_dir * length);
 		}
 
 		~IterateIK3DJointSetting() {
