@@ -303,3 +303,6 @@ SCsub                                         @godotengine/buildsystem
 # V-Sekai Multiplayer Fabric Asset
 
 /modules/multiplayer_fabric_asset/            @fire
+# V-Sekai Keychain
+
+/modules/keychain/                            @fire
