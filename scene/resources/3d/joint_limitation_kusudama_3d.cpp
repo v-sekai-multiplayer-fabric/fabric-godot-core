@@ -204,33 +204,28 @@ void JointLimitationKusudama3D::_get_property_list(List<PropertyInfo> *p_list) c
 void JointLimitationKusudama3D::_compute_hull_order() const {
 	uint32_t n = cones.size();
 	_hull_order.resize(n);
+	for (uint32_t i = 0; i < n; i++) {
+		_hull_order[i] = i;
+	}
 	if (n <= 2) {
-		for (uint32_t i = 0; i < n; i++) {
-			_hull_order[i] = i;
-		}
 		return;
 	}
-	Vector3 centroid;
-	for (uint32_t i = 0; i < n; i++) {
-		centroid += _get_cone_center_normalized(i);
+	// Sort by angle around a reference axis derived from the first two cones.
+	// This avoids centroid computation (which degenerates with equidistant cones).
+	Vector3 ref = _get_cone_center_normalized(0).cross(_get_cone_center_normalized(1));
+	if (ref.is_zero_approx()) {
+		ref = _get_cone_center_normalized(0).get_any_perpendicular();
 	}
-	centroid /= (real_t)n;
-	if (centroid.is_zero_approx()) {
-		centroid = Vector3(0, 1, 0);
-	}
-	centroid.normalize();
-
-	Vector3 u = centroid.get_any_perpendicular().normalized();
-	Vector3 v = centroid.cross(u).normalized();
+	ref.normalize();
+	Vector3 u = ref.get_any_perpendicular().normalized();
+	Vector3 v = ref.cross(u).normalized();
 
 	LocalVector<real_t> angles;
 	angles.resize(n);
 	for (uint32_t i = 0; i < n; i++) {
-		_hull_order[i] = i;
 		Vector3 c = _get_cone_center_normalized(i);
 		angles[i] = Math::atan2(c.dot(v), c.dot(u));
 	}
-	// Sort indices by angle.
 	for (uint32_t i = 1; i < n; i++) {
 		uint32_t key_idx = _hull_order[i];
 		real_t key_angle = angles[key_idx];
@@ -280,18 +275,7 @@ void JointLimitationKusudama3D::_rebuild_polygon_cache() const {
 		_polygon_vertices[i] = _get_cone_center_normalized(_hull_order[i]);
 	}
 
-	// Compute centroid for orientation check.
-	Vector3 centroid;
-	for (uint32_t i = 0; i < n; i++) {
-		centroid += _polygon_vertices[i];
-	}
-	centroid /= (real_t)n;
-	if (centroid.is_zero_approx()) {
-		centroid = Vector3(0, 1, 0);
-	}
-	centroid.normalize();
-
-	// Edge normals with orientation check.
+	// Edge normals.
 	_polygon_normals.resize(n);
 	for (uint32_t i = 0; i < n; i++) {
 		Vector3 edge_normal = _polygon_vertices[i].cross(_polygon_vertices[(i + 1) % n]);
@@ -301,14 +285,16 @@ void JointLimitationKusudama3D::_rebuild_polygon_cache() const {
 		_polygon_normals[i] = edge_normal.normalized();
 	}
 
-	bool centroid_inside = true;
+	// Orientation check via winding sum: the sum of cross products gives the
+	// polygon's area-normal.  If it points opposite to the sum of vertices
+	// (the "outward" direction), normals face the wrong way — flip them.
+	Vector3 winding_sum;
+	Vector3 vertex_sum;
 	for (uint32_t i = 0; i < n; i++) {
-		if (centroid.dot(_polygon_normals[i]) < 0) {
-			centroid_inside = false;
-			break;
-		}
+		winding_sum += _polygon_vertices[i].cross(_polygon_vertices[(i + 1) % n]);
+		vertex_sum += _polygon_vertices[i];
 	}
-	if (!centroid_inside) {
+	if (winding_sum.dot(vertex_sum) < 0) {
 		for (uint32_t i = 0; i < n; i++) {
 			_polygon_normals[i] = -_polygon_normals[i];
 		}
