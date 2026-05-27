@@ -125,6 +125,7 @@ public:
 		}
 
 		// Get limited rotation from forward axis in local rest space.
+		// Uses shortest-arc rotation to preserve twist (no twist flip at equator).
 		Vector3 get_limited_rotation(const Quaternion &p_offset, const Vector3 &p_vector, const Vector3 &p_forward) const {
 			ERR_FAIL_COND_V(limitation.is_null(), p_vector);
 			Vector3 local_vector = p_offset.xform_inv(p_vector);
@@ -132,8 +133,15 @@ public:
 			if (Math::is_zero_approx(length)) {
 				return p_vector;
 			}
-			Vector3 limited = limitation->solve(p_forward, get_limitation_right_axis_vector(), limitation_rotation_offset, local_vector.normalized()) * length;
-			return p_offset.xform(limited);
+			Vector3 input_dir = local_vector.normalized();
+			Vector3 constrained_dir = limitation->solve(p_forward, get_limitation_right_axis_vector(), limitation_rotation_offset, input_dir);
+			if (input_dir.is_equal_approx(constrained_dir)) {
+				return p_vector;
+			}
+			// Shortest-arc rotation from input to constrained: pure swing, no twist.
+			Quaternion swing = Quaternion(input_dir, constrained_dir);
+			Vector3 result = swing.xform(local_vector);
+			return p_offset.xform(result);
 		}
 
 		~IterateIK3DJointSetting() {
