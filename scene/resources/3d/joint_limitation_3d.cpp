@@ -70,7 +70,32 @@ Vector3 JointLimitation3D::_solve(const Vector3 &p_direction) const {
 Vector3 JointLimitation3D::solve(const Vector3 &p_local_forward_vector, const Vector3 &p_local_right_vector, const Quaternion &p_rotation_offset, const Vector3 &p_local_current_vector) const {
 	Quaternion space = make_space(p_local_forward_vector, p_local_right_vector, p_rotation_offset);
 	Vector3 dir = p_local_current_vector.normalized();
-	return space.xform(_solve(space.xform_inv(dir)));
+	Vector3 local_dir = space.xform_inv(dir);
+	Vector3 constrained_dir = _solve(local_dir);
+
+	if (local_dir.is_equal_approx(constrained_dir)) {
+		return dir;
+	}
+
+	// The correction rotation from unconstrained to constrained direction.
+	// This rotation may contain both swing (perpendicular to forward) and
+	// twist (around forward).  We remove the twist to keep it constant.
+	Vector3 forward = p_local_forward_vector.normalized();
+	Vector3 world_constrained = space.xform(constrained_dir);
+
+	// Decompose the correction into swing-twist around the forward axis.
+	// The swing-only rotation moves the direction without twisting the bone.
+	Quaternion full_correction = Quaternion(dir, world_constrained);
+	// Project the rotation axis onto the plane perpendicular to forward.
+	Vector3 axis = full_correction.get_axis();
+	real_t angle = full_correction.get_angle();
+	Vector3 swing_axis = (axis - forward * axis.dot(forward));
+	if (swing_axis.is_zero_approx()) {
+		return world_constrained;
+	}
+	swing_axis.normalize();
+	Quaternion swing_only = Quaternion(swing_axis, angle);
+	return swing_only.xform(dir).normalized();
 }
 
 #ifdef TOOLS_ENABLED
