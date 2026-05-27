@@ -280,27 +280,35 @@ void JointLimitationKusudama3D::_rebuild_polygon_cache() const {
 		centroid += _get_cone_center_normalized(i);
 	}
 	centroid /= (real_t)n;
-	if (centroid.is_zero_approx()) {
+	bool centroid_degenerate = centroid.length_squared() < 0.01f;
+	if (centroid_degenerate) {
 		centroid = Vector3(0, 1, 0);
 	}
 	centroid.normalize();
 
-	// For each cone in hull order, compute the point on its rim furthest from the
-	// centroid.  These trace the convex hull boundary — one vertex per cone.
+	// For each cone in hull order, compute polygon vertex.
+	// If centroid is well-defined: use the point on each cone's rim furthest from
+	// the centroid (traces the convex hull boundary).
+	// If centroid is degenerate (cones cover the whole sphere): use cone centers
+	// directly — avoids the near-zero projection that produces garbage vertices.
 	_polygon_vertices.resize(n);
 	for (uint32_t i = 0; i < n; i++) {
 		uint32_t idx = _hull_order[i];
 		Vector3 c = _get_cone_center_normalized(idx);
 		real_t r = cones[idx].w;
 
-		Vector3 proj = centroid - c * centroid.dot(c);
-		Vector3 away;
-		if (proj.is_zero_approx()) {
-			away = c.get_any_perpendicular().normalized();
+		if (centroid_degenerate) {
+			_polygon_vertices[i] = c;
 		} else {
-			away = -proj.normalized();
+			Vector3 proj = centroid - c * centroid.dot(c);
+			Vector3 away;
+			if (proj.length_squared() < 1e-6f) {
+				away = c.get_any_perpendicular().normalized();
+			} else {
+				away = -proj.normalized();
+			}
+			_polygon_vertices[i] = (c * Math::cos(r) + away * Math::sin(r)).normalized();
 		}
-		_polygon_vertices[i] = (c * Math::cos(r) + away * Math::sin(r)).normalized();
 	}
 
 	// Edge normals with orientation check.
