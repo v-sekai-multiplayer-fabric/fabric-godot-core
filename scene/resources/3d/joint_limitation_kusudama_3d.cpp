@@ -461,9 +461,7 @@ int JointLimitationKusudama3D::get_cone_sequence_for_shader(PackedVector4Array &
 void JointLimitationKusudama3D::get_kusudama_fill_mesh_and_material(const Transform3D &p_transform, float p_bone_length, const Color &p_color, int p_bone_index, Transform3D &r_mesh_to_skeleton_rest, Ref<ArrayMesh> &r_mesh, Ref<Material> &r_material) const {
 	r_mesh.unref();
 	r_material.unref();
-	PackedVector4Array cone_sequence;
-	int cone_count = get_cone_sequence_for_shader(cone_sequence);
-	if (cone_count <= 0) {
+	if (cones.size() == 0) {
 		return;
 	}
 	real_t sphere_r = p_bone_length * (real_t)0.25;
@@ -519,20 +517,81 @@ void JointLimitationKusudama3D::get_kusudama_fill_mesh_and_material(const Transf
 		st->set_bones(bones);
 		st->set_weights(weights);
 	}
+	// Compute per-vertex constraint colors using the SAME solver as the CPU.
+	// No constraint logic in the shader — single source of truth.
+	const float boundary_width = 0.02f;
+	const float outline_width = 0.05f;
+	Color boundary_color;
+	boundary_color.set_ok_hsl(
+			p_color.get_ok_hsl_h(),
+			p_color.get_ok_hsl_s(),
+			CLAMP((float)p_color.get_ok_hsl_l() - 0.25f, 0.0f, 1.0f),
+			p_color.a);
+
 	for (int idx = 0; idx < points.size(); idx++) {
 		Vector3 n = normals[idx];
+		Vector3 dir = n; // direction on unit sphere
 		Vector3 pos = points[idx];
 		if (use_skin) {
-			// Vertices must be in skeleton global rest space for Godot's skin (bind = inverse bone rest).
 			pos = p_transform.xform(pos * sphere_r);
 			n = p_transform.basis.xform(n).normalized();
 		}
-		Color c;
-		c.r = n.x;
-		c.g = n.y;
-		c.b = n.z;
-		c.a = 0.0f;
-		st->set_custom(0, c);
+
+		// Evaluate constraint at this direction using the C++ solver.
+		// -1 = inside (allowed), 0 = on boundary, 1 = outside (disallowed)
+		int condition = 1; // default: outside
+		for (uint32_t ci = 0; ci < cones.size(); ci++) {
+			Vector3 cone_center = _get_cone_center_normalized(ci);
+			real_t cone_radius = cones[ci].w;
+			real_t arc_dist = dir.angle_to(cone_center);
+			if (arc_dist < cone_radius - boundary_width / 2.0f) {
+				condition = -1; // inside
+				break;
+			}
+			if (arc_dist <= cone_radius + boundary_width / 2.0f) {
+				condition = 0; // on boundary
+			}
+		}
+		// Check tangent paths if not already inside a cone.
+		if (condition > 0 && cones.size() >= 2) {
+			_rebuild_polygon_cache();
+			for (uint32_t pi = 0; pi + 1 < cones.size(); pi++) {
+				if (_is_in_tangent_path(dir, pi)) {
+					condition = -1; // inside tangent path
+					break;
+				}
+			}
+		}
+
+		// Map condition to color.
+		Color vert_color;
+		if (condition == -1) {
+			vert_color = p_color; // allowed: kusudama color
+		} else if (condition == 0) {
+			vert_color = boundary_color; // boundary outline
+		} else {
+			// Check if near the boundary (for outline rendering).
+			bool near_boundary = false;
+			for (uint32_t ci = 0; ci < cones.size(); ci++) {
+				real_t arc_dist = dir.angle_to(_get_cone_center_normalized(ci));
+				if (arc_dist <= cones[ci].w + outline_width / 2.0f) {
+					near_boundary = true;
+					break;
+				}
+			}
+			if (near_boundary) {
+				vert_color = boundary_color;
+			} else {
+				vert_color = Color(0, 0, 0, 0); // outside: transparent
+			}
+		}
+
+		Color custom;
+		custom.r = vert_color.r;
+		custom.g = vert_color.g;
+		custom.b = vert_color.b;
+		custom.a = vert_color.a;
+		st->set_custom(0, custom);
 		st->set_normal(n);
 		st->add_vertex(pos);
 	}
@@ -541,23 +600,13 @@ void JointLimitationKusudama3D::get_kusudama_fill_mesh_and_material(const Transf
 	}
 	r_mesh = st->commit();
 
+	// Simple pass-through shader: just display the vertex color from CUSTOM0.
 	Ref<Shader> sh;
 	sh.instantiate();
 	sh->set_code(KUSUDAMA_GIZMO_SHADER);
 	Ref<ShaderMaterial> mat;
 	mat.instantiate();
 	mat->set_shader(sh);
-	Color boundary_color;
-	boundary_color.set_ok_hsl(
-			p_color.get_ok_hsl_h(),
-			p_color.get_ok_hsl_s(),
-			CLAMP((float)p_color.get_ok_hsl_l() - 0.25f, 0.0f, 1.0f),
-			p_color.a);
-
-	mat->set_shader_parameter("cone_count", cone_count);
-	mat->set_shader_parameter("cone_sequence", cone_sequence);
-	mat->set_shader_parameter("kusudama_color", p_color);
-	mat->set_shader_parameter("boundary_outline_color", boundary_color);
 	r_material = mat;
 
 	if (use_skin) {
