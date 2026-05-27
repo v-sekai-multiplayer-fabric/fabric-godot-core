@@ -420,11 +420,31 @@ Vector3 JointLimitationKusudama3D::_solve(const Vector3 &p_direction) const {
 	uint32_t num_pairs = n - 1;
 	for (uint32_t i = 0; i < num_pairs; i++) {
 		if (_is_in_tangent_path(p, i)) {
+			_previous_result = p;
+			_has_previous = true;
 			return p;
 		}
 	}
 
-	return _polygon_project(p);
+	// Project to nearest polygon edge (gnomonic 2D).
+	Vector3 projected = _polygon_project(p);
+
+	// Differential continuity: if we have a previous result and the projection
+	// would teleport (large angular jump), instead project from the previous
+	// result toward the input — slide along the boundary rather than jump.
+	if (_has_previous && projected.dot(_previous_result) < 0.5f) {
+		// Teleport detected. Find the nearest polygon edge to _previous_result
+		// and slide along it toward the input direction.
+		Vector3 prev_proj = _polygon_project(_previous_result);
+		// Blend: move from previous projection toward the new one, clamped.
+		Vector3 blended = prev_proj.lerp(projected, 0.3f).normalized();
+		_previous_result = blended;
+		return blended;
+	}
+
+	_previous_result = projected;
+	_has_previous = true;
+	return projected;
 }
 
 // Helper functions for kusudama solving
