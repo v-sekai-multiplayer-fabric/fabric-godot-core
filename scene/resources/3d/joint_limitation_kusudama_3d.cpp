@@ -439,30 +439,23 @@ int JointLimitationKusudama3D::get_cone_sequence_for_shader(PackedVector4Array &
 	if (n == 0) {
 		return 0;
 	}
-	// Rebuild polygon cache to get hull order.
-	_rebuild_polygon_cache();
-	uint32_t hull_n = _hull_order.size();
-	if (hull_n == 0) {
-		hull_n = n;
-	}
-	// Layout: cone0, tangent0_1, tangent0_2, cone1, tangent1_1, tangent1_2, ..., tangentN_1, tangentN_2, cone0 (wrap)
-	// Use hull order for closed loop.
-	for (uint32_t i = 0; i < hull_n; i++) {
-		uint32_t idx = (hull_n > 0 && _hull_order.size() == hull_n) ? _hull_order[i] : i;
-		Vector3 center_i = _get_cone_center_normalized(idx);
-		real_t radius_i = cones[idx].w;
+	// Layout: cone0, tangent0_1, tangent0_2, cone1, ..., coneN-1 (open chain, input order).
+	for (uint32_t i = 0; i < n; i++) {
+		Vector3 center_i = _get_cone_center_normalized(i);
+		real_t radius_i = cones[i].w;
 		if (i == 0) {
 			r_cone_sequence.push_back(Vector4(center_i.x, center_i.y, center_i.z, radius_i));
 		}
-		uint32_t idx_next = (hull_n > 0 && _hull_order.size() == hull_n) ? _hull_order[(i + 1) % hull_n] : (i + 1) % n;
-		Vector3 center_next = _get_cone_center_normalized(idx_next);
-		real_t radius_next = cones[idx_next].w;
-		Vector3 tan1, tan2;
-		real_t trad;
-		compute_tangent_circles(center_i, radius_i, center_next, radius_next, tan1, tan2, trad);
-		r_cone_sequence.push_back(Vector4(tan1.x, tan1.y, tan1.z, trad));
-		r_cone_sequence.push_back(Vector4(tan2.x, tan2.y, tan2.z, trad));
-		r_cone_sequence.push_back(Vector4(center_next.x, center_next.y, center_next.z, radius_next));
+		if (i + 1 < n) {
+			Vector3 center_next = _get_cone_center_normalized(i + 1);
+			real_t radius_next = cones[i + 1].w;
+			Vector3 tan1, tan2;
+			real_t trad;
+			compute_tangent_circles(center_i, radius_i, center_next, radius_next, tan1, tan2, trad);
+			r_cone_sequence.push_back(Vector4(tan1.x, tan1.y, tan1.z, trad));
+			r_cone_sequence.push_back(Vector4(tan2.x, tan2.y, tan2.z, trad));
+			r_cone_sequence.push_back(Vector4(center_next.x, center_next.y, center_next.z, radius_next));
+		}
 	}
 	return n;
 }
