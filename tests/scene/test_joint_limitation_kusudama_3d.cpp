@@ -1780,6 +1780,163 @@ TEST_CASE("[Scene][JointLimitationKusudama3D] Test convex hull ordering") {
 	CHECK(result3.is_normalized());
 }
 
+TEST_CASE("[Scene][JointLimitationKusudama3D] Exhaustive great-circle sweep - no teleports") {
+	// Sweep input directions along many great circles.  For each circle, step at
+	// fine granularity and verify the output never jumps more than a threshold
+	// between consecutive steps.  A jump means the solver teleported the output
+	// to the opposite side instead of sliding along the boundary.
+	Ref<JointLimitationKusudama3D> limitation;
+	limitation.instantiate();
+
+	Vector<Vector4> cones = make_fibonacci_cones(10, Math::deg_to_rad(30.0));
+	set_cones_from_vector4(limitation, cones);
+
+	Vector3 forward = Vector3(0, 0, 1);
+	Vector3 right = Vector3(1, 0, 0);
+	Quaternion rot = Quaternion();
+
+	const int num_circles = 30;
+	const int steps_per_circle = 200;
+	const real_t max_allowed_step_deg = 10.0;
+
+	int total_teleports = 0;
+
+	for (int c = 0; c < num_circles; c++) {
+		// Generate a random great circle axis using Fibonacci-like distribution.
+		real_t theta = Math::acos(1.0 - 2.0 * (c + 0.5) / num_circles);
+		real_t phi = Math_TAU * c * 0.618033988;
+		Vector3 axis(Math::sin(theta) * Math::cos(phi),
+				Math::sin(theta) * Math::sin(phi),
+				Math::cos(theta));
+		axis.normalize();
+
+		// Build orthonormal basis on the great circle perpendicular to axis.
+		Vector3 u = axis.get_any_perpendicular().normalized();
+		Vector3 v = axis.cross(u).normalized();
+
+		Vector3 prev_out;
+		for (int s = 0; s <= steps_per_circle; s++) {
+			real_t angle = Math_TAU * (real_t)s / (real_t)steps_per_circle;
+			Vector3 input_dir = (u * Math::cos(angle) + v * Math::sin(angle)).normalized();
+			Vector3 out = limitation->solve(forward, right, rot, input_dir);
+
+			CHECK(out.is_finite());
+			CHECK(out.length() > 0.9f);
+
+			if (s > 0) {
+				real_t step_deg = Math::rad_to_deg(prev_out.angle_to(out));
+				if (step_deg > max_allowed_step_deg) {
+					total_teleports++;
+				}
+			}
+			prev_out = out;
+		}
+	}
+
+	CHECK_MESSAGE(total_teleports == 0,
+			vformat("Teleports detected: %d (across %d circles x %d steps)",
+					total_teleports, num_circles, steps_per_circle));
+}
+
+TEST_CASE("[Scene][JointLimitationKusudama3D] Exhaustive latitude sweeps - no teleports") {
+	// Sweep at constant latitudes (small circles) from pole to pole.
+	Ref<JointLimitationKusudama3D> limitation;
+	limitation.instantiate();
+
+	Vector<Vector4> cones = make_fibonacci_cones(10, Math::deg_to_rad(30.0));
+	set_cones_from_vector4(limitation, cones);
+
+	Vector3 forward = Vector3(0, 0, 1);
+	Vector3 right = Vector3(1, 0, 0);
+	Quaternion rot = Quaternion();
+
+	const int num_latitudes = 40;
+	const int steps_per_latitude = 200;
+	const real_t max_allowed_step_deg = 10.0;
+
+	int total_teleports = 0;
+
+	for (int lat = 1; lat < num_latitudes; lat++) {
+		real_t theta = Math_PI * (real_t)lat / (real_t)num_latitudes;
+
+		Vector3 prev_out;
+		for (int s = 0; s <= steps_per_latitude; s++) {
+			real_t phi = Math_TAU * (real_t)s / (real_t)steps_per_latitude;
+			Vector3 input_dir(
+					Math::sin(theta) * Math::cos(phi),
+					Math::sin(theta) * Math::sin(phi),
+					Math::cos(theta));
+			input_dir.normalize();
+			Vector3 out = limitation->solve(forward, right, rot, input_dir);
+
+			CHECK(out.is_finite());
+			CHECK(out.length() > 0.9f);
+
+			if (s > 0) {
+				real_t step_deg = Math::rad_to_deg(prev_out.angle_to(out));
+				if (step_deg > max_allowed_step_deg) {
+					total_teleports++;
+				}
+			}
+			prev_out = out;
+		}
+	}
+
+	CHECK_MESSAGE(total_teleports == 0,
+			vformat("Teleports detected: %d (across %d latitudes x %d steps)",
+					total_teleports, num_latitudes, steps_per_latitude));
+}
+
+TEST_CASE("[Scene][JointLimitationKusudama3D] Exhaustive cone-to-cone paths - no teleports") {
+	// For every pair of cones (i, j), sweep a great circle arc from cone i center
+	// to cone j center and verify no teleports.  This catches the case where
+	// interpolation between two non-adjacent cones crosses a forbidden region.
+	Ref<JointLimitationKusudama3D> limitation;
+	limitation.instantiate();
+
+	const int n = 10;
+	Vector<Vector4> cones = make_fibonacci_cones(n, Math::deg_to_rad(30.0));
+	set_cones_from_vector4(limitation, cones);
+
+	Vector3 forward = Vector3(0, 0, 1);
+	Vector3 right = Vector3(1, 0, 0);
+	Quaternion rot = Quaternion();
+
+	const int steps = 100;
+	const real_t max_allowed_step_deg = 10.0;
+
+	int total_teleports = 0;
+
+	for (int i = 0; i < n; i++) {
+		for (int j = i + 1; j < n; j++) {
+			Vector3 ci = Vector3(cones[i].x, cones[i].y, cones[i].z).normalized();
+			Vector3 cj = Vector3(cones[j].x, cones[j].y, cones[j].z).normalized();
+
+			Vector3 prev_out;
+			for (int s = 0; s <= steps; s++) {
+				real_t t = (real_t)s / (real_t)steps;
+				Vector3 input_dir = slerp_unit(ci, cj, t);
+				Vector3 out = limitation->solve(forward, right, rot, input_dir);
+
+				CHECK(out.is_finite());
+				CHECK(out.length() > 0.9f);
+
+				if (s > 0) {
+					real_t step_deg = Math::rad_to_deg(prev_out.angle_to(out));
+					if (step_deg > max_allowed_step_deg) {
+						total_teleports++;
+					}
+				}
+				prev_out = out;
+			}
+		}
+	}
+
+	CHECK_MESSAGE(total_teleports == 0,
+			vformat("Teleports detected: %d (across %d cone pairs x %d steps)",
+					total_teleports, n * (n - 1) / 2, steps));
+}
+
 } // namespace TestJointLimitationKusudama3D
 
 #endif // _3D_DISABLED
