@@ -315,7 +315,7 @@ rnnoise_sources = [
 env_rnnoise.add_source_files(env.modules_sources, [rnnoise_dir + s for s in rnnoise_sources])
 
 # AEC3 — WebRTC acoustic echo cancellation
-aec3_dir = "thirdparty/"
+aec3_dir = "#thirdparty/"
 env_aec3 = module_env.Clone()
 env_aec3.disable_warnings()
 env_aec3.Prepend(CPPPATH=[
