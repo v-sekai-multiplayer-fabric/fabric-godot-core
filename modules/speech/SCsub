@@ -170,7 +170,7 @@ thirdparty_sources = [
 
 opus_sources_silk = []
 
-if env["platform"] in ["android", "iphone", "javascript"]:
+if env["platform"] in []:
     env_thirdparty.Append(CPPDEFINES=["FIXED_POINT"])
     opus_sources_silk = [
         "silk/fixed/LTP_analysis_filter_FIX.c",

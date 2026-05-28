@@ -33,7 +33,9 @@
 #include "common.h"
 #include <math.h>
 #include "arch.h"
+#if defined(__x86_64__) || defined(_M_X64) || defined(__i386__) || defined(_M_IX86)
 #include "x86/x86_arch_macros.h"
+#endif
 
 
 #if defined(__AVX__) || defined(__SSE2__)
