@@ -34,7 +34,7 @@
 #include "core/object/ref_counted.h"
 #include "core/variant/typed_array.h"
 
-#include "thirdparty/opus_speech/opus/opus.h"
+#include <thirdparty/opus_speech/opus/opus.h>
 
 class SpeechDecoder : public RefCounted {
 	GDCLASS(SpeechDecoder, RefCounted);

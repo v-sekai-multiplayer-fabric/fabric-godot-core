@@ -321,13 +321,15 @@ env_rnnoise.add_source_files(env.modules_sources, [rnnoise_dir + s for s in rnno
 aec3_dir = "#thirdparty/"
 env_aec3 = module_env.Clone()
 env_aec3.disable_warnings()
-env_aec3.Prepend(CPPPATH=[
-    "#thirdparty/AEC3",
-    "#thirdparty/AEC3/audio_processing",
-    "#thirdparty/AEC3/base",
-    "#thirdparty/AEC3/base/abseil",
-    "#thirdparty/AEC3/base/jsoncpp/include",
-])
+env_aec3.Prepend(
+    CPPPATH=[
+        "#thirdparty/AEC3",
+        "#thirdparty/AEC3/audio_processing",
+        "#thirdparty/AEC3/base",
+        "#thirdparty/AEC3/base/abseil",
+        "#thirdparty/AEC3/base/jsoncpp/include",
+    ]
+)
 aec3_sources = [
     "AEC3/audio_processing/aec3/adaptive_fir_filter.cc",
     "AEC3/audio_processing/aec3/adaptive_fir_filter_erl.cc",
