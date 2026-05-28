@@ -835,7 +835,11 @@ using swap_internal::StdSwapIsUnconstrained;
 //
 // https://clang.llvm.org/docs/LanguageExtensions.html#:~:text=__is_trivially_relocatable
 //
-#if ABSL_HAVE_BUILTIN(__is_trivially_relocatable)
+#if ABSL_HAVE_BUILTIN(__builtin_is_cpp_trivially_relocatable)
+template <class T>
+struct is_trivially_relocatable
+    : std::integral_constant<bool, __builtin_is_cpp_trivially_relocatable(T)> {};
+#elif ABSL_HAVE_BUILTIN(__is_trivially_relocatable)
 template <class T>
 struct is_trivially_relocatable
     : std::integral_constant<bool, __is_trivially_relocatable(T)> {};
