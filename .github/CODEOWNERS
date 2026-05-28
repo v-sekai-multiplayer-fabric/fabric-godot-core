@@ -306,3 +306,6 @@ SCsub                                         @godotengine/buildsystem
 # V-Sekai Keychain
 
 /modules/keychain/                            @fire
+# V-Sekai Speech
+
+/modules/speech/                              @fire
