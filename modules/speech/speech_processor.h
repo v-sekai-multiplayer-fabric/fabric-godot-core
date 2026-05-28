@@ -49,11 +49,18 @@
 #include <thirdparty/opus_speech/opus/opus.h>
 #include <thirdparty/rnnoise/include/rnnoise.h>
 
+#ifdef __GNUC__
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wctor-dtor-privacy"
+#endif
 #include <thirdparty/AEC3/api/echo_canceller3_config.h>
 #include <thirdparty/AEC3/api/echo_canceller3_factory.h>
 #include <thirdparty/AEC3/audio_processing/audio_buffer.h>
 #include <thirdparty/AEC3/audio_processing/high_pass_filter.h>
 #include <thirdparty/AEC3/audio_processing/include/audio_processing.h>
+#ifdef __GNUC__
+#pragma GCC diagnostic pop
+#endif
 
 #include <stdint.h>
 
