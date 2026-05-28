@@ -31,7 +31,7 @@
 #pragma once
 
 #include "core/error/error_macros.h"
-#include "modules/speech/thirdparty/libsamplerate/src/samplerate.h"
+#include "thirdparty/libsamplerate/src/samplerate.h"
 
 #include "core/config/engine.h"
 #include "core/config/project_settings.h"

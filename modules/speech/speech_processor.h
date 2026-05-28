@@ -45,15 +45,15 @@
 #include <stdlib.h>
 #include <functional>
 
-#include "modules/speech/thirdparty/libsamplerate/src/samplerate.h"
-#include "modules/speech/thirdparty/opus/opus/opus.h"
-#include "modules/speech/thirdparty/rnnoise/include/rnnoise.h"
+#include "thirdparty/libsamplerate/src/samplerate.h"
+#include "thirdparty/opus_speech/opus/opus.h"
+#include "thirdparty/rnnoise/include/rnnoise.h"
 
-#include "modules/speech/thirdparty/AEC3/api/echo_canceller3_config.h"
-#include "modules/speech/thirdparty/AEC3/api/echo_canceller3_factory.h"
-#include "modules/speech/thirdparty/AEC3/audio_processing/audio_buffer.h"
-#include "modules/speech/thirdparty/AEC3/audio_processing/high_pass_filter.h"
-#include "modules/speech/thirdparty/AEC3/audio_processing/include/audio_processing.h"
+#include "thirdparty/AEC3/api/echo_canceller3_config.h"
+#include "thirdparty/AEC3/api/echo_canceller3_factory.h"
+#include "thirdparty/AEC3/audio_processing/audio_buffer.h"
+#include "thirdparty/AEC3/audio_processing/high_pass_filter.h"
+#include "thirdparty/AEC3/audio_processing/include/audio_processing.h"
 
 #include <stdint.h>
 

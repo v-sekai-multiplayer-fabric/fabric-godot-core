@@ -38,16 +38,16 @@ elif env["platform"] == "android":
 else:  # including if env["platform"] == "javascript":
     module_env.Append(CPPDEFINES=["WEBRTC_POSIX"])
 
-module_env.Prepend(CPPPATH=["thirdparty/libsamplerate/src"])
-module_env.Prepend(CPPPATH=["thirdparty/opus"])
-module_env.Prepend(CPPPATH=["thirdparty/opus/opus"])
-module_env.Prepend(CPPPATH=["thirdparty/opus/celt"])
+module_env.Prepend(CPPPATH=["#thirdparty/libsamplerate/src"])
+module_env.Prepend(CPPPATH=["#thirdparty/opus_speech"])
+module_env.Prepend(CPPPATH=["#thirdparty/opus_speech/opus"])
+module_env.Prepend(CPPPATH=["#thirdparty/opus_speech/celt"])
 module_env.Prepend(CPPPATH=["include"])
 module_env.Prepend(CPPPATH=["include"])
 
 env_thirdparty = module_env.Clone()
 env_thirdparty.disable_warnings()
-thirdparty_dir = "thirdparty/opus/"
+thirdparty_dir = "#thirdparty/opus_speech/"
 thirdparty_sources = [
     # Sync with opus_sources.mk (Opus 1.6.1)
     "opus.c",
@@ -257,7 +257,7 @@ elif env["platform"] == "osx":
     if "arch" in env and env["arch"] == "arm64":
         env_thirdparty.Append(CPPDEFINES=["OPUS_ARM64_OPT"])
 
-env_thirdparty.add_source_files(env.modules_sources, Glob("thirdparty/libsamplerate/src/*.c"))
+env_thirdparty.add_source_files(env.modules_sources, Glob("#thirdparty/libsamplerate/src/*.c"))
 opus_sources_dnn = [
     "dnn/nnet.c",
     "dnn/nnet_default.c",
@@ -296,10 +296,10 @@ env_thirdparty.add_source_files(env.modules_sources, [thirdparty_dir + s for s i
 env_thirdparty.add_source_files(env.modules_sources, [thirdparty_dir + s for s in opus_sources_dnn])
 
 # RNNoise — built in its own env to avoid header conflicts with opus
-rnnoise_dir = "thirdparty/rnnoise/"
+rnnoise_dir = "#thirdparty/rnnoise/"
 env_rnnoise = module_env.Clone()
 env_rnnoise.disable_warnings()
-env_rnnoise.Prepend(CPPPATH=[rnnoise_dir + "include", rnnoise_dir + "src"])
+env_rnnoise.Prepend(CPPPATH=["#thirdparty/rnnoise/include", "#thirdparty/rnnoise/src"])
 rnnoise_sources = [
     "src/denoise.c",
     "src/rnn.c",
