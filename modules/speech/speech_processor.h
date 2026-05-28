@@ -33,7 +33,6 @@
 #include "scene/main/node.h"
 
 #include "core/config/engine.h"
-#include "core/config/project_settings.h"
 #include "core/object/ref_counted.h"
 #include "core/os/mutex.h"
 #include "scene/audio/audio_stream_player.h"
