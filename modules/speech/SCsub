@@ -234,6 +234,7 @@ env_thirdparty.Append(CPPDEFINES=["HAVE_CONFIG_H"])
 thirdparty_include_paths = [
     "",
     "celt",
+    "celt/x86",
     "opus",
     "silk",
     "silk/fixed",
