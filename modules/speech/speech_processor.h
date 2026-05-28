@@ -33,16 +33,13 @@
 #include "scene/main/node.h"
 
 #include "core/config/engine.h"
-#include "core/config/project_settings.h"
-#include "core/object/class_db.h"
 #include "core/object/ref_counted.h"
 #include "core/os/mutex.h"
 #include "scene/audio/audio_stream_player.h"
 #include "servers/audio/audio_server.h"
-#include "servers/audio/audio_stream.h"
 #include "servers/audio/effects/audio_effect_capture.h"
 
-#include <stdlib.h>
+#include <cstdlib>
 #include <functional>
 
 #include <thirdparty/libsamplerate/src/samplerate.h>
@@ -62,7 +59,7 @@
 #pragma GCC diagnostic pop
 #endif
 
-#include <stdint.h>
+#include <cstdint>
 
 #include "speech_decoder.h"
 

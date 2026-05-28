@@ -256,6 +256,25 @@ void SpeechProcessor::start() {
 	}
 	audio_input_stream_player->play();
 	audio_effect_capture->clear_buffer();
+
+	// AEC3 — initialize on first start so the AudioServer is available.
+	if (!echo_controller) {
+		webrtc::EchoCanceller3Factory aec_factory(aec_config);
+		echo_controller = aec_factory.Create(SPEECH_SETTING_VOICE_SAMPLE_RATE, SPEECH_SETTING_CHANNEL_COUNT, SPEECH_SETTING_CHANNEL_COUNT);
+		hp_filter = std::make_unique<webrtc::HighPassFilter>(SPEECH_SETTING_VOICE_SAMPLE_RATE, SPEECH_SETTING_CHANNEL_COUNT);
+		webrtc::StreamConfig stream_config(SPEECH_SETTING_VOICE_SAMPLE_RATE, SPEECH_SETTING_CHANNEL_COUNT, false);
+		aec_reference_audio = std::make_unique<webrtc::AudioBuffer>(
+				stream_config.sample_rate_hz(), stream_config.num_channels(),
+				stream_config.sample_rate_hz(), stream_config.num_channels(),
+				stream_config.sample_rate_hz(), stream_config.num_channels());
+		aec_capture_audio = std::make_unique<webrtc::AudioBuffer>(
+				stream_config.sample_rate_hz(), stream_config.num_channels(),
+				stream_config.sample_rate_hz(), stream_config.num_channels(),
+				stream_config.sample_rate_hz(), stream_config.num_channels());
+		if (AudioServer::get_singleton()) {
+			echo_controller->SetAudioBufferDelay(AudioServer::get_singleton()->get_output_latency());
+		}
+	}
 }
 
 void SpeechProcessor::stop() {
@@ -563,22 +582,10 @@ SpeechProcessor::SpeechProcessor() {
 			SPEECH_SETTING_CHANNEL_COUNT, &libresample_error);
 	rnnoise_state = rnnoise_create(nullptr);
 
-	// AEC3 initialization
+	// AEC3 buffer pre-allocated; full init deferred to start() so headless tests
+	// without a running AudioServer don't crash on construction.
 	mix_reference_buffer.resize(SPEECH_SETTING_BUFFER_FRAME_COUNT);
 	mix_reference_buffer.fill(0);
-	webrtc::EchoCanceller3Factory aec_factory(aec_config);
-	echo_controller = aec_factory.Create(SPEECH_SETTING_VOICE_SAMPLE_RATE, SPEECH_SETTING_CHANNEL_COUNT, SPEECH_SETTING_CHANNEL_COUNT);
-	hp_filter = std::make_unique<webrtc::HighPassFilter>(SPEECH_SETTING_VOICE_SAMPLE_RATE, SPEECH_SETTING_CHANNEL_COUNT);
-	webrtc::StreamConfig stream_config(SPEECH_SETTING_VOICE_SAMPLE_RATE, SPEECH_SETTING_CHANNEL_COUNT, false);
-	aec_reference_audio = std::make_unique<webrtc::AudioBuffer>(
-			stream_config.sample_rate_hz(), stream_config.num_channels(),
-			stream_config.sample_rate_hz(), stream_config.num_channels(),
-			stream_config.sample_rate_hz(), stream_config.num_channels());
-	aec_capture_audio = std::make_unique<webrtc::AudioBuffer>(
-			stream_config.sample_rate_hz(), stream_config.num_channels(),
-			stream_config.sample_rate_hz(), stream_config.num_channels(),
-			stream_config.sample_rate_hz(), stream_config.num_channels());
-	echo_controller->SetAudioBufferDelay(AudioServer::get_singleton()->get_output_latency());
 
 	audio_server = AudioServer::get_singleton();
 }
