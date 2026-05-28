@@ -323,6 +323,7 @@ env_aec3.Prepend(CPPPATH=[
     "#thirdparty/AEC3/audio_processing",
     "#thirdparty/AEC3/base",
     "#thirdparty/AEC3/base/abseil",
+    "#thirdparty/AEC3/base/jsoncpp/include",
 ])
 aec3_sources = [
     "AEC3/audio_processing/aec3/adaptive_fir_filter.cc",
@@ -404,7 +405,7 @@ aec3_sources = [
     "AEC3/base/abseil/absl/strings/ascii.cc",
     "AEC3/base/abseil/absl/strings/charconv.cc",
     "AEC3/base/abseil/absl/strings/escaping.cc",
-    "AEC3/base/abseil/absl/strings/internal/charconv_bignum.cc",
+    "AEC3/base/abseil/absl/strings/internal/charconv_bigint.cc",
     "AEC3/base/abseil/absl/strings/internal/charconv_parse.cc",
     "AEC3/base/abseil/absl/strings/internal/memutil.cc",
     "AEC3/base/abseil/absl/strings/match.cc",
