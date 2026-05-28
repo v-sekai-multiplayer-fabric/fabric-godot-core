@@ -30,6 +30,8 @@
 
 #include "speech_processor.h"
 #include "core/typedefs.h"
+#include "core/config/project_settings.h"
+#include "core/object/class_db.h"
 
 #include <algorithm>
 
