@@ -319,9 +319,9 @@ aec3_dir = "#thirdparty/"
 env_aec3 = module_env.Clone()
 env_aec3.disable_warnings()
 env_aec3.Prepend(CPPPATH=[
-    "thirdparty/AEC3",
-    "thirdparty/AEC3/base",
-    "thirdparty/AEC3/base/abseil",
+    "#thirdparty/AEC3",
+    "#thirdparty/AEC3/base",
+    "#thirdparty/AEC3/base/abseil",
 ])
 aec3_sources = [
     "AEC3/audio_processing/aec3/adaptive_fir_filter.cc",
