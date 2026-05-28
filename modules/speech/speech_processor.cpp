@@ -135,7 +135,37 @@ void SpeechProcessor::_mix_audio(const Vector2 *p_capture_buffer) {
 		capture_real_array_offset = 0;
 		float *capture_real_array_write_ptr = capture_real_array.ptrw();
 		const float *capture_real_array_read_ptr = capture_real_array.ptr();
+		const float *reference_real_array_read_ptr = reference_real_array.ptr();
 		while (capture_real_array_offset < resampled_frame_count - SPEECH_SETTING_BUFFER_FRAME_COUNT) {
+			// AEC3: cancel speaker echo from microphone input
+			if (echo_controller) {
+				for (int64_t i = 0; i < SPEECH_SETTING_BUFFER_FRAME_COUNT; i++) {
+					mix_reference_buffer.write[i] = webrtc::FloatToS16(reference_real_array_read_ptr[static_cast<size_t>(capture_real_array_offset) + i]);
+				}
+				aec_ref_frame.UpdateFrame(0, mix_reference_buffer.ptr(), SPEECH_SETTING_BUFFER_FRAME_COUNT, SPEECH_SETTING_VOICE_SAMPLE_RATE, webrtc::AudioFrame::kNormalSpeech, webrtc::AudioFrame::kVadActive, 1);
+				Vector<int16_t> mix_capture_s16;
+				mix_capture_s16.resize(SPEECH_SETTING_BUFFER_FRAME_COUNT);
+				for (int64_t i = 0; i < SPEECH_SETTING_BUFFER_FRAME_COUNT; i++) {
+					mix_capture_s16.write[i] = webrtc::FloatToS16(capture_real_array_read_ptr[static_cast<size_t>(capture_real_array_offset) + i]);
+				}
+				aec_capture_frame.UpdateFrame(0, mix_capture_s16.ptr(), SPEECH_SETTING_BUFFER_FRAME_COUNT, SPEECH_SETTING_VOICE_SAMPLE_RATE, webrtc::AudioFrame::kNormalSpeech, webrtc::AudioFrame::kVadActive, 1);
+				aec_capture_audio->CopyFrom(&aec_capture_frame);
+				aec_reference_audio->CopyFrom(&aec_ref_frame);
+				aec_reference_audio->SplitIntoFrequencyBands();
+				echo_controller->AnalyzeRender(aec_reference_audio.get());
+				aec_reference_audio->MergeFrequencyBands();
+				echo_controller->AnalyzeCapture(aec_capture_audio.get());
+				aec_capture_audio->SplitIntoFrequencyBands();
+				hp_filter->Process(aec_capture_audio.get(), true);
+				echo_controller->ProcessCapture(aec_capture_audio.get(), nullptr, false);
+				aec_capture_audio->MergeFrequencyBands();
+				aec_capture_audio->CopyTo(&aec_capture_frame);
+				const int16_t *aec_out = aec_capture_frame.data();
+				for (int64_t i = 0; i < SPEECH_SETTING_BUFFER_FRAME_COUNT; i++) {
+					capture_real_array_write_ptr[static_cast<size_t>(capture_real_array_offset) + i] = webrtc::S16ToFloat(aec_out[i]);
+				}
+			}
+
 			float max_speech_prob = 0.0f;
 			if (rnnoise_state) {
 				for (int sub = 0; sub < SPEECH_SETTING_BUFFER_FRAME_COUNT / RNNOISE_FRAME_SIZE; sub++) {
@@ -532,6 +562,24 @@ SpeechProcessor::SpeechProcessor() {
 	libresample_state = src_new(SRC_SINC_MEDIUM_QUALITY,
 			SPEECH_SETTING_CHANNEL_COUNT, &libresample_error);
 	rnnoise_state = rnnoise_create(nullptr);
+
+	// AEC3 initialization
+	mix_reference_buffer.resize(SPEECH_SETTING_BUFFER_FRAME_COUNT);
+	mix_reference_buffer.fill(0);
+	webrtc::EchoCanceller3Factory aec_factory(aec_config);
+	echo_controller = aec_factory.Create(SPEECH_SETTING_VOICE_SAMPLE_RATE, SPEECH_SETTING_CHANNEL_COUNT, SPEECH_SETTING_CHANNEL_COUNT);
+	hp_filter = std::make_unique<webrtc::HighPassFilter>(SPEECH_SETTING_VOICE_SAMPLE_RATE, SPEECH_SETTING_CHANNEL_COUNT);
+	webrtc::StreamConfig stream_config(SPEECH_SETTING_VOICE_SAMPLE_RATE, SPEECH_SETTING_CHANNEL_COUNT, false);
+	aec_reference_audio = std::make_unique<webrtc::AudioBuffer>(
+			stream_config.sample_rate_hz(), stream_config.num_channels(),
+			stream_config.sample_rate_hz(), stream_config.num_channels(),
+			stream_config.sample_rate_hz(), stream_config.num_channels());
+	aec_capture_audio = std::make_unique<webrtc::AudioBuffer>(
+			stream_config.sample_rate_hz(), stream_config.num_channels(),
+			stream_config.sample_rate_hz(), stream_config.num_channels(),
+			stream_config.sample_rate_hz(), stream_config.num_channels());
+	echo_controller->SetAudioBufferDelay(AudioServer::get_singleton()->get_output_latency());
+
 	audio_server = AudioServer::get_singleton();
 }
 

@@ -49,6 +49,12 @@
 #include "modules/speech/thirdparty/opus/opus/opus.h"
 #include "modules/speech/thirdparty/rnnoise/include/rnnoise.h"
 
+#include "modules/speech/thirdparty/AEC3/api/echo_canceller3_config.h"
+#include "modules/speech/thirdparty/AEC3/api/echo_canceller3_factory.h"
+#include "modules/speech/thirdparty/AEC3/audio_processing/audio_buffer.h"
+#include "modules/speech/thirdparty/AEC3/audio_processing/high_pass_filter.h"
+#include "modules/speech/thirdparty/AEC3/audio_processing/include/audio_processing.h"
+
 #include <stdint.h>
 
 #include "speech_decoder.h"
@@ -185,6 +191,15 @@ private:
 	float vad_threshold = 0.5f;
 	int vad_hangover_frames = 0;
 	static constexpr int VAD_HANGOVER_MAX = 15;
+
+	// AEC3
+	webrtc::EchoCanceller3Config aec_config;
+	std::unique_ptr<webrtc::AudioBuffer> aec_reference_audio;
+	std::unique_ptr<webrtc::AudioBuffer> aec_capture_audio;
+	std::unique_ptr<webrtc::EchoControl> echo_controller;
+	std::unique_ptr<webrtc::HighPassFilter> hp_filter;
+	webrtc::AudioFrame aec_ref_frame, aec_capture_frame;
+	Vector<int16_t> mix_reference_buffer;
 
 	int64_t capture_discarded_frames = 0;
 	int64_t capture_pushed_frames = 0;
