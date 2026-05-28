@@ -199,7 +199,6 @@ private:
 	std::unique_ptr<webrtc::EchoControl> echo_controller;
 	std::unique_ptr<webrtc::HighPassFilter> hp_filter;
 	webrtc::AudioFrame aec_ref_frame, aec_capture_frame;
-	Vector<int16_t> mix_reference_buffer;
 
 	int64_t capture_discarded_frames = 0;
 	int64_t capture_pushed_frames = 0;
