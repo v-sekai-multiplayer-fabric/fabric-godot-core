@@ -275,10 +275,29 @@ sources = (
     + Glob("src/sketch/*.cpp")
     + Glob("src/constraints/*.cpp")
     + Glob("src/solver/*.cpp")
-    + mwt_sources
 )
 
 env_cassie.add_source_files(env.modules_sources, sources)
+
+# The vendored multipolygon_triangulator (DMWT / MingCurve / DMWT_dot) is older
+# C-style code that trips clang/clang-cl -Werror: deprecated CRT calls
+# (strcpy/strcat), char-typed array subscripts, and set-but-unused / unused
+# locals. Compile it with a clone that silences those vendored-code warnings
+# rather than patching each site.
+env_mwt = env_cassie.Clone()
+if env_mwt.get("platform") == "windows" and "g++" not in _compiler:
+    # MSVC / clang-cl: strcpy/strcat are flagged deprecated unless this is set.
+    env_mwt.Append(CPPDEFINES=["_CRT_SECURE_NO_WARNINGS"])
+if "clang" in _compiler or "g++" in _compiler or "gcc" in _compiler:
+    env_mwt.Append(
+        CCFLAGS=[
+            "-Wno-unused-but-set-variable",
+            "-Wno-unused-variable",
+            "-Wno-char-subscripts",
+            "-Wno-deprecated-declarations",
+        ]
+    )
+env_mwt.add_source_files(env.modules_sources, mwt_sources)
 
 # The slang_dispatch wrappers #include the vendored Slang CPU prelude, whose
 # COM-style interface structs (ISlangUnknown, ITexture, IRWTexture, ...) declare
