@@ -6,11 +6,11 @@
 	<description>
 		Holds a compressed audio buffer (WebM/MP4/Ogg/WAV/MKV) and plays it back through whichever OS-native decoder is available on the build platform:
 		[codeblock]
-		Windows -> Media Foundation
-		Linux   -> GStreamer
-		macOS / iOS -> AVFoundation
-		Android -> MediaCodec
-		Web     -> WebCodecs
+		Windows -&gt; Media Foundation
+		Linux   -&gt; GStreamer
+		macOS / iOS -&gt; AVFoundation
+		Android -&gt; MediaCodec
+		Web     -&gt; WebCodecs
 		[/codeblock]
 		If no native backend is installed at runtime (e.g. a Linux box without GStreamer), the stream stays silent and reports zero length. Pair with [VideoStreamNative] when the source has both an audio and a video track.
 	</description>
@@ -35,7 +35,7 @@
 		</method>
 	</methods>
 	<members>
-		<member name="container_hint" type="int" setter="set_container_hint" getter="get_container_hint" enum="AudioStreamNative.ContainerHint" default="0">
+		<member name="container_hint" type="int" setter="set_container_hint" getter="get_container_hint" default="0">
 			Container-format hint for the OS decoder. Defaults to Auto.
 		</member>
 		<member name="data" type="PackedByteArray" setter="set_data" getter="get_data" default="PackedByteArray()">
@@ -48,21 +48,4 @@
 			Seconds from start to which the stream seeks when looping.
 		</member>
 	</members>
-	<constants>
-		<constant name="CONTAINER_AUTO" value="0" enum="ContainerHint">
-			Let the OS decoder pick the container format.
-		</constant>
-		<constant name="CONTAINER_WEBM" value="1" enum="ContainerHint">
-			WebM container.
-		</constant>
-		<constant name="CONTAINER_MP4" value="2" enum="ContainerHint">
-			MP4 / M4A container.
-		</constant>
-		<constant name="CONTAINER_OGG" value="3" enum="ContainerHint">
-			Ogg container (Vorbis / Opus).
-		</constant>
-		<constant name="CONTAINER_WAV" value="4" enum="ContainerHint">
-			WAV container.
-		</constant>
-	</constants>
 </class>

@@ -513,7 +513,7 @@ void VideoStreamNative::_bind_methods() {
 	ClassDB::bind_static_method("VideoStreamNative", D_METHOD("load_from_buffer", "buffer", "hint"), &VideoStreamNative::load_from_buffer, DEFVAL((int)NativeMediaBackend::CONTAINER_AUTO));
 	ClassDB::bind_static_method("VideoStreamNative", D_METHOD("load_from_file", "path"), &VideoStreamNative::load_from_file);
 
-ADD_PROPERTY(PropertyInfo(Variant::PACKED_BYTE_ARRAY, "data"), "set_data", "get_data");
+	ADD_PROPERTY(PropertyInfo(Variant::PACKED_BYTE_ARRAY, "data"), "set_data", "get_data");
 	ADD_PROPERTY(PropertyInfo(Variant::INT, "container_hint", PROPERTY_HINT_ENUM, "Auto,WebM,MP4,Ogg,WAV"), "set_container_hint", "get_container_hint");
 }
 

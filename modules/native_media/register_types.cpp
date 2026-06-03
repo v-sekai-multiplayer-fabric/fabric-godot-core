@@ -31,14 +31,16 @@
 #include "register_types.h"
 
 #include "audio_stream_native.h"
-#include "core/io/resource_importer.h"
-#include "core/object/class_db.h"
 #include "video_stream_native.h"
 
+#include "core/io/resource_importer.h"
+#include "core/object/class_db.h"
+
 #ifdef TOOLS_ENABLED
-#include "editor/editor_node.h"
 #include "resource_importer_audio_native.h"
 #include "resource_importer_video_native.h"
+
+#include "editor/editor_node.h"
 
 static void _editor_init() {
 	Ref<ResourceImporterVideoNative> video_import;

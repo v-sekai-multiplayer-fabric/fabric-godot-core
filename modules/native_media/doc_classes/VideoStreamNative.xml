@@ -5,7 +5,7 @@
 	</brief_description>
 	<description>
 		Holds a compressed video container (WebM/MP4/MKV) and plays it back through whichever OS-native decoder ships on the build platform. The decoder is asked for NV12 frames; YCbCr-to-RGB conversion runs on the GPU via the compute shader [code]ycbcr_sampler.glsl[/code] (Vulkan / D3D12 / Metal) or [code]ycbcr_sampler_compat.gdshader[/code] (OpenGL Compatibility). No CPU per-pixel work — designed for 8K content at multiple-screen scale.
-		Use with [VideoStreamPlayer] like any other [VideoStream] resource. If no native backend is installed at runtime, [method VideoStreamPlayback.get_texture] returns a 1x1 black placeholder texture.
+		Use with [VideoStreamPlayer] like any other [VideoStream] resource. If no native backend is installed at runtime, [method VideoStreamPlayer.get_video_texture] returns a 1x1 black placeholder texture.
 	</description>
 	<tutorials>
 		<link title="Playing videos">$DOCS_URL/tutorials/animation/playing_videos.html</link>

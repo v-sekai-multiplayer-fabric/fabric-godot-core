@@ -26,7 +26,7 @@ layout(set = 0, binding = 2, rgba8) uniform writeonly image2D dst_rgba;
 
 layout(push_constant, std430) uniform Params {
 	uint color_matrix; // 0 = BT.601, 1 = BT.709, 2 = BT.2020
-	uint full_range;   // 0 = limited, 1 = full
+	uint full_range; // 0 = limited, 1 = full
 }
 params;
 

@@ -30,12 +30,13 @@
 
 #pragma once
 
-#include "modules/native_media/native_media_backend.h"
 #include "scene/resources/image_texture.h"
 #include "scene/resources/texture.h"
 #include "scene/resources/texture_rd.h"
 #include "scene/resources/video_stream.h"
 #include "servers/rendering/rendering_device.h"
+
+#include "modules/native_media/native_media_backend.h"
 
 class VideoStreamNative;
 
