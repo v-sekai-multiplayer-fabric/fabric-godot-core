@@ -24,7 +24,7 @@ inline void axpy(double p_alpha, const double *p_x, double *p_y, int p_n) {
 	}
 }
 
-inline void copy(const double *p_src, double *p_dst, int p_n) {
+[[maybe_unused]] inline void copy(const double *p_src, double *p_dst, int p_n) {
 	for (int i = 0; i < p_n; ++i) {
 		p_dst[i] = p_src[i];
 	}
