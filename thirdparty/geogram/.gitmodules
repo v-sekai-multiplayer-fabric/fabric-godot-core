@@ -1,0 +1,28 @@
+[submodule "src/lib/geogram/third_party/amgcl"]
+	path = src/lib/geogram/third_party/amgcl
+	url = https://github.com/ddemidov/amgcl.git
+[submodule "src/lib/third_party/glfw"]
+	path = src/lib/third_party/glfw
+	url = https://github.com/glfw/glfw.git
+[submodule "src/lib/geogram_gfx/third_party/imgui"]
+	path = src/lib/geogram_gfx/third_party/imgui
+	url = https://github.com/ocornut/imgui.git
+	branch = docking
+[submodule "src/lib/geogram/third_party/libMeshb"]
+	path = src/lib/geogram/third_party/libMeshb
+	url = https://github.com/LoicMarechal/libMeshb.git
+[submodule "src/lib/geogram/third_party/rply"]
+	path = src/lib/geogram/third_party/rply
+	url = https://github.com/diegonehab/rply.git
+[submodule "src/lib/geogram/third_party/OpenNL"]
+	path = src/lib/geogram/third_party/OpenNL
+	url = https://github.com/BrunoLevy/OpenNL.git
+[submodule "src/lib/geogram_gfx/third_party/imoguizmo"]
+	path = src/lib/geogram_gfx/third_party/imoguizmo
+	url = https://github.com/fknfilewalker/imoguizmo.git
+[submodule "src/lib/geogram_gfx/third_party/imgui_lua_bindings_gomgen"]
+	path = src/lib/geogram_gfx/third_party/imgui_lua_bindings_gomgen
+	url = https://github.com/BrunoLevy/imgui_lua_bindings_gomgen.git
+[submodule "src/lib/geogram_gfx/third_party/ImGuiColorTextEdit_geogram"]
+	path = src/lib/geogram_gfx/third_party/ImGuiColorTextEdit_geogram
+	url = https://github.com/BrunoLevy/ImGuiColorTextEdit_geogram.git
