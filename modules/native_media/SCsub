@@ -32,7 +32,7 @@ elif platform == "linuxbsd":
     gst_sigs = "backends/gstreamer/gstreamer.sigs"
     gst_stub_h = "backends/gstreamer/gstreamer_stubs.h"
     gst_stub_cc = "backends/gstreamer/gstreamer_stubs.cc"
-    env_native_media.Command(
+    gst_stub = env_native_media.Command(
         [gst_stub_h, gst_stub_cc],
         [gst_sigs, "#thirdparty/generate_stubs/generate_stubs.py"],
         [
@@ -59,8 +59,17 @@ elif platform == "linuxbsd":
             ]
         ],
     )
-    env_native_media.add_source_files(env.modules_sources, "backends/gstreamer/*.cpp")
-    env_native_media.add_source_files(env.modules_sources, "backends/gstreamer/*.cc")
+    # gstreamer_backend.cpp #includes the generated gstreamer_stubs.h, and the
+    # generated gstreamer_stubs.cc carries the dlsym dispatch table that must be
+    # compiled and linked. Glob can't see a file that does not exist at
+    # SConscript-parse time, so add the generated .cc explicitly with
+    # allow_gen=True, and make every GStreamer object depend on the generator so
+    # a parallel build cannot compile the backend before the stubs are emitted.
+    gst_obj = []
+    env_native_media.add_source_files(gst_obj, "backends/gstreamer/*.cpp")
+    env_native_media.add_source_files(gst_obj, [gst_stub_cc], allow_gen=True)
+    env.modules_sources += gst_obj
+    env_native_media.Depends(gst_obj, gst_stub)
     env_native_media.Append(CPPDEFINES=["GSTREAMER_ENABLED"])
     env.Append(LIBS=["dl"])
 else:
