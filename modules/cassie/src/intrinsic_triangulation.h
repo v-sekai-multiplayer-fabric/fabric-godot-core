@@ -1,0 +1,96 @@
+#pragma once
+
+#include "scene/resources/mesh.h"
+#include "core/object/ref_counted.h"
+#include "core/templates/hash_map.h"
+#include "core/templates/vector.h"
+#include "core/variant/dictionary.h"
+#include "core/variant/array.h"
+#include "core/variant/variant.h"
+#include "core/variant/array.h"
+#include "core/math/vector3.h"
+
+struct IntrinsicEdge {
+    int v0, v1;
+    int t0, t1;
+    double length;
+    bool is_original;
+
+    IntrinsicEdge() :
+            v0(-1), v1(-1), t0(-1), t1(-1), length(0.0), is_original(true) {}
+};
+
+struct IntrinsicTriangle {
+    int v[3];
+    int e[3];
+    double edge_lengths[3];
+    bool is_active;
+
+    IntrinsicTriangle() :
+            is_active(true) {
+        v[0] = v[1] = v[2] = -1;
+        e[0] = e[1] = e[2] = -1;
+        edge_lengths[0] = edge_lengths[1] = edge_lengths[2] = 0.0;
+    }
+};
+
+class IntrinsicTriangulation : public RefCounted {
+    GDCLASS(IntrinsicTriangulation, RefCounted);
+
+private:
+    PackedVector3Array vertices;
+    PackedInt32Array indices;
+    PackedVector3Array normals;
+
+    Vector<IntrinsicEdge> edges;
+    Vector<IntrinsicTriangle> triangles;
+    HashMap<int, int> vertex_to_triangle;
+
+    int max_flip_iterations = 100;
+    float angle_threshold = 0.523599;
+    bool use_delaunay_criterion = true;
+
+    void build_initial_intrinsic_mesh();
+    int find_edge(int v0, int v1) const;
+    int find_opposite_vertex(int triangle_idx, int edge_idx) const;
+    bool is_delaunay_edge(int edge_idx) const;
+    bool can_flip_edge(int edge_idx) const;
+    void flip_edge(int edge_idx);
+    double compute_intrinsic_edge_length(int v0, int v1, int tri_idx) const;
+    double triangle_circumradius(const IntrinsicTriangle &tri) const;
+    Vector3 compute_triangle_normal(int tri_idx) const;
+    void update_normals();
+
+    double compute_angle_at_vertex(const IntrinsicTriangle &tri, int local_vertex_idx) const;
+    bool point_in_circumcircle(const IntrinsicTriangle &tri, int point_idx) const;
+
+protected:
+    static void _bind_methods();
+
+public:
+    void set_mesh_data(const PackedVector3Array &p_vertices, const PackedInt32Array &p_indices, const PackedVector3Array &p_normals = PackedVector3Array());
+    void set_mesh(const Ref<ArrayMesh> &p_mesh, int p_surface = 0);
+
+    void set_max_flip_iterations(int p_iterations);
+    int get_max_flip_iterations() const;
+    void set_angle_threshold(float p_angle);
+    float get_angle_threshold() const;
+    void use_delaunay_flips(bool p_enable);
+
+    bool flip_to_delaunay();
+    bool refine_intrinsic_triangulation(float p_target_edge_length = -1.0f);
+    void smooth_intrinsic_positions(int p_iterations = 5);
+
+    PackedVector3Array get_vertices() const;
+    PackedInt32Array get_indices() const;
+    PackedVector3Array get_normals() const;
+    Ref<ArrayMesh> get_mesh() const;
+
+    int get_triangle_count() const;
+    int get_edge_count() const;
+    int get_vertex_count() const;
+    Dictionary get_statistics() const;
+
+    IntrinsicTriangulation();
+    ~IntrinsicTriangulation();
+};

@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<class name="CassieSketchContext" inherits="Resource" api_type="editor" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="../../../doc/class.xsd">
+	<brief_description>
+		Existing sketch state passed to [CassieBeautifier].
+	</brief_description>
+	<description>
+		Holds the list of [CassieFinalStroke] strokes already committed to the sketch graph, the orthogonal axes used for planarity snap, and the optional mirror plane configuration.
+	</description>
+	<tutorials>
+	</tutorials>
+</class>
