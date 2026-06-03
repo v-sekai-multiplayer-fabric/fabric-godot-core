@@ -397,6 +397,8 @@ $RECYCLE.BIN/
 *.lnk
 *.generated.props
 
+.lake/
+
 ###########################################
 ### Vendored thirdparty un-ignore rules ###
 ###########################################
