@@ -21,7 +21,16 @@ platform = env["platform"]
 if platform == "windows":
     env_native_media.add_source_files(env.modules_sources, "backends/mediafoundation/*.cpp")
     # Core MF, plus D3D11 + DXGI for the zero-copy bridge (task #12).
-    env.Append(LIBS=["mf", "mfplat", "mfreadwrite", "mfuuid", "ole32", "shlwapi", "propsys", "d3d11", "dxgi", "dxguid"])
+    mf_libs = ["mf", "mfplat", "mfreadwrite", "mfuuid", "ole32", "shlwapi", "propsys", "d3d11", "dxgi", "dxguid"]
+    if env.msvc:
+        # Module SCsubs run after SConstruct decorates LIBSUFFIX with the
+        # platform/target/arch tag, so a bare name in env["LIBS"] would resolve
+        # to e.g. "mfuuid.windows.editor.x86_64.lib" and fail to link. These are
+        # system import libraries — link them by their real ".lib" name through
+        # LINKFLAGS instead (works for both MSVC link and clang-cl lld-link).
+        env.Append(LINKFLAGS=[lib + ".lib" for lib in mf_libs])
+    else:
+        env.Append(LIBS=mf_libs)
 elif platform == "linuxbsd":
     # GStreamer goes through thirdparty/generate_stubs/generate_stubs.py:
     # dlopen at runtime, no -lgstreamer-1.0 at link time, no gstreamer-1.0-dev

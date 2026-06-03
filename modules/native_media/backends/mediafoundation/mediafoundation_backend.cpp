@@ -56,7 +56,7 @@ static PFN_MFCreateMFByteStreamOnStream _resolve_mf_byte_stream_on_stream() {
 		m = LoadLibraryA("mfplat.dll");
 	}
 	if (m) {
-		pfn_MFCreateMFByteStreamOnStream = (PFN_MFCreateMFByteStreamOnStream)GetProcAddress(m, "MFCreateMFByteStreamOnStream");
+		pfn_MFCreateMFByteStreamOnStream = (PFN_MFCreateMFByteStreamOnStream)(void *)GetProcAddress(m, "MFCreateMFByteStreamOnStream");
 	}
 	return pfn_MFCreateMFByteStreamOnStream;
 }
@@ -99,6 +99,7 @@ void _mf_shutdown() {
 // Holds a raw backend pointer; the backend's destructor releases its own
 // reference, and we guard the backend pointer with the backend's queue_mutex
 // so OnReadSample never touches a half-destroyed backend.
+GODOT_GCC_WARNING_PUSH_AND_IGNORE("-Wnon-virtual-dtor") // COM interfaces have non-virtual dtors by design; lifetime is managed via AddRef/Release.
 class MFAsyncCallback : public IMFSourceReaderCallback {
 	LONG ref_count = 1;
 
@@ -166,6 +167,7 @@ public:
 	STDMETHODIMP OnEvent(DWORD, IMFMediaEvent *) override { return S_OK; }
 	STDMETHODIMP OnFlush(DWORD) override { return S_OK; }
 };
+GODOT_GCC_WARNING_POP
 
 MediaFoundationBackend::MediaFoundationBackend() {
 	_mf_startup();
