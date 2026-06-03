@@ -125,6 +125,7 @@ public:
 		}
 
 		// Get limited rotation from forward axis in local rest space.
+		// Returns the constrained direction scaled by original length.
 		Vector3 get_limited_rotation(const Quaternion &p_offset, const Vector3 &p_vector, const Vector3 &p_forward) const {
 			ERR_FAIL_COND_V(limitation.is_null(), p_vector);
 			Vector3 local_vector = p_offset.xform_inv(p_vector);
@@ -132,8 +133,9 @@ public:
 			if (Math::is_zero_approx(length)) {
 				return p_vector;
 			}
-			Vector3 limited = limitation->solve(p_forward, get_limitation_right_axis_vector(), limitation_rotation_offset, local_vector.normalized()) * length;
-			return p_offset.xform(limited);
+			Vector3 input_dir = local_vector.normalized();
+			Vector3 constrained_dir = limitation->solve(p_forward, get_limitation_right_axis_vector(), limitation_rotation_offset, input_dir);
+			return p_offset.xform(constrained_dir * length);
 		}
 
 		~IterateIK3DJointSetting() {
