@@ -290,33 +290,22 @@ env_refine.disable_warnings()
 env_refine.add_source_files(env.modules_sources, ["src/refine.cpp"])
 
 # The vendored multipolygon_triangulator (DMWT / MingCurve / DMWT_dot) is older
-# C-style code that trips clang/clang-cl -Werror: deprecated CRT calls
-# (strcpy/strcat), char-typed array subscripts, and set-but-unused / unused
-# locals. Compile it with a clone that silences those vendored-code warnings
-# rather than patching each site.
+# C-style code that trips -Werror on every toolchain (deprecated strcpy/strcat
+# on clang-cl/MSVC, char-typed array subscripts, set-but-unused / unused locals
+# on clang/gcc/emscripten/Android). Compile it warnings-off — Godot's convention
+# for vendored code — which sets the right flag per compiler (-w / /w) and so
+# also covers em++ and the Android NDK, which a hand-rolled -Wno list missed.
 env_mwt = env_cassie.Clone()
-if env_mwt.get("platform") == "windows" and "g++" not in _compiler:
-    # MSVC / clang-cl: strcpy/strcat are flagged deprecated unless this is set.
-    env_mwt.Append(CPPDEFINES=["_CRT_SECURE_NO_WARNINGS"])
-if "clang" in _compiler or "g++" in _compiler or "gcc" in _compiler:
-    env_mwt.Append(
-        CCFLAGS=[
-            "-Wno-unused-but-set-variable",
-            "-Wno-unused-variable",
-            "-Wno-char-subscripts",
-            "-Wno-deprecated-declarations",
-        ]
-    )
+env_mwt.disable_warnings()
 env_mwt.add_source_files(env.modules_sources, mwt_sources)
 
 # The slang_dispatch wrappers #include the vendored Slang CPU prelude, whose
 # COM-style interface structs (ISlangUnknown, ITexture, IRWTexture, ...) declare
-# virtual methods with non-virtual destructors. Compile them with a clone that
-# silences -Wnon-virtual-dtor on clang/clang-cl/gcc/mingw so -Werror doesn't
-# reject the vendored headers (plain MSVC has no such warning).
+# virtual methods with non-virtual destructors (clang/clang-cl -Werror). Compile
+# the wrappers warnings-off so the vendored prelude is tolerated on every
+# toolchain (the per-compiler flag covers em++ / Android NDK too).
 env_slang = env_cassie.Clone()
-if "clang" in _compiler or "g++" in _compiler or "gcc" in _compiler:
-    env_slang.Append(CCFLAGS=["-Wno-non-virtual-dtor"])
+env_slang.disable_warnings()
 env_slang.add_source_files(env.modules_sources, Glob("src/solver/slang_dispatch/*.cpp"))
 # Geogram sources use the exceptions-enabled env clone.
 env_geogram.add_source_files(env.modules_sources, geogram_sources)
