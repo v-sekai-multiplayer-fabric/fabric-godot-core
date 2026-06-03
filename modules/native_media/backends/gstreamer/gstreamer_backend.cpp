@@ -50,7 +50,6 @@ Mutex &_gst_lifecycle_mutex() {
 	static Mutex m;
 	return m;
 }
-int _gst_loaded_refs = 0;
 bool _gst_init_attempted = false;
 bool _gst_init_succeeded = false;
 
