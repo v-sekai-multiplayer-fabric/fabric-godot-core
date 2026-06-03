@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<class name="CassieBeautifierParams" inherits="Resource" api_type="editor" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="../../../doc/class.xsd">
+	<brief_description>
+		Threshold bundle for the CASSIE beautifier pipeline.
+	</brief_description>
+	<description>
+		Defaults match the Unity CASSIEParameters constants. Tune [member bezier_fitting_error] and [member rdp_error] to control fit smoothness, and [member mu_fidelity] / [member proximity_threshold] to tune how aggressively constraints overrule fidelity in the solver outer loop.
+	</description>
+	<tutorials>
+	</tutorials>
+</class>
