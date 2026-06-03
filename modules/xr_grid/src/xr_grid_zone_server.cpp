@@ -55,15 +55,15 @@ void XRGridZoneServer::_notification(int p_what) {
 	}
 	server_peer->poll();
 	while (server_peer->get_available_packet_count() > 0) {
-		const uint8_t *data = nullptr;
+		const uint8_t *packet_data = nullptr;
 		int len = 0;
-		if (server_peer->get_packet(&data, len) != OK || len <= 0) {
+		if (server_peer->get_packet(&packet_data, len) != OK || len <= 0) {
 			break;
 		}
 		if (len == 100) {
 			server_peer->set_target_peer(0);
 			server_peer->set_transfer_mode(MultiplayerPeer::TRANSFER_MODE_UNRELIABLE);
-			server_peer->put_packet(data, len);
+			server_peer->put_packet(packet_data, len);
 			++relay_count;
 		}
 	}
