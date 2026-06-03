@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8" ?>
-<class name="CassieInputStroke" inherits="Resource" api_type="editor" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="../../../doc/class.xsd">
+<class name="CassieInputStroke" inherits="Resource" api_type="core" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="../../../doc/class.xsd">
 	<brief_description>
 		Raw sample buffer for a single freehand sketch stroke.
 	</brief_description>
@@ -11,6 +11,13 @@
 	<tutorials>
 	</tutorials>
 	<methods>
+		<method name="add_constraint">
+			<return type="void" />
+			<param index="0" name="constraint" type="CassieConstraint" />
+			<param index="1" name="proximity_threshold" type="float" />
+			<description>
+			</description>
+		</method>
 		<method name="add_sample">
 			<return type="void" />
 			<param index="0" name="position" type="Vector3" />
@@ -32,8 +39,18 @@
 				Removes all samples and resets the running length to zero.
 			</description>
 		</method>
+		<method name="get_constraint_count" qualifiers="const">
+			<return type="int" />
+			<description>
+			</description>
+		</method>
+		<method name="get_constraints" qualifiers="const">
+			<return type="CassieConstraint[]" />
+			<description>
+			</description>
+		</method>
 		<method name="get_g1_sections" qualifiers="const">
-			<return type="Array" />
+			<return type="PackedVector3Array[]" />
 			<param index="0" name="discontinuity_angular_threshold" type="float" />
 			<param index="1" name="hook_discontinuity_angular_threshold" type="float" />
 			<param index="2" name="ablation_duration" type="float" />
@@ -70,10 +87,22 @@
 				Returns the number of samples currently in the buffer.
 			</description>
 		</method>
+		<method name="get_surface_constraints" qualifiers="const">
+			<return type="CassieSurfaceConstraint[]" />
+			<description>
+			</description>
+		</method>
 		<method name="get_weights" qualifiers="const">
 			<return type="PackedFloat32Array" />
 			<description>
 				Returns the per-sample pressure values in order.
+			</description>
+		</method>
+		<method name="in_constrain_to_surface">
+			<return type="void" />
+			<param index="0" name="patch_id" type="int" />
+			<param index="1" name="position" type="Vector3" />
+			<description>
 			</description>
 		</method>
 		<method name="is_valid" qualifiers="const">
@@ -82,6 +111,13 @@
 			<param index="1" name="min_stroke_size" type="float" />
 			<description>
 				Returns [code]true[/code] only when there are at least two samples and either the stroke took longer than [param min_sketching_time] or the bounding span exceeds [param min_stroke_size]. Catches accidental clicks.
+			</description>
+		</method>
+		<method name="out_constrain_to_surface">
+			<return type="void" />
+			<param index="0" name="patch_id" type="int" />
+			<param index="1" name="position" type="Vector3" />
+			<description>
 			</description>
 		</method>
 	</methods>
