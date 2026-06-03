@@ -289,3 +289,11 @@
 *.py                                          @godotengine/buildsystem
 SConstruct                                    @godotengine/buildsystem
 SCsub                                         @godotengine/buildsystem
+
+# V-Sekai multiplayer-fabric modules (must stay at EOF — CODEOWNERS is
+# last-match-wins, so placing these above the buildsystem catch-all lets
+# /*.* or SCsub steal ownership of files inside the module and breaks
+# merge assignment.)
+
+/modules/native_media/                        @v-sekai-multiplayer-fabric/multiplayer-fabric
+/modules/native_media/doc_classes/            @v-sekai-multiplayer-fabric/multiplayer-fabric @godotengine/documentation

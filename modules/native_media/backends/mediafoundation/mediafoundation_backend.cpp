@@ -61,12 +61,12 @@ static PFN_MFCreateMFByteStreamOnStream _resolve_mf_byte_stream_on_stream() {
 	return pfn_MFCreateMFByteStreamOnStream;
 }
 
-#define SAFE_RELEASE(p)         \
-	do {                        \
-		if (p) {                \
-			(p)->Release();     \
-			(p) = nullptr;      \
-		}                       \
+#define SAFE_RELEASE(p) \
+	do { \
+		if (p) { \
+			(p)->Release(); \
+			(p) = nullptr; \
+		} \
 	} while (0)
 
 namespace {
@@ -123,8 +123,10 @@ public:
 		*ppv = nullptr;
 		return E_NOINTERFACE;
 	}
-	STDMETHODIMP_(ULONG) AddRef() override { return InterlockedIncrement(&ref_count); }
-	STDMETHODIMP_(ULONG) Release() override {
+	STDMETHODIMP_(ULONG)
+	AddRef() override { return InterlockedIncrement(&ref_count); }
+	STDMETHODIMP_(ULONG)
+	Release() override {
 		LONG c = InterlockedDecrement(&ref_count);
 		if (c == 0) {
 			delete this;
@@ -377,7 +379,7 @@ void MediaFoundationBackend::_on_video_sample(DWORD dwStreamFlags, IMFSample *pS
 	// Godot's RenderingDevice::texture_create_shared supports per-plane
 	// views from multi-planar VkImages (G8_B8R8_2PLANE_420_UNORM →
 	// R8_UNORM + R8G8_UNORM views via VK_IMAGE_ASPECT_PLANE_0/1).
-	// Current behaviour: texture_create_shared returns superficially
+	// Current behavior: texture_create_shared returns superficially
 	// valid RIDs that fail to bind in uniform sets, producing green
 	// screen + "Attempted to free invalid ID" errors on pool teardown.
 	// The bridge init + pool infrastructure is kept alive so the WMF
@@ -454,20 +456,20 @@ void MediaFoundationBackend::_on_video_sample(DWORD dwStreamFlags, IMFSample *pS
 			// Y allocation height from the total buffer length Lock2DSize gave us.
 			const DWORD content_len = length - DWORD(scan0 - start);
 			const LONG total_rows = LONG(content_len / uint32_t(pitch));
-			
+
 			// NV12: Y plane is padded to 16-pixel height alignment (macroblocks)
 			// For 1080p, Y is padded to 1088 rows. Chroma starts right after Y.
-			const LONG y_padded_height = ((h + 15) / 16) * 16;  // Round up to 16
+			const LONG y_padded_height = ((h + 15) / 16) * 16; // Round up to 16
 			const LONG y_alloc_rows = y_padded_height;
-			
+
 			print_verbose(vformat("native_media: NV12: w=%d h=%d pitch=%d y_padded=%d total_rows=%d",
-				w, h, pitch, y_padded_height, total_rows));
-			
+					w, h, pitch, y_padded_height, total_rows));
+
 			// Copy Y plane (only the actual content rows, not padding)
 			for (uint32_t row = 0; row < h; row++) {
 				memcpy(dst + row * w, scan0 + LONG(row) * pitch, w);
 			}
-			
+
 			// Chroma starts after the padded Y plane
 			BYTE *chroma_src = scan0 + y_alloc_rows * pitch;
 			uint8_t *chroma_dst = dst + y_plane_bytes;

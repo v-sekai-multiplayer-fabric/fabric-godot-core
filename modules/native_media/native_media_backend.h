@@ -31,11 +31,11 @@
 #pragma once
 
 #include "core/error/error_list.h"
+#include "core/math/audio_frame.h"
 #include "core/math/vector2i.h"
 #include "core/string/ustring.h"
-#include "core/templates/vector.h"
-#include "core/math/audio_frame.h"
 #include "core/templates/rid.h"
+#include "core/templates/vector.h"
 
 // OS-native media decoder backend.
 // One concrete subclass per platform — Media Foundation (Windows), GStreamer

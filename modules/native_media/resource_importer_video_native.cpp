@@ -6,6 +6,7 @@
 /*                        https://godotengine.org                         */
 /**************************************************************************/
 /* Copyright (c) 2014-present Godot Engine contributors (see AUTHORS.md). */
+/* Copyright (c) 2007-2014 Juan Linietsky, Ariel Manzur.                  */
 /*                                                                        */
 /* Permission is hereby granted, free of charge, to any person obtaining  */
 /* a copy of this software and associated documentation files (the        */
@@ -32,6 +33,7 @@
 #include "resource_importer_video_native.h"
 
 #include "core/io/resource_saver.h"
+
 #include "modules/native_media/video_stream_native.h"
 
 String ResourceImporterVideoNative::get_importer_name() const {
