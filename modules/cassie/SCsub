@@ -268,9 +268,15 @@ delaunay_faces_src = ["#thirdparty/multipolygon_triangulator/DelaunayFaces.cpp"]
 mwt_sources = [f for f in mwt_sources if not str(f).endswith("DelaunayFaces.cpp")]
 geogram_sources += delaunay_faces_src
 
+# refine.cpp is thin glue over PMP's uniform_remeshing, which drags in the
+# heavy Eigen template headers. Those headers trip GCC -Werror
+# (-Wduplicated-branches, -Wctor-dtor-privacy in Eigen::ReturnByValue etc.).
+# Compile it warnings-off — Godot's convention for vendored-header-heavy TUs —
+# rather than chasing each Eigen diagnostic per compiler.
+src_cpp = [f for f in Glob("src/*.cpp") if not str(f).endswith("refine.cpp")]
 sources = (
     ["register_types.cpp"]
-    + Glob("src/*.cpp")
+    + src_cpp
     + Glob("src/curves/*.cpp")
     + Glob("src/sketch/*.cpp")
     + Glob("src/constraints/*.cpp")
@@ -278,6 +284,10 @@ sources = (
 )
 
 env_cassie.add_source_files(env.modules_sources, sources)
+
+env_refine = env_cassie.Clone()
+env_refine.disable_warnings()
+env_refine.add_source_files(env.modules_sources, ["src/refine.cpp"])
 
 # The vendored multipolygon_triangulator (DMWT / MingCurve / DMWT_dot) is older
 # C-style code that trips clang/clang-cl -Werror: deprecated CRT calls
