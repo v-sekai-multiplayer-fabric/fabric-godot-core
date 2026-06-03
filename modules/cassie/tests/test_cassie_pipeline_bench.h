@@ -1,12 +1,32 @@
 /**************************************************************************/
-/*  test_cassie_pipeline_bench.h                                           */
+/*  test_cassie_pipeline_bench.h                                          */
 /**************************************************************************/
-/* Editing-pipeline perf baseline: graph populate → find_cycles →          */
-/* sample_cycle_boundary → SurfaceManager::update().                       */
-/*                                                                         */
-/* All cases are TEST_CASE_PENDING so normal CI skips them. Run with:      */
-/*   bin/godot.<...>.exe --test --test-case="*CassiePipelineBench*"        */
-/* Grep the output for "[CassiePipelineBench]" to extract the table.       */
+/*                         This file is part of:                          */
+/*                             GODOT ENGINE                               */
+/*                        https://godotengine.org                         */
+/**************************************************************************/
+/* Copyright (c) 2014-present Godot Engine contributors (see AUTHORS.md). */
+/* Copyright (c) 2007-2014 Juan Linietsky, Ariel Manzur.                  */
+/*                                                                        */
+/* Permission is hereby granted, free of charge, to any person obtaining  */
+/* a copy of this software and associated documentation files (the        */
+/* "Software"), to deal in the Software without restriction, including    */
+/* without limitation the rights to use, copy, modify, merge, publish,    */
+/* distribute, sublicense, and/or sell copies of the Software, and to     */
+/* permit persons to whom the Software is furnished to do so, subject to  */
+/* the following conditions:                                              */
+/*                                                                        */
+/* The above copyright notice and this permission notice shall be         */
+/* included in all copies or substantial portions of the Software.        */
+/*                                                                        */
+/* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,        */
+/* EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF     */
+/* MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. */
+/* IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY   */
+/* CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,   */
+/* TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE      */
+/* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                 */
+/**************************************************************************/
 
 #pragma once
 
@@ -20,7 +40,6 @@
 
 #include "core/io/file_access.h"
 #include "core/io/json.h"
-#include <cfloat>
 #include "core/math/vector3.h"
 #include "core/os/os.h"
 #include "core/os/time.h"
@@ -30,6 +49,9 @@
 #include "scene/resources/curve.h"
 #include "scene/resources/mesh.h"
 #include "tests/test_macros.h"
+
+#include <cfloat>
+#include <vector>
 
 namespace TestCassiePipelineBench {
 
@@ -232,19 +254,19 @@ static uint64_t _run_scale(const String &p_label, int p_grid_N,
 // ── Trivial scale ─────────────────────────────────────────────────────────
 
 TEST_CASE_PENDING("[Cassie][PipelineBench] Trivial: 3-stroke triangle, 1 cycle") {
-	_run_scale("trivial(3-stroke-triangle)", /*grid_N=*/ 0, real_t(0.15));
+	_run_scale("trivial(3-stroke-triangle)", /*grid_N=*/0, real_t(0.15));
 }
 
 // ── Small scale ───────────────────────────────────────────────────────────
 
 TEST_CASE_PENDING("[Cassie][PipelineBench] Small: 4x4 grid, 9 quad cycles") {
-	_run_scale("small(4x4-grid)", /*grid_N=*/ 4, real_t(0.1));
+	_run_scale("small(4x4-grid)", /*grid_N=*/4, real_t(0.1));
 }
 
 // ── Medium scale ──────────────────────────────────────────────────────────
 
 TEST_CASE_PENDING("[Cassie][PipelineBench] Medium: 8x8 grid, 49 quad cycles") {
-	_run_scale("medium(8x8-grid)", /*grid_N=*/ 8, real_t(0.1));
+	_run_scale("medium(8x8-grid)", /*grid_N=*/8, real_t(0.1));
 }
 
 // ── Optional larger scale, guarded by a 2-second wall budget ──────────────
@@ -258,7 +280,7 @@ TEST_CASE_PENDING("[Cassie][PipelineBench] Medium: 8x8 grid, 49 quad cycles") {
 
 TEST_CASE_PENDING("[Cassie][PipelineBench] Large: 16x16 grid, 225 quad cycles (2 s budget)") {
 	const uint64_t budget_us = 2'000'000ULL;
-	const uint64_t total_us = _run_scale("large(16x16-grid)", /*grid_N=*/ 16, real_t(0.1));
+	const uint64_t total_us = _run_scale("large(16x16-grid)", /*grid_N=*/16, real_t(0.1));
 	if (total_us > budget_us) {
 		MESSAGE(vformat(
 				"[CassiePipelineBench] large(16x16-grid) BUDGET-EXCEEDED  "
@@ -429,11 +451,11 @@ TEST_CASE_PENDING("[Cassie][PipelineBench] Real mesh: Sketchfab character → cu
 			"[CassiePipelineBench] real-mesh(character-1.7m)  source_verts=%d  "
 			"source_tris=%d  curves=%d  input_samples=%d",
 			mesh->get_surface_count() > 0
-				? int(PackedVector3Array(mesh->surface_get_arrays(0)[Mesh::ARRAY_VERTEX]).size())
-				: 0,
+					? int(PackedVector3Array(mesh->surface_get_arrays(0)[Mesh::ARRAY_VERTEX]).size())
+					: 0,
 			mesh->get_surface_count() > 0
-				? int(PackedInt32Array(mesh->surface_get_arrays(0)[Mesh::ARRAY_INDEX]).size()) / 3
-				: 0,
+					? int(PackedInt32Array(mesh->surface_get_arrays(0)[Mesh::ARRAY_INDEX]).size()) / 3
+					: 0,
 			curve_count, total_input_samples));
 	MESSAGE(vformat(
 			"[CassiePipelineBench] real-mesh(character-1.7m)  set_mesh=%d us  "
@@ -469,8 +491,10 @@ static PackedVector3Array _make_planar_square(int p_per_side) {
 	// of next. Total = 4*(p_per_side - 1) points, evenly spaced.
 	PackedVector3Array pts;
 	const Vector3 corners[4] = {
-		Vector3(0, 0, 0), Vector3(1, 0, 0),
-		Vector3(1, 0, 1), Vector3(0, 0, 1),
+		Vector3(0, 0, 0),
+		Vector3(1, 0, 0),
+		Vector3(1, 0, 1),
+		Vector3(0, 0, 1),
 	};
 	for (int s = 0; s < 4; ++s) {
 		const Vector3 a = corners[s];
@@ -496,8 +520,12 @@ static PackedVector3Array _make_planar_circle(int p_count, real_t p_radius) {
 static PackedVector3Array _make_planar_L(int p_per_side) {
 	// L-shape outline, six straight segments. Tests concavity + straight runs.
 	const Vector3 corners[6] = {
-		Vector3(0, 0, 0), Vector3(2, 0, 0), Vector3(2, 0, 1),
-		Vector3(1, 0, 1), Vector3(1, 0, 2), Vector3(0, 0, 2),
+		Vector3(0, 0, 0),
+		Vector3(2, 0, 0),
+		Vector3(2, 0, 1),
+		Vector3(1, 0, 1),
+		Vector3(1, 0, 2),
+		Vector3(0, 0, 2),
 	};
 	PackedVector3Array pts;
 	for (int s = 0; s < 6; ++s) {
@@ -598,30 +626,42 @@ static void _dump_our_patches_json(const String &p_label,
 	bool first_patch = true;
 	for (int i = 0; i < p_cycles.size(); ++i) {
 		const PackedInt32Array cycle = p_cycles[i];
-		if (cycle.size() < 3) continue;
+		if (cycle.size() < 3) {
+			continue;
+		}
 		const PackedVector3Array boundary =
 				p_graph->sample_cycle_boundary(cycle, p_target_edge_length);
-		if (boundary.size() < 3) continue;
+		if (boundary.size() < 3) {
+			continue;
+		}
 		Dictionary r =
 				CassieTriangulator::triangulate(boundary, p_target_edge_length);
-		if (!bool(r.get("success", false))) continue;
+		if (!bool(r.get("success", false))) {
+			continue;
+		}
 		PackedVector3Array verts = r.get("vertices", PackedVector3Array());
 		PackedInt32Array faces = r.get("faces", PackedInt32Array());
-		if (verts.size() == 0 || faces.size() == 0) continue;
+		if (verts.size() == 0 || faces.size() == 0) {
+			continue;
+		}
 		if (!first_patch) {
 			wf->store_string(",");
 		}
 		first_patch = false;
 		wf->store_string("{\"verts\":[");
 		for (int v = 0; v < verts.size(); ++v) {
-			if (v > 0) wf->store_string(",");
+			if (v > 0) {
+				wf->store_string(",");
+			}
 			const Vector3 p = verts[v];
 			wf->store_string(vformat("[%.6f,%.6f,%.6f]",
 					double(p.x), double(p.y), double(p.z)));
 		}
 		wf->store_string("],\"faces\":[");
 		for (int fi = 0; fi < faces.size(); ++fi) {
-			if (fi > 0) wf->store_string(",");
+			if (fi > 0) {
+				wf->store_string(",");
+			}
 			wf->store_string(itos(faces[fi]));
 		}
 		wf->store_string("]}");
@@ -679,8 +719,12 @@ static void _probe_curves_file(const String &p_label, const String &p_filename,
 		}
 		attempted++;
 		const int nb = boundary.size();
-		if (nb < nB_min) nB_min = nb;
-		if (nb > nB_max) nB_max = nb;
+		if (nb < nB_min) {
+			nB_min = nb;
+		}
+		if (nb > nB_max) {
+			nB_max = nb;
+		}
 		// CASSIE_DUMP_BOUNDARY=<dir> writes each cycle's boundary as a flat
 		// stride-3 double text file, one row "x y z" per sample. Lets the
 		// Unity Triangulation_dll harness consume the exact same input we
@@ -1008,8 +1052,12 @@ static PatchInvariants _measure_patch(const PackedVector3Array &p_verts,
 			inv.aabb_min = inv.aabb_min.min(verts[k]);
 			inv.aabb_max = inv.aabb_max.max(verts[k]);
 			const double len = double((verts[(k + 1) % 3] - verts[k]).length());
-			if (len < inv.edge_len_min) inv.edge_len_min = len;
-			if (len > inv.edge_len_max) inv.edge_len_max = len;
+			if (len < inv.edge_len_min) {
+				inv.edge_len_min = len;
+			}
+			if (len > inv.edge_len_max) {
+				inv.edge_len_max = len;
+			}
 			inv.edge_len_sum += len;
 			inv.edge_count++;
 		}
@@ -1083,14 +1131,26 @@ static void _sketch_invariants(const String &p_label, const String &p_filename) 
 		total_area += pi.area;
 		agg_aabb_min = agg_aabb_min.min(pi.aabb_min);
 		agg_aabb_max = agg_aabb_max.max(pi.aabb_max);
-		if (pi.edge_len_min < agg_edge_min) agg_edge_min = pi.edge_len_min;
-		if (pi.edge_len_max > agg_edge_max) agg_edge_max = pi.edge_len_max;
+		if (pi.edge_len_min < agg_edge_min) {
+			agg_edge_min = pi.edge_len_min;
+		}
+		if (pi.edge_len_max > agg_edge_max) {
+			agg_edge_max = pi.edge_len_max;
+		}
 		agg_edge_sum += pi.edge_len_sum;
 		agg_edge_count += pi.edge_count;
-		if (pi.triangles < tris_min) tris_min = pi.triangles;
-		if (pi.triangles > tris_max) tris_max = pi.triangles;
-		if (pi.area < area_min) area_min = pi.area;
-		if (pi.area > area_max) area_max = pi.area;
+		if (pi.triangles < tris_min) {
+			tris_min = pi.triangles;
+		}
+		if (pi.triangles > tris_max) {
+			tris_max = pi.triangles;
+		}
+		if (pi.area < area_min) {
+			area_min = pi.area;
+		}
+		if (pi.area > area_max) {
+			area_max = pi.area;
+		}
 	}
 	const uint64_t total_us = time->get_ticks_usec() - t0;
 	const Vector3 ext = agg_aabb_max - agg_aabb_min;
@@ -1161,8 +1221,8 @@ struct ExhaustiveAggregate {
 	int fail_lt_4 = 0;
 	int fail_degenerate_extent = 0;
 	int fail_collinear = 0;
-	int fail_dup_samples = 0;     // consecutive boundary points < 1 mm apart
-	int fail_self_intersect = 0;  // projected 2D boundary self-crosses
+	int fail_dup_samples = 0; // consecutive boundary points < 1 mm apart
+	int fail_self_intersect = 0; // projected 2D boundary self-crosses
 	int fail_real = 0;
 	uint64_t wall_us = 0;
 };
@@ -1204,13 +1264,15 @@ static void _classify_failure(const PackedVector3Array &p_boundary,
 		return;
 	}
 	// Collinearity via covariance matrix eigenvalue ratio. Centroid first.
-	Vector3 c;
-	for (int i = 0; i < n; ++i) c += p_boundary[i];
-	c /= float(n);
+	Vector3 centroid;
+	for (int i = 0; i < n; ++i) {
+		centroid += p_boundary[i];
+	}
+	centroid /= float(n);
 	// 3x3 covariance.
 	double cov[3][3] = { { 0, 0, 0 }, { 0, 0, 0 }, { 0, 0, 0 } };
 	for (int i = 0; i < n; ++i) {
-		const Vector3 d = p_boundary[i] - c;
+		const Vector3 d = p_boundary[i] - centroid;
 		cov[0][0] += double(d.x) * d.x;
 		cov[1][1] += double(d.y) * d.y;
 		cov[2][2] += double(d.z) * d.z;
@@ -1242,8 +1304,12 @@ static void _classify_failure(const PackedVector3Array &p_boundary,
 	// Self-intersection check on the projection to the best-fit plane.
 	// Drop the axis whose variance is smallest, keep the other two.
 	int drop = 0;
-	if (cov[1][1] < cov[drop][drop]) drop = 1;
-	if (cov[2][2] < cov[drop][drop]) drop = 2;
+	if (cov[1][1] < cov[drop][drop]) {
+		drop = 1;
+	}
+	if (cov[2][2] < cov[drop][drop]) {
+		drop = 2;
+	}
 	const int ax0 = (drop + 1) % 3;
 	const int ax1 = (drop + 2) % 3;
 	auto proj2 = [&](const Vector3 &v) -> Vector2 {
@@ -1255,7 +1321,9 @@ static void _classify_failure(const PackedVector3Array &p_boundary,
 		const Vector2 b = proj2(p_boundary[(i + 1) % n]);
 		// Skip adjacent + identical edges.
 		for (int j = i + 2; j < n; ++j) {
-			if (i == 0 && j == n - 1) continue;
+			if (i == 0 && j == n - 1) {
+				continue;
+			}
 			const Vector2 c = proj2(p_boundary[j]);
 			const Vector2 d = proj2(p_boundary[(j + 1) % n]);
 			if (_segs_cross_2d(a, b, c, d)) {
@@ -1299,10 +1367,14 @@ static void _exhaustive_run_one(const char *p_filename,
 	double area = 0.0;
 	for (int i = 0; i < cycles.size(); ++i) {
 		const PackedInt32Array cycle = cycles[i];
-		if (cycle.size() < 3) continue;
+		if (cycle.size() < 3) {
+			continue;
+		}
 		const PackedVector3Array boundary =
 				graph->sample_cycle_boundary(cycle, tel);
-		if (boundary.size() < 3) continue;
+		if (boundary.size() < 3) {
+			continue;
+		}
 		Dictionary r = CassieTriangulator::triangulate(boundary, tel);
 		if (!bool(r.get("success", false))) {
 			fail++;
@@ -1312,7 +1384,9 @@ static void _exhaustive_run_one(const char *p_filename,
 		succ++;
 		const PackedVector3Array verts = r.get("vertices", PackedVector3Array());
 		const PackedInt32Array faces = r.get("faces", PackedInt32Array());
-		if (verts.size() == 0 || faces.size() == 0) continue;
+		if (verts.size() == 0 || faces.size() == 0) {
+			continue;
+		}
 		const PatchInvariants pi = _measure_patch(verts, faces);
 		tris += pi.triangles;
 		area += pi.area;
@@ -1332,7 +1406,9 @@ template <typename T>
 static T _median(Vector<T> p_v) {
 	p_v.sort();
 	const int n = p_v.size();
-	if (n == 0) return T(0);
+	if (n == 0) {
+		return T(0);
+	}
 	return p_v[n / 2];
 }
 
@@ -1358,14 +1434,16 @@ static void _exhaustive_report(const String &p_label,
 	const double mean_tris = double(agg.tris_total) / double(agg.files_loaded);
 	const double mean_succ = double(agg.cycles_succ) / double(agg.files_loaded);
 	const double succ_rate = agg.cycles_total > 0
-			? double(agg.cycles_succ) / double(agg.cycles_total) : 0.0;
+			? double(agg.cycles_succ) / double(agg.cycles_total)
+			: 0.0;
 	MESSAGE(vformat(
 			"[CassieExhaustive] %s  per_file mean: succ=%.1f  tris=%.1f  area=%.4f m^2  "
 			"cycle_succ_rate=%.1f %%",
 			p_label, mean_succ, mean_tris, mean_area, succ_rate * 100.0));
 	const int fail_legit = agg.fail_lt_4 + agg.fail_degenerate_extent + agg.fail_collinear;
 	const double real_fail_rate = agg.cycles_total > 0
-			? double(agg.fail_real) / double(agg.cycles_total) : 0.0;
+			? double(agg.fail_real) / double(agg.cycles_total)
+			: 0.0;
 	MESSAGE(vformat(
 			"[CassieExhaustive] %s  fail breakdown: lt_4=%d  degen_extent=%d  "
 			"collinear=%d  dup_samples=%d  self_intersect=%d  real=%d  "
@@ -1374,37 +1452,107 @@ static void _exhaustive_report(const String &p_label,
 			agg.fail_collinear, agg.fail_dup_samples, agg.fail_self_intersect,
 			agg.fail_real,
 			(agg.cycles_total > 0
-					? double(fail_legit + agg.fail_dup_samples + agg.fail_self_intersect)
-							/ double(agg.cycles_total) * 100.0
-					: 0.0),
+							? double(fail_legit + agg.fail_dup_samples + agg.fail_self_intersect) / double(agg.cycles_total) * 100.0
+							: 0.0),
 			real_fail_rate * 100.0));
 }
 
 // 72 user-study files: <participant>-<system>-<model>.json
 // participants 1-12 × systems {0,1,2} × models {1,2}.
 static const char *kTrainStudyFiles[] = {
-	"01-0-1.json", "01-0-2.json", "01-1-1.json", "01-1-2.json", "01-2-1.json", "01-2-2.json",
-	"02-0-1.json", "02-0-2.json", "02-1-1.json", "02-1-2.json", "02-2-1.json", "02-2-2.json",
-	"03-0-1.json", "03-0-2.json", "03-1-1.json", "03-1-2.json", "03-2-1.json", "03-2-2.json",
-	"04-0-1.json", "04-0-2.json", "04-1-1.json", "04-1-2.json", "04-2-1.json", "04-2-2.json",
-	"05-0-1.json", "05-0-2.json", "05-1-1.json", "05-1-2.json", "05-2-1.json", "05-2-2.json",
-	"06-0-1.json", "06-0-2.json", "06-1-1.json", "06-1-2.json", "06-2-1.json", "06-2-2.json",
-	"07-0-1.json", "07-0-2.json", "07-1-1.json", "07-1-2.json", "07-2-1.json", "07-2-2.json",
-	"08-0-1.json", "08-0-2.json", "08-1-1.json", "08-1-2.json", "08-2-1.json", "08-2-2.json",
-	"09-0-1.json", "09-0-2.json", "09-1-1.json", "09-1-2.json", "09-2-1.json", "09-2-2.json",
-	"10-0-1.json", "10-0-2.json", "10-1-1.json", "10-1-2.json", "10-2-1.json", "10-2-2.json",
-	"11-0-1.json", "11-0-2.json", "11-1-1.json", "11-1-2.json", "11-2-1.json", "11-2-2.json",
-	"12-0-1.json", "12-0-2.json", "12-1-1.json", "12-1-2.json", "12-2-1.json", "12-2-2.json",
+	"01-0-1.json",
+	"01-0-2.json",
+	"01-1-1.json",
+	"01-1-2.json",
+	"01-2-1.json",
+	"01-2-2.json",
+	"02-0-1.json",
+	"02-0-2.json",
+	"02-1-1.json",
+	"02-1-2.json",
+	"02-2-1.json",
+	"02-2-2.json",
+	"03-0-1.json",
+	"03-0-2.json",
+	"03-1-1.json",
+	"03-1-2.json",
+	"03-2-1.json",
+	"03-2-2.json",
+	"04-0-1.json",
+	"04-0-2.json",
+	"04-1-1.json",
+	"04-1-2.json",
+	"04-2-1.json",
+	"04-2-2.json",
+	"05-0-1.json",
+	"05-0-2.json",
+	"05-1-1.json",
+	"05-1-2.json",
+	"05-2-1.json",
+	"05-2-2.json",
+	"06-0-1.json",
+	"06-0-2.json",
+	"06-1-1.json",
+	"06-1-2.json",
+	"06-2-1.json",
+	"06-2-2.json",
+	"07-0-1.json",
+	"07-0-2.json",
+	"07-1-1.json",
+	"07-1-2.json",
+	"07-2-1.json",
+	"07-2-2.json",
+	"08-0-1.json",
+	"08-0-2.json",
+	"08-1-1.json",
+	"08-1-2.json",
+	"08-2-1.json",
+	"08-2-2.json",
+	"09-0-1.json",
+	"09-0-2.json",
+	"09-1-1.json",
+	"09-1-2.json",
+	"09-2-1.json",
+	"09-2-2.json",
+	"10-0-1.json",
+	"10-0-2.json",
+	"10-1-1.json",
+	"10-1-2.json",
+	"10-2-1.json",
+	"10-2-2.json",
+	"11-0-1.json",
+	"11-0-2.json",
+	"11-1-1.json",
+	"11-1-2.json",
+	"11-2-1.json",
+	"11-2-2.json",
+	"12-0-1.json",
+	"12-0-2.json",
+	"12-1-1.json",
+	"12-1-2.json",
+	"12-2-1.json",
+	"12-2-2.json",
 };
 
 // 16 demo files (varied, no naming-convention constraints).
 static const char *kTestDemoFiles[] = {
-	"architecture.json", "architecture-2.json", "chair.json",
-	"computer-mouse.json", "dress.json", "flower.json",
-	"guitar.json", "hat.json", "hmd_modern.json",
-	"hmd_sutherland.json", "large_hat.json", "monster_head.json",
-	"sewing-machine.json", "shield.json", "teapot.json",
-	"vacuum.json", "vintage_car.json",
+	"architecture.json",
+	"architecture-2.json",
+	"chair.json",
+	"computer-mouse.json",
+	"dress.json",
+	"flower.json",
+	"guitar.json",
+	"hat.json",
+	"hmd_modern.json",
+	"hmd_sutherland.json",
+	"large_hat.json",
+	"monster_head.json",
+	"sewing-machine.json",
+	"shield.json",
+	"teapot.json",
+	"vacuum.json",
+	"vintage_car.json",
 };
 
 // Single-fixture dumper for Blender side-by-side comparison. Defaults to

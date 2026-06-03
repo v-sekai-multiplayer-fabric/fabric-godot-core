@@ -12,7 +12,7 @@ enum ShapeType {
 	ERROR_OTHERS
 };
 
-static void errors(int type, char * filename){
+[[maybe_unused]] static void errors(int type, char * filename){
 	#if OUTPUT_ERROR
 	switch(type){
 	case ERROR_CURVE:
