@@ -13,7 +13,10 @@ def configure(env):
 def get_doc_classes():
     return [
         "AudioStreamNative",
+        "ResourceImporterAudioNative",
+        "ResourceImporterVideoNative",
         "VideoStreamNative",
+        "VideoStreamPlaybackNative",
     ]
 
 
