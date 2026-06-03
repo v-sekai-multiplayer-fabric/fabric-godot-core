@@ -79,6 +79,13 @@
 
 # Modules
 
+## V-Sekai multiplayer-fabric modules
+/modules/xr_grid/                             @v-sekai-multiplayer-fabric/multiplayer-fabric
+/modules/xr_grid/doc_classes/                 @v-sekai-multiplayer-fabric/multiplayer-fabric @godotengine/documentation
+/modules/cassie/                              @v-sekai-multiplayer-fabric/multiplayer-fabric
+/modules/cassie/doc_classes/                  @v-sekai-multiplayer-fabric/multiplayer-fabric @godotengine/documentation
+/modules/http3/                               @v-sekai-multiplayer-fabric/multiplayer-fabric
+
 ## Audio (+ video)
 /modules/interactive_music/                   @godotengine/audio
 /modules/interactive_music/doc_classes/       @godotengine/audio @godotengine/documentation
