@@ -109,15 +109,15 @@ void XRGridFabricManager::_notification(int p_what) {
 			++frame_counter;
 			hlc_counter = 0;
 			while (peer->get_available_packet_count() > 0) {
-				const uint8_t *data = nullptr;
+				const uint8_t *packet_data = nullptr;
 				int len = 0;
-				if (peer->get_packet(&data, len) != OK || len <= 0) {
+				if (peer->get_packet(&packet_data, len) != OK || len <= 0) {
 					break;
 				}
 				if (len == 100) {
 					PackedByteArray pkt;
 					pkt.resize(len);
-					memcpy(pkt.ptrw(), data, len);
+					memcpy(pkt.ptrw(), packet_data, len);
 					emit_signal("entity_received", pkt);
 				}
 			}
