@@ -163,6 +163,11 @@ Operating system defines, see http://sourceforge.net/p/predef/wiki/OperatingSyst
 #define SLANG_PSP2 1
 #elif defined(__ghs__)
 #define SLANG_WIIU 1
+#elif defined(__EMSCRIPTEN__)
+// V-Sekai patch: Emscripten/WebAssembly is POSIX-like; the prelude's Linux
+// code paths (standard C++) compile under it, so map it to SLANG_LINUX
+// rather than hitting the unknown-platform error below.
+#define SLANG_LINUX 1
 #else
 #error "unknown target platform"
 #endif

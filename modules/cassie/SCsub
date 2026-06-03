@@ -275,11 +275,20 @@ sources = (
     + Glob("src/sketch/*.cpp")
     + Glob("src/constraints/*.cpp")
     + Glob("src/solver/*.cpp")
-    + Glob("src/solver/slang_dispatch/*.cpp")
     + mwt_sources
 )
 
 env_cassie.add_source_files(env.modules_sources, sources)
+
+# The slang_dispatch wrappers #include the vendored Slang CPU prelude, whose
+# COM-style interface structs (ISlangUnknown, ITexture, IRWTexture, ...) declare
+# virtual methods with non-virtual destructors. Compile them with a clone that
+# silences -Wnon-virtual-dtor on clang/clang-cl/gcc/mingw so -Werror doesn't
+# reject the vendored headers (plain MSVC has no such warning).
+env_slang = env_cassie.Clone()
+if "clang" in _compiler or "g++" in _compiler or "gcc" in _compiler:
+    env_slang.Append(CCFLAGS=["-Wno-non-virtual-dtor"])
+env_slang.add_source_files(env.modules_sources, Glob("src/solver/slang_dispatch/*.cpp"))
 # Geogram sources use the exceptions-enabled env clone.
 env_geogram.add_source_files(env.modules_sources, geogram_sources)
 env_geogram.add_source_files(env.modules_sources, pmp_sources)
