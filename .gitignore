@@ -271,16 +271,6 @@ bld/
 !thirdparty/**/arm/
 !thirdparty/**/arm64/
 
-# Do not ignore vendored thirdparty paths that collide with godot's default
-# patterns ([Bb]in/, [Oo]bj/, st[A-Za-z0-9]{6}, *_h.h). These are upstream
-# library trees we ship as-is, not godot build output.
-!thirdparty/geogram/src/bin/
-!thirdparty/geogram/src/bin/**
-!thirdparty/geogram/src/lib/geogram_gfx/gui/gui_state_h.h
-!thirdparty/pmp/data/obj/
-!thirdparty/pmp/data/obj/**
-!thirdparty/pmp/external/eigen-3.4.0/Eigen/St*
-
 thirdparty/swappy-frame-pacing/arm64-v8a/abi.json
 thirdparty/swappy-frame-pacing/armeabi-v7a/abi.json
 thirdparty/swappy-frame-pacing/x86/abi.json
@@ -406,3 +396,19 @@ $RECYCLE.BIN/
 *.msp
 *.lnk
 *.generated.props
+
+###########################################
+### Vendored thirdparty un-ignore rules ###
+###########################################
+
+# Vendored thirdparty trees collide with godot's default patterns
+# ([Bb]in/, [Oo]bj/, st[A-Za-z0-9]{6}, *_h.h, *.obj). These are
+# upstream library trees we ship as-is, not godot build output.
+# Lives at the end of .gitignore so the broad rules above don't
+# re-ignore them (last-match-wins).
+!thirdparty/geogram/src/bin/
+!thirdparty/geogram/src/bin/**
+!thirdparty/geogram/src/lib/geogram_gfx/gui/gui_state_h.h
+!thirdparty/pmp/data/obj/
+!thirdparty/pmp/data/obj/**
+!thirdparty/pmp/external/eigen-3.4.0/Eigen/St*
