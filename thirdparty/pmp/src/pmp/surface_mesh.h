@@ -5,7 +5,13 @@
 #pragma once
 
 #include <vector>
+// V-Sekai patch: std::filesystem::path is unavailable below the macOS 10.15 /
+// iOS deployment target Godot builds against, and CASSIE never compiles pmp's
+// file I/O (pmp/io/*.cpp is excluded from the build). Guard the include and the
+// read_pmp/write_pmp friend declarations below so the header compiles on Apple.
+#if !defined(__APPLE__)
 #include <filesystem>
+#endif
 #include <cstdlib>  // -fno-exceptions patch: std::abort
 
 #include "pmp/types.h"
@@ -2010,9 +2016,11 @@ private:
     inline bool has_garbage() const { return has_garbage_; }
 
     // io functions that need access to internal details
+#if !defined(__APPLE__)
     friend void read_pmp(SurfaceMesh&, const std::filesystem::path&);
     friend void write_pmp(const SurfaceMesh&, const std::filesystem::path&,
                           const IOFlags&);
+#endif
 
     // property containers for each entity type and object
     PropertyContainer vprops_;

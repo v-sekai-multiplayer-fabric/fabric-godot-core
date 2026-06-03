@@ -714,7 +714,7 @@ void DMWT::getResult(double** outFaces, int* outNum, double** outPoints, float**
 }
 
 void DMWT::getResult(int** outFaces, int* outNum, double** outPoints, float** outNorms, int* outPn) {
-  double* finalPoints;
+  [[maybe_unused]] double* finalPoints;
   if (isDeGen) {
     finalPoints = deGenPoints;
   } else {

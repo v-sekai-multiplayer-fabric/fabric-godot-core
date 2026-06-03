@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8" ?>
-<class name="IntrinsicTriangulation" inherits="RefCounted" api_type="editor" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="../../../doc/class.xsd">
+<class name="IntrinsicTriangulation" inherits="RefCounted" api_type="core" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="../../../doc/class.xsd">
 	<brief_description>
 		Improves an existing triangle mesh by flipping edges toward the Delaunay criterion.
 	</brief_description>
@@ -103,7 +103,7 @@
 			<return type="void" />
 			<param index="0" name="iterations" type="int" default="5" />
 			<description>
-				Moves each interior vertex toward the average of its neighbours for [param iterations] Laplacian passes. Boundary vertices are not moved.
+				Moves each interior vertex toward the average of its neighbors for [param iterations] Laplacian passes. Boundary vertices are not moved.
 			</description>
 		</method>
 		<method name="use_delaunay_flips">

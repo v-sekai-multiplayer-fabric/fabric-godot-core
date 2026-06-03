@@ -660,7 +660,10 @@ SLANG_FORCE_INLINE float f16tof32(const uint32_t value)
 #endif // (defined(__clang__) && __clang_major__ >= 15) || (defined(__GNUC__) && __GNUC__ >= 12)
 #endif // C++23
 
-#ifdef FLT16_MIN
+// V-Sekai patch: Emscripten/WebAssembly defines FLT16_MIN but clang rejects
+// the _Float16 type for the wasm target ("not supported on this target").
+// Exclude it so wasm falls through to the portable `struct half` fallback.
+#if defined(FLT16_MIN) && !defined(__EMSCRIPTEN__)
 typedef _Float16 half;
 #elif __STDCPP_FLOAT16_T__ == 1
 typedef std::float16_t half;

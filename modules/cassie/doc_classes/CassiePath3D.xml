@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8" ?>
-<class name="CassiePath3D" inherits="Resource" api_type="editor" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="../../../doc/class.xsd">
+<class name="CassiePath3D" inherits="Resource" api_type="core" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="../../../doc/class.xsd">
 	<brief_description>
 		A 3D polyline with a surface normal stored per point.
 	</brief_description>
@@ -15,7 +15,7 @@
 		# Reduce jitter from freehand input
 		path.beautify_taubin(0.5, -0.53, 5)
 
-		# Normalise spacing so the triangulator sees uniform boundary density
+		# Normalize spacing so the triangulator sees uniform boundary density
 		path.resample_uniform(30)
 
 		var surface := CassieSurface.new()
@@ -41,7 +41,7 @@
 			<param index="0" name="lambda" type="float" default="0.5" />
 			<param index="1" name="iterations" type="int" default="5" />
 			<description>
-				Smooths the path with uniform Laplacian relaxation. Each iteration moves every interior point toward the average of its two neighbours by [param lambda]. Shrinks the curve slightly with each pass; use [method beautify_taubin] to avoid shrinkage.
+				Smooths the path with uniform Laplacian relaxation. Each iteration moves every interior point toward the average of its two neighbors by [param lambda]. Shrinks the curve slightly with each pass; use [method beautify_taubin] to avoid shrinkage.
 			</description>
 		</method>
 		<method name="beautify_taubin">
@@ -159,7 +159,7 @@
 		<method name="smooth_normals">
 			<return type="void" />
 			<description>
-				Averages each normal with its neighbours to reduce sharp normal discontinuities along the path.
+				Averages each normal with its neighbors to reduce sharp normal discontinuities along the path.
 			</description>
 		</method>
 	</methods>
