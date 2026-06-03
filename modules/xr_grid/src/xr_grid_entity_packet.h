@@ -1,21 +1,32 @@
 /**************************************************************************/
-/*  xr_grid_entity_packet.h                                                */
+/*  xr_grid_entity_packet.h                                               */
 /**************************************************************************/
-/* Native port of                                                          */
-/* xr-grid/addons/procedural_3d_grid/core/fabric/entity_packet.gd.         */
-/*                                                                         */
-/* Fixed 100-byte packet format the xr-grid fabric uses for player + stroke*/
-/* entity sync. Layout (little-endian):                                    */
-/*   [0..3]   global_id u32     (peer_id × 3 + sub_index)                  */
-/*   [4..27]  position 3× f64                                              */
-/*   [28..33] velocity 3× i16   (quantized × 1000, clamped ±32767)         */
-/*   [34..39] acceleration 3× i16 (currently always zero, reserved)        */
-/*   [40..43] HLC frame×counter (u24 frame | u8 counter)                   */
-/*   [44..47] entity_class u8 << 24 | flags u8 << 16 | owner_id u16        */
-/*   [48..51] sub_index u16 << 16 | 0                                      */
-/*   [52..55] rotation pack: swing_y_i16 lo | swing_z_i16 hi               */
-/*   [56..59] rotation pack: twist_x_i16 lo | reserved 0 hi                */
-/*   [60..99] payload[4..13] reserved zeros                                */
+/*                         This file is part of:                          */
+/*                             GODOT ENGINE                               */
+/*                        https://godotengine.org                         */
+/**************************************************************************/
+/* Copyright (c) 2014-present Godot Engine contributors (see AUTHORS.md). */
+/* Copyright (c) 2007-2014 Juan Linietsky, Ariel Manzur.                  */
+/*                                                                        */
+/* Permission is hereby granted, free of charge, to any person obtaining  */
+/* a copy of this software and associated documentation files (the        */
+/* "Software"), to deal in the Software without restriction, including    */
+/* without limitation the rights to use, copy, modify, merge, publish,    */
+/* distribute, sublicense, and/or sell copies of the Software, and to     */
+/* permit persons to whom the Software is furnished to do so, subject to  */
+/* the following conditions:                                              */
+/*                                                                        */
+/* The above copyright notice and this permission notice shall be         */
+/* included in all copies or substantial portions of the Software.        */
+/*                                                                        */
+/* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,        */
+/* EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF     */
+/* MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. */
+/* IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY   */
+/* CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,   */
+/* TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE      */
+/* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                 */
+/**************************************************************************/
 
 #pragma once
 

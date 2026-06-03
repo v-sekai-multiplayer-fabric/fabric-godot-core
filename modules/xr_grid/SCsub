@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+from misc.utility.scons_hints import *
+
 """
 SCsub for the xr-grid engine module.
 
@@ -21,13 +23,16 @@ The actual scene + GDScript layer lives under project/ (read-only,
 sourced from upstream) and integration/ (overlay scripts that drop
 into the xr-grid project to wire CassieSketcher in).
 """
+
 Import("env")
 
 env_xr_grid = env.Clone()
 
-env_xr_grid.Append(CPPPATH=[
-    "#modules/xr_grid/src",
-])
+env_xr_grid.Append(
+    CPPPATH=[
+        "#modules/xr_grid/src",
+    ]
+)
 
 sources = [
     "register_types.cpp",
