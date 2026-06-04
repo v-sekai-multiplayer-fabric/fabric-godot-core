@@ -133,6 +133,9 @@ namespace GEO {
         out << "Line " << line_num_
             << ": field #" << index
             << " is not a valid " << type << " value: " << field(index);
-        throw std::logic_error(out.str());
+        // -fno-exceptions patch: report and abort instead of throwing
+        // std::logic_error. See thirdparty/geogram/patches/.
+        Logger::err("I/O") << out.str() << std::endl;
+        geo_abort();
     }
 }

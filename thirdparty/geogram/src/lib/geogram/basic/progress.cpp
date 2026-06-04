@@ -99,7 +99,9 @@ namespace {
      */
     void task_progress(index_t step, index_t percent) {
         if(task_canceled_) {
-            throw TaskCanceled();
+            // -fno-exceptions patch: CASSIE never cancels geogram tasks; abort
+            // instead of throwing TaskCanceled. See thirdparty/geogram/patches/.
+            geo_abort();
         }
 
         if(progress_client_) {

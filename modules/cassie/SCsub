@@ -197,8 +197,10 @@ basic_skip = {
     "geofile.cpp",  # GeoFile bin serialization + zlib macro collision
     "android_utils.cpp",  # JNI
     "boolean_expression.cpp",  # CSG expression parser
-    "line_stream.cpp",  # file-format line reader
-    "progress.cpp",  # progress UI callbacks
+    # line_stream.cpp (GEO::LineInput) and progress.cpp (GEO::Progress) were
+    # skipped as "unreached", but other compiled geogram TUs reference their
+    # symbols, so the link fails with undefined GEO::LineInput / GEO::Progress.
+    # Keep them in the build to provide the definitions.
 }
 delaunay_skip = {
     "delaunay_2d.cpp",  # we use 3D only
