@@ -46,6 +46,10 @@
 #include <geogram/basic/argused.h>
 #include <vector>
 #include <string.h>
+// V-Sekai patch: std::new_handler / std::get_new_handler (used below in the
+// custom operator new) live in <new>; libc++ (Android NDK, Emscripten) does
+// not pull it in transitively the way libstdc++ does.
+#include <new>
 #include <stdlib.h>
 
 #ifdef GEO_OS_WINDOWS

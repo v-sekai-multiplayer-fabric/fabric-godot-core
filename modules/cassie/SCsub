@@ -112,6 +112,14 @@ elif "g++" in _compiler or "gcc" in _compiler:
     # the same constraint set.
     env_cassie.Append(CCFLAGS=["-frounding-math", "-fsignaling-nans"])
 
+# Eigen's template headers are pulled into many CASSIE TUs (via PMP and the
+# solver headers) and trip two GCC -Werror diagnostics that only ever fire from
+# Eigen: -Wduplicated-branches (XprHelper / ForwardDeclarations) and
+# -Wctor-dtor-privacy (the all-private Eigen::ReturnByValue guard classes).
+# Silence them module-wide rather than chasing every Eigen-including file.
+if "g++" in _compiler or "gcc" in _compiler:
+    env_cassie.Append(CCFLAGS=["-Wno-duplicated-branches", "-Wno-ctor-dtor-privacy"])
+
 # --- SPIR-V → byte array headers ---
 # For each .spv under thirdparty/avbd/, emit a sibling .spv.gen.h with
 # the bytes baked into a `static constexpr uint8_t <name>_spv[]` array
