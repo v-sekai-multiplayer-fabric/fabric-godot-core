@@ -1,9 +1,5 @@
 def can_build(env, platform):
-    # CASSIE's native path pulls heavy research thirdparty (Geogram, Eigen, PMP,
-    # Slang). It builds on Linux/Windows/macOS/Android/iOS; only the emscripten
-    # (Web) toolchain can't carry it (no -fno-exceptions support for the Geogram
-    # throw sites, plus wasm-specific type limits), so gate the module off Web.
-    return platform != "web"
+    return True
 
 
 def configure(env):
