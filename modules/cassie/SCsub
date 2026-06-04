@@ -43,18 +43,6 @@ BUILD_QUAD_MESHING = False
 env_cassie.Append(
     CPPPATH=[
         "#modules/cassie/src",
-        "#thirdparty/multipolygon_triangulator",
-        # ENG-88: Geogram (BSD-3) for the 3D Delaunay BDEL path.
-        "#thirdparty/geogram/src/lib",
-        # OpenNL's .c files use `#include <OpenNL/nl.h>` — relative to the
-        # geogram third_party root.
-        "#thirdparty/geogram/src/lib/geogram/third_party",
-        # PMP (MIT) for half-edge manifold mesh + uniform_remeshing in
-        # refine_patch. Mirrors upstream cassie-triangulation's libs/pmp-library
-        # pin (commit f2fb04f4). Uses our canonical thirdparty/eigen, not
-        # PMP's bundled external/eigen (we don't ship it).
-        "#thirdparty/pmp/src",
-        "#thirdparty/eigen",
     ]
 )
 
@@ -112,13 +100,29 @@ elif "g++" in _compiler or "gcc" in _compiler:
     # the same constraint set.
     env_cassie.Append(CCFLAGS=["-frounding-math", "-fsignaling-nans"])
 
-# Eigen's template headers are pulled into many CASSIE TUs (via PMP and the
-# solver headers) and trip two GCC -Werror diagnostics that only ever fire from
-# Eigen: -Wduplicated-branches (XprHelper / ForwardDeclarations) and
-# -Wctor-dtor-privacy (the all-private Eigen::ReturnByValue guard classes).
-# Silence them module-wide rather than chasing every Eigen-including file.
-if "g++" in _compiler or "gcc" in _compiler:
-    env_cassie.Append(CCFLAGS=["-Wno-duplicated-branches", "-Wno-ctor-dtor-privacy"])
+# The vendored thirdparty headers (Eigen, PMP, Geogram, the MWT triangulator)
+# are pulled into CASSIE's own TUs and are not -Werror-clean across the compiler
+# matrix — Eigen alone trips -Wduplicated-branches, -Wctor-dtor-privacy and
+# -Wunused-but-set-variable on different toolchains, and MSVC promotes its own
+# set via /WX. Add them as SYSTEM includes so warnings originating in these
+# headers are suppressed everywhere, without silencing CASSIE's own code.
+_system_includes = [
+    "#thirdparty/multipolygon_triangulator",
+    "#thirdparty/geogram/src/lib",
+    # OpenNL's .c files use `#include <OpenNL/nl.h>`, relative to this root.
+    "#thirdparty/geogram/src/lib/geogram/third_party",
+    "#thirdparty/pmp/src",
+    "#thirdparty/eigen",
+]
+if env_cassie.get("platform") == "windows" and "g++" not in _compiler:
+    # MSVC / clang-cl: /external:I marks an include tree as external and
+    # /external:W0 sets its warning level to 0 (so /WX cannot promote them).
+    env_cassie.Append(CCFLAGS=["/external:W0"])
+    for _inc in _system_includes:
+        env_cassie.Append(CCFLAGS=["/external:I", Dir(_inc).path])
+else:
+    for _inc in _system_includes:
+        env_cassie.Append(CCFLAGS=["-isystem", Dir(_inc).path])
 
 # --- SPIR-V → byte array headers ---
 # For each .spv under thirdparty/avbd/, emit a sibling .spv.gen.h with
@@ -153,10 +157,10 @@ mwt_sources = Glob("#thirdparty/multipolygon_triangulator/*.cpp")
 # patch those sites in the subtree to std::abort() so the no-exceptions
 # constraint holds.
 env_geogram = env_cassie.Clone()
-if env_geogram.get("CXX") and "g++" in str(env_geogram["CXX"]).lower():
-    # Suppress noisy MSVC-only #pragma intrinsic warnings from
-    # geogram/basic/thread_sync.h that MinGW reports as unknown.
-    env_geogram.Append(CXXFLAGS=["-Wno-unknown-pragmas"])
+# Geogram (and the PMP sources compiled under this env) is vendored research
+# code that is not -Werror-clean across the matrix; compile it warnings-off,
+# Godot's convention for thirdparty, instead of chasing each diagnostic.
+env_geogram.disable_warnings()
 
 # --- Geogram sources (ENG-88) ---
 # Mirrors thirdparty/geogram/src/lib/geogram/CMakeLists.txt's
