@@ -1,5 +1,9 @@
 def can_build(env, platform):
-    return True
+    # CASSIE's native path pulls heavy research thirdparty (Geogram, Eigen, PMP,
+    # Slang) that is not -Werror / -fno-exceptions-clean on the emscripten (Web)
+    # and iOS libc++ toolchains. Gate the in-engine module off those targets;
+    # Linux/Windows/macOS/Android keep the native path.
+    return platform not in ("web", "ios")
 
 
 def configure(env):
