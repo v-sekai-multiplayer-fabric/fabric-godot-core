@@ -65,6 +65,10 @@ git diff <upstream-sha> -- src/lib/geogram > patches/0001-...-NAME.patch
 
 * `0001-no-exceptions-string-h.patch` — string.h `to_int`/`to_double`/`to_bool`
   ConversionError sites. Replaced with `geo_runtime_abort_impl`. **Pending — written but not yet applied.**
+* `0002-android-new-handler-include.patch` — `memory.h` adds `#include <new>`
+  so `std::new_handler` / `std::get_new_handler` resolve on Android's libc++
+  (glibc++/MSVC pull `<new>` in transitively; the Android NDK toolchain does
+  not, breaking the `android.editor.arm64` build). **Applied.**
 
 Next-session inventory of remaining throws to convert:
 
