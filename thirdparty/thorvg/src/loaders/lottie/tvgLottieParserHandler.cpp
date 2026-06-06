@@ -1,5 +1,5 @@
-/*
- * Copyright (c) 2023 - 2024 the ThorVG project. All rights reserved.
+    /*
+ * Copyright (c) 2023 - 2026 ThorVG project. All rights reserved.
 
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -20,36 +20,8 @@
  * SOFTWARE.
  */
 
-/*
- * Copyright (c) 2020 Samsung Electronics Co., Ltd. All rights reserved.
-
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
-
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
-
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- */
-
+#include "tvgStr.h"
 #include "tvgLottieParserHandler.h"
-
-
-/************************************************************************/
-/* Internal Class Implementation                                        */
-/************************************************************************/
-
-static const int PARSE_FLAGS = kParseDefaultFlags | kParseInsituFlag;
 
 
 /************************************************************************/
@@ -59,12 +31,12 @@ static const int PARSE_FLAGS = kParseDefaultFlags | kParseInsituFlag;
 
 bool LookaheadParserHandler::enterArray()
 {
-    if (state != kEnteringArray) {
-        Error();
-        return false;
+    if (state == kEnteringArray) {
+        parseNext();
+        return true;
     }
-    parseNext();
-    return true;
+    Error();
+    return false;
 }
 
 
@@ -86,77 +58,71 @@ bool LookaheadParserHandler::nextArrayValue()
 
 int LookaheadParserHandler::getInt()
 {
-    if (state != kHasNumber) {
-        Error();
-        return 0;
+    if (state == kHasNumber) {
+        auto result = val.GetInt();
+        parseNext();
+        return result;
     }
-    auto result = val.GetInt();
-    parseNext();
-    return result;
+    Error();
+    return 0;
 }
 
 
 float LookaheadParserHandler::getFloat()
 {
-    if (state != kHasNumber) {
-        Error();
-        return 0;
+    if (state == kHasNumber) {
+        auto result = val.GetFloat();
+        parseNext();
+        return result;
     }
-    auto result = val.GetFloat();
-    parseNext();
-    return result;
+    Error();
+    return 0;
 }
 
 
 const char* LookaheadParserHandler::getString()
 {
-    if (state != kHasString) {
-        Error();
-        return nullptr;
+    if (state == kHasString) {
+        auto result = val.GetString();
+        parseNext();
+        return result;
     }
-    auto result = val.GetString();
-    parseNext();
-    return result;
+    Error();
+    return nullptr;
 }
 
 
 char* LookaheadParserHandler::getStringCopy()
 {
-    auto str = getString();
-    if (str) return strdup(str);
-    return nullptr;
+    return tvg::duplicate(getString());
 }
 
 
 bool LookaheadParserHandler::getBool()
 {
-    if (state != kHasBool) {
-        Error();
-        return false;
+    if (state == kHasBool) {
+        auto result = val.GetBool();
+        parseNext();
+        return result;
     }
-    auto result = val.GetBool();
-    parseNext();
-    return result;
+    Error();
+    return false;
 }
 
 
 void LookaheadParserHandler::getNull()
 {
-    if (state != kHasNull) {
-        Error();
+    if (state == kHasNull) {
+        parseNext();
         return;
     }
-    parseNext();
+    Error();
 }
 
 
 bool LookaheadParserHandler::parseNext()
 {
-    if (reader.HasParseError()) {
-        Error();
-        return false;
-    }
-    if (!reader.IterativeParseNext<PARSE_FLAGS>(iss, *this)) {
+    if (reader.HasParseError() || !reader.IterativeParseNext<PARSE_FLAGS>(iss, *this)) {
         Error();
         return false;
     }
@@ -166,12 +132,12 @@ bool LookaheadParserHandler::parseNext()
 
 bool LookaheadParserHandler::enterObject()
 {
-    if (state != kEnteringObject) {
-        Error();
-        return false;
+    if (state == kEnteringObject) {
+        parseNext();
+        return true;
     }
-    parseNext();
-    return true;
+    Error();
+    return false;
 }
 
 
@@ -219,10 +185,8 @@ const char* LookaheadParserHandler::nextObjectKey()
 }
 
 
-void LookaheadParserHandler::skip(const char* key)
+void LookaheadParserHandler::skip()
 {
-    //if (key) TVGLOG("LOTTIE", "Skipped parsing value = %s", key);
-
     if (peekType() == kArrayType) {
         enterArray();
         skipOut(1);
@@ -238,4 +202,10 @@ void LookaheadParserHandler::skip(const char* key)
 char* LookaheadParserHandler::getPos()
 {
     return iss.src_;
+}
+
+
+bool LookaheadParserHandler::isPrimitive()
+{
+    return state >= kHasNull && state <= kHasKey;
 }

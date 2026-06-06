@@ -32,6 +32,8 @@
 
 #include "image_loader_svg.h"
 
+#include "core/object/class_db.h"
+
 #include <thorvg.h>
 
 #ifdef THREADS_ENABLED

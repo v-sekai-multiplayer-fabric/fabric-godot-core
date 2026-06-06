@@ -36,10 +36,13 @@
 #include <thorvg.h>
 
 static Ref<Image> lottie_to_sprite_sheet(Ref<JSON> p_json, float p_begin, float p_end, float p_fps, int p_columns, float p_scale, int p_size_limit, Size2i *r_sprite_size, int *r_columns, int *r_frame_count) {
-	std::unique_ptr<tvg::SwCanvas> sw_canvas = tvg::SwCanvas::gen();
-	std::unique_ptr<tvg::Animation> animation = tvg::Animation::gen();
+	std::unique_ptr<tvg::SwCanvas> sw_canvas(tvg::SwCanvas::gen());
+	std::unique_ptr<tvg::Animation> animation(tvg::Animation::gen());
 	tvg::Picture *picture = animation->picture();
-	tvg::Result res = sw_canvas->push(tvg::cast(picture));
+	// The picture is owned by the Animation; Canvas::add() would transfer
+	// ownership to the canvas, so ref() it first to keep the Animation owner.
+	picture->ref();
+	tvg::Result res = sw_canvas->add(picture);
 	ERR_FAIL_COND_V(res != tvg::Result::Success, Ref<Image>());
 
 	String lottie_str = p_json->get_parsed_text();
@@ -48,7 +51,7 @@ static Ref<Image> lottie_to_sprite_sheet(Ref<JSON> p_json, float p_begin, float 
 		lottie_str = JSON::stringify(p_json->get_data(), "", false);
 	}
 
-	res = picture->load(lottie_str.utf8().get_data(), lottie_str.utf8().size(), "lottie", true);
+	res = picture->load(lottie_str.utf8().get_data(), lottie_str.utf8().size(), "lottie", nullptr, true);
 	ERR_FAIL_COND_V_MSG(res != tvg::Result::Success, Ref<Image>(), "Failed to load Lottie.");
 
 	float origin_width, origin_height;
@@ -76,7 +79,7 @@ static Ref<Image> lottie_to_sprite_sheet(Ref<JSON> p_json, float p_begin, float 
 	memset(buffer, 0, sizeof(uint32_t) * width * height);
 
 	sw_canvas->sync();
-	res = sw_canvas->target(buffer, width, width, height, tvg::SwCanvas::ARGB8888S);
+	res = sw_canvas->target(buffer, width, width, height, tvg::ColorSpace::ARGB8888S);
 	if (res != tvg::Result::Success) {
 		memfree(buffer);
 		ERR_FAIL_V_MSG(Ref<Image>(), "Couldn't set target on ThorVG canvas.");
@@ -93,12 +96,14 @@ static Ref<Image> lottie_to_sprite_sheet(Ref<JSON> p_json, float p_begin, float 
 			float current_frame = total_frame_count * (p_begin + (p_end - p_begin) * progress);
 
 			animation->frame(current_frame);
-			res = sw_canvas->update(picture);
+			res = sw_canvas->update();
 			if (res != tvg::Result::Success) {
 				memfree(buffer);
 				ERR_FAIL_V_MSG(Ref<Image>(), "Couldn't update ThorVG pictures on canvas.");
 			}
-			res = sw_canvas->draw();
+			// draw(true) clears the target before drawing, replacing the old
+			// per-iteration Canvas::clear() that 1.0 removed.
+			res = sw_canvas->draw(true);
 			if (res != tvg::Result::Success) {
 				WARN_PRINT_ONCE("Couldn't draw ThorVG pictures on canvas.");
 			}
@@ -119,7 +124,6 @@ static Ref<Image> lottie_to_sprite_sheet(Ref<JSON> p_json, float p_begin, float 
 					image->set_pixel(x + width * column, y + height * row, color);
 				}
 			}
-			sw_canvas->clear(false);
 		}
 	}
 	memfree(buffer);

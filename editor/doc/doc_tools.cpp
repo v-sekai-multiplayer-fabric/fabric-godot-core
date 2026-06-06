@@ -499,7 +499,7 @@ void DocTools::generate(BitField<GenerateFlags> p_flags) {
 				import_option = true;
 
 				List<ResourceImporter::ImportOption> texture_options;
-				ResourceImporter *texture_importer = memnew(ResourceImporterTexture);
+				ResourceImporter *texture_importer = Object::cast_to<ResourceImporter>(ClassDB::instantiate("ResourceImporterTexture"));
 				texture_importer->get_import_options("", &texture_options);
 
 				ResourceImporter *resimp = Object::cast_to<ResourceImporter>(ClassDB::instantiate(name));

@@ -23,9 +23,11 @@
 #ifndef _TVG_LOTTIE_COMMON_
 #define _TVG_LOTTIE_COMMON_
 
-#include <cmath>
-#include "tvgCommon.h"
 #include "tvgArray.h"
+#include "tvgMath.h"
+
+namespace tvg
+{
 
 struct PathSet
 {
@@ -36,9 +38,9 @@ struct PathSet
 };
 
 
-struct RGB24
+struct RGB32
 {
-    int32_t rgb[3];
+    int32_t r, g, b;
 };
 
 
@@ -46,6 +48,15 @@ struct ColorStop
 {
     Fill::ColorStop* data = nullptr;
     Array<float>* input = nullptr;
+
+    void copy(const ColorStop& rhs, uint32_t cnt)
+    {
+        if (rhs.data) {
+            data = tvg::malloc<Fill::ColorStop>(sizeof(Fill::ColorStop) * cnt);
+            memcpy(data, rhs.data, sizeof(Fill::ColorStop) * cnt);
+        }
+        if (rhs.input) TVGERR("LOTTIE", "Must be populated!");
+    }
 };
 
 
@@ -54,21 +65,35 @@ struct TextDocument
     char* text = nullptr;
     float height;
     float shift;
-    RGB24 color;
+    RGB32 color;
     struct {
         Point pos;
-        Point size;
+        Point size{};
     } bbox;
     struct {
-        RGB24 color;
+        RGB32 color;
         float width;
         bool below = false;
     } stroke;
     char* name = nullptr;
     float size;
     float tracking = 0.0f;
-    uint8_t justify = 0;
-    uint8_t caps = 0;   //0: Regular, 1: AllCaps, 2: SmallCaps
+    float justify = 0.0f;    //horizontal alignment
+    uint8_t caps = 0;        //0: Regular, 1: AllCaps, 2: SmallCaps
+
+    void copy(const TextDocument& rhs)
+    {
+        text = duplicate(rhs.text);
+        name = duplicate(rhs.name);
+    }
+};
+
+
+struct Tween
+{
+    float frameNo = 0.0f;
+    float progress = 0.0f;  //greater than 0 and smaller than 1
+    bool active = false;
 };
 
 
@@ -78,22 +103,33 @@ static inline int32_t REMAP255(float val)
 }
 
 
-static inline RGB24 operator-(const RGB24& lhs, const RGB24& rhs)
+static inline RGB32 operator-(const RGB32& lhs, const RGB32& rhs)
 {
-    return {lhs.rgb[0] - rhs.rgb[0], lhs.rgb[1] - rhs.rgb[1], lhs.rgb[2] - rhs.rgb[2]};
+    return {lhs.r - rhs.r, lhs.g - rhs.g, lhs.b - rhs.b};
 }
 
 
-static inline RGB24 operator+(const RGB24& lhs, const RGB24& rhs)
+static inline RGB32 operator+(const RGB32& lhs, const RGB32& rhs)
 {
-    return {lhs.rgb[0] + rhs.rgb[0], lhs.rgb[1] + rhs.rgb[1], lhs.rgb[2] + rhs.rgb[2]};
+    return {lhs.r + rhs.r, lhs.g + rhs.g, lhs.b + rhs.b};
 }
 
 
-static inline RGB24 operator*(const RGB24& lhs, float rhs)
+static inline RGB32 operator*(const RGB32& lhs, float rhs)
 {
-    return {(int32_t)nearbyintf(lhs.rgb[0] * rhs), (int32_t)nearbyintf(lhs.rgb[1] * rhs), (int32_t)nearbyintf(lhs.rgb[2] * rhs)};
+    return {(int32_t)nearbyintf(lhs.r * rhs), (int32_t)nearbyintf(lhs.g * rhs), (int32_t)nearbyintf(lhs.b * rhs)};
 }
 
+
+static inline RGB32 lerp(const RGB32& s, const RGB32& e, float t)
+{
+    return {
+        tvg::clamp((int32_t)(s.r + (e.r - s.r) * t), 0, 255),
+        tvg::clamp((int32_t)(s.g + (e.g - s.g) * t), 0, 255),
+        tvg::clamp((int32_t)(s.b + (e.b - s.b) * t), 0, 255)
+    };
+}
+
+}
 
 #endif //_TVG_LOTTIE_COMMON_
