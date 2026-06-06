@@ -155,10 +155,10 @@ void CassieSurfacePatch::set_mesh(const Ref<Mesh> &p_mesh) {
 			if (lu < real_t(1e-20) || lv < real_t(1e-20)) {
 				return real_t(0);
 			}
-			real_t c = u.dot(v) / (lu * lv);
-			if (c > real_t(1)) c = real_t(1);
-			else if (c < real_t(-1)) c = real_t(-1);
-			return Math::acos(c);
+			real_t cos_a = u.dot(v) / (lu * lv);
+			if (cos_a > real_t(1)) cos_a = real_t(1);
+			else if (cos_a < real_t(-1)) cos_a = real_t(-1);
+			return Math::acos(cos_a);
 		};
 		normal_accum[i0] += face_n * vertex_angle(e_ab, e_ac);
 		normal_accum[i1] += face_n * vertex_angle(e_ba, e_bc);

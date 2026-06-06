@@ -45,7 +45,7 @@ DMWT::DMWT(int ptn, double* pts, double* deGenPts, bool isdegen) {
   }
 
   if (isDeGen) {
-    deGenPoints = new double[3 * numofpoints];
+    deGenPoints = new double[3 * (size_t)(unsigned)numofpoints];
     for (int i = 0; i < numofpoints; i++) {
       deGenPoints[i * 3]     = deGenPts[i * 3];
       deGenPoints[i * 3 + 1] = deGenPts[i * 3 + 1];
@@ -73,7 +73,7 @@ DMWT::DMWT(int ptn, double* pts, double* deGenPts, float* norms, bool isdegen) {
   }
 
   if (isDeGen) {
-    deGenPoints = new double[3 * numofpoints];
+    deGenPoints = new double[3 * (size_t)(unsigned)numofpoints];
     for (int i = 0; i < numofpoints; i++) {
       deGenPoints[i * 3]     = deGenPts[i * 3];
       deGenPoints[i * 3 + 1] = deGenPts[i * 3 + 1];
@@ -350,12 +350,11 @@ void DMWT::buildList() {
     edgeInfoList[i] = new EdgeInfo();
   }
 
-  int v1, v2, vsum, ei = -1, left, right;
+  int v1, v2, ei = -1, left, right;
   char newside;
   // scan all triangles, setup triangleInfoList and most of edgeInfoList except BiTri information
   // initialize all edgeInfoList and set its left/rightsize, left/rightEdgeInd and left/rightTris
   for (int t = 0; t < numoftris; t++) {
-    vsum = triangle(t, 0) + triangle(t, 2) + triangle(t, 1);
     for (int i = 0; i < 3; i++) {
       if (i == 2) {
         v1 = triangle(t, 0);

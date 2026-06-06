@@ -79,10 +79,10 @@ The function returns the optimal tiling cost, and the index of the first triangl
 (adjacent to eind) in the triangle list of eind (-1 if eind is on the boundary).
 */
 bool DMWT::tileSegment(int eind, char side, int ti, float& thisCost, int& thisTile){
-	float optCost = FLT_MAX, subCost=0.0, subCostSum;
+	float optCost = FLT_MAX, subCost=0.0, subCostSum=0.0f;
 	int tnum, tind, tindofti=-1, ei, ejind, ejtnum;
 	int optTile = -1, subTile = -1;
-	int ev1, ev2, tv3, v3;
+	int ev1, ev2, tv3=-1, v3;
 	int *tlist; int *ejtlist; char *elist; char newside; char *ejelist;
 	thisCost = optCost; thisTile = optTile;
 	EdgeInfo * einfo; TriangleInfo * tinfo; EdgeInfo * ejinfo;
@@ -190,8 +190,8 @@ bool DMWT::tileSegment(int eind, char side, int ti, float& thisCost, int& thisTi
 						}
 						for(int i=0; i<ejtnum; i++){
 							TriangleInfo * ejtinfo = triangleInfoList[ejtlist[i]];
-							ejtinfo->optCost[ejelist[i]] = subCost;
-							ejtinfo->optTile[ejelist[i]] = subTile;
+							ejtinfo->optCost[(int)ejelist[i]] = subCost;
+							ejtinfo->optTile[(int)ejelist[i]] = subTile;
 						}
 						//}
 					}

@@ -145,6 +145,9 @@ mwt_sources = Glob("#thirdparty/multipolygon_triangulator/*.cpp")
 # patch those sites in the subtree to std::abort() so the no-exceptions
 # constraint holds.
 env_geogram = env_cassie.Clone()
+# Geogram is vendored upstream code we don't maintain; silence its warnings
+# rather than patching the subtree (same policy as Godot's other thirdparty).
+env_geogram.disable_warnings()
 if env_geogram.get("CXX") and "g++" in str(env_geogram["CXX"]).lower():
     # Suppress noisy MSVC-only #pragma intrinsic warnings from
     # geogram/basic/thread_sync.h that MinGW reports as unknown.
