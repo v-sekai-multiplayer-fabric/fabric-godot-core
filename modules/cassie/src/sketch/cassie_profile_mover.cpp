@@ -1,16 +1,45 @@
-#include "cassie_profile_mover.h"
+/**************************************************************************/
+/*  cassie_profile_mover.cpp                                              */
+/**************************************************************************/
+/*                         This file is part of:                          */
+/*                             GODOT ENGINE                               */
+/*                        https://godotengine.org                         */
+/**************************************************************************/
+/* Copyright (c) 2014-present Godot Engine contributors (see AUTHORS.md). */
+/* Copyright (c) 2007-2014 Juan Linietsky, Ariel Manzur.                  */
+/*                                                                        */
+/* Permission is hereby granted, free of charge, to any person obtaining  */
+/* a copy of this software and associated documentation files (the        */
+/* "Software"), to deal in the Software without restriction, including    */
+/* without limitation the rights to use, copy, modify, merge, publish,    */
+/* distribute, sublicense, and/or sell copies of the Software, and to     */
+/* permit persons to whom the Software is furnished to do so, subject to  */
+/* the following conditions:                                              */
+/*                                                                        */
+/* The above copyright notice and this permission notice shall be         */
+/* included in all copies or substantial portions of the Software.        */
+/*                                                                        */
+/* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,        */
+/* EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF     */
+/* MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. */
+/* IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY   */
+/* CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,   */
+/* TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE      */
+/* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                 */
+/**************************************************************************/
 
-#include "cassie_curvenet_knot.h"
-#include "cassie_final_stroke.h"
+#include "cassie_profile_mover.h"
 
 #include "../solver/cassie_pcg.h"
 #include "../solver/slang_dispatch/cassie_mas_gpu.h"
 #include "../solver/slang_dispatch/cassie_slang_gpu.h"
+#include "cassie_curvenet_knot.h"
+#include "cassie_final_stroke.h"
 
 #include "core/math/disjoint_set.h"
 #include "core/math/math_funcs.h"
-#include "core/os/time.h"
 #include "core/object/class_db.h"
+#include "core/os/time.h"
 #include "core/templates/hash_map.h"
 #include "core/templates/pair.h"
 #include "scene/resources/curve.h"
@@ -39,9 +68,9 @@ struct CassieProfileMoverHarmonic {
 	// vs ~18 s for the 3 sequential CPU PCG axes.
 	std::unique_ptr<cassie_slang_gpu::CassieSlangGpu> gpu_cg;
 	cassie_slang_gpu::CassieSlangGpu::CgPcg3Handle gpu_handle;
-	LocalVector<float> rhs_f3_unpacked;     // 3 floats per row (xyz)
-	LocalVector<float> x_init_f3_unpacked;  // warm-start packed xyz
-	LocalVector<float> sol_f3_unpacked;     // solution xyz
+	LocalVector<float> rhs_f3_unpacked; // 3 floats per row (xyz)
+	LocalVector<float> x_init_f3_unpacked; // warm-start packed xyz
+	LocalVector<float> sol_f3_unpacked; // solution xyz
 };
 
 CassieProfileMover::CassieProfileMover() = default;
@@ -175,7 +204,7 @@ void CassieProfileMover::bind(const Ref<CassieSurfacePatch> &p_patch,
 	}
 	sample_bvh.clear();
 	if (N_samples == 0) {
-		return; // no curvenet to drive deform — bind() leaves identity behaviour
+		return; // no curvenet to drive deform — bind() leaves identity behavior
 	}
 
 	const real_t kPointEps = real_t(1e-4);
@@ -620,7 +649,7 @@ void CassieProfileMover::_build_harmonic_state() {
 	harmonic_impl.reset(new CassieProfileMoverHarmonic());
 
 	auto lower_to_csr = [](const LocalVector<HashMap<int, double>> &p_rows,
-								  int p_cols, cassie_pcg::CSRMatrix &r_csr) {
+								int p_cols, cassie_pcg::CSRMatrix &r_csr) {
 		const int n_rows = int(p_rows.size());
 		r_csr.rows = n_rows;
 		r_csr.cols = p_cols;
@@ -773,7 +802,9 @@ void CassieProfileMover::_build_harmonic_state() {
 		}
 		LocalVector<float> rhs_zero;
 		rhs_zero.resize(Ni * 3);
-		for (int k = 0; k < Ni * 3; ++k) rhs_zero[k] = 0.0f;
+		for (int k = 0; k < Ni * 3; ++k) {
+			rhs_zero[k] = 0.0f;
+		}
 		harmonic_impl->gpu_handle = gpu->upload_cg3_state(
 				Ni,
 				harmonic_impl->L_II.row_ptr.ptr(),
@@ -813,7 +844,9 @@ void CassieProfileMover::_build_harmonic_state() {
 				rhs_rest_f3[i * 3 + 1] = float(rhs_y[i]);
 				rhs_rest_f3[i * 3 + 2] = float(rhs_z[i]);
 			}
-			for (int k = 0; k < Ni * 3; ++k) x_warm_f3[k] = 0.0f;
+			for (int k = 0; k < Ni * 3; ++k) {
+				x_warm_f3[k] = 0.0f;
+			}
 			harmonic_impl->gpu_cg->update_cg3_rhs(
 					harmonic_impl->gpu_handle, rhs_rest_f3.ptr());
 			for (int pass = 0; pass < 8; ++pass) {
@@ -826,12 +859,16 @@ void CassieProfileMover::_build_harmonic_state() {
 				float max_delta = 0.0f;
 				for (int k = 0; k < Ni * 3; ++k) {
 					const float d = std::abs(sol_rest_f3[k] - x_warm_f3[k]);
-					if (d > max_delta) max_delta = d;
+					if (d > max_delta) {
+						max_delta = d;
+					}
 				}
 				for (int k = 0; k < Ni * 3; ++k) {
 					x_warm_f3[k] = sol_rest_f3[k];
 				}
-				if (max_delta < 1e-5f) break;
+				if (max_delta < 1e-5f) {
+					break;
+				}
 			}
 			for (int i = 0; i < Ni; ++i) {
 				const Vector3 &p = rest_vertex_positions[interior_to_mesh[i]];
@@ -863,10 +900,7 @@ void CassieProfileMover::_build_harmonic_state() {
 	rest_face_frame_inv.resize(post_cut_tc);
 	for (int t = 0; t < post_cut_tc; ++t) {
 		const Vector3i &tri = triangles[t];
-		if (tri.x < 0 || tri.y < 0 || tri.z < 0
-				|| tri.x >= int(rest_vertex_positions.size())
-				|| tri.y >= int(rest_vertex_positions.size())
-				|| tri.z >= int(rest_vertex_positions.size())) {
+		if (tri.x < 0 || tri.y < 0 || tri.z < 0 || tri.x >= int(rest_vertex_positions.size()) || tri.y >= int(rest_vertex_positions.size()) || tri.z >= int(rest_vertex_positions.size())) {
 			rest_face_frame_inv[t] = Basis();
 			continue;
 		}
@@ -1074,8 +1108,7 @@ Ref<ArrayMesh> CassieProfileMover::deform() const {
 	// build early-exits and rest_face_frame_inv stays empty; in that
 	// case fall back to the angle-weighted face-normal path so we don't
 	// index an empty vector. ENG-72.
-	const bool have_rest_normals = int(rest_vertex_normals.size()) == vc
-			&& int(rest_face_frame_inv.size()) == tc;
+	const bool have_rest_normals = int(rest_vertex_normals.size()) == vc && int(rest_face_frame_inv.size()) == tc;
 	auto vertex_angle = [](const Vector3 &u, const Vector3 &v) {
 		const real_t lu = u.length();
 		const real_t lv = v.length();
@@ -1083,8 +1116,11 @@ Ref<ArrayMesh> CassieProfileMover::deform() const {
 			return real_t(0);
 		}
 		real_t c = u.dot(v) / (lu * lv);
-		if (c > real_t(1)) c = real_t(1);
-		else if (c < real_t(-1)) c = real_t(-1);
+		if (c > real_t(1)) {
+			c = real_t(1);
+		} else if (c < real_t(-1)) {
+			c = real_t(-1);
+		}
 		return Math::acos(c);
 	};
 	for (int t = 0; t < tc; ++t) {
@@ -1262,18 +1298,26 @@ Ref<ArrayMesh> CassieProfileMover::bake_skin(int p_max_weights_per_vert) const {
 				const int ka = sample_knot_a[s];
 				const int kb = sample_knot_b[s];
 				const double t = double(sample_t[s]);
-				if (ka == k) w += (1.0 - t);
-				if (kb == k) w += t;
+				if (ka == k) {
+					w += (1.0 - t);
+				}
+				if (kb == k) {
+					w += t;
+				}
 			}
 			e_boundary[b] = w;
 		}
 
 		// 1b. rhs = -L_IB * e_k_boundary
 		cassie_pcg::spmv(harmonic_impl->L_IB, e_boundary.ptr(), rhs.ptr());
-		for (int i = 0; i < Ni; ++i) rhs[i] = -rhs[i];
+		for (int i = 0; i < Ni; ++i) {
+			rhs[i] = -rhs[i];
+		}
 
 		// 1c. Solve L_II * phi_k = rhs (CPU double-precision PCG).
-		for (int i = 0; i < Ni; ++i) phi_interior[i] = 0.0;
+		for (int i = 0; i < Ni; ++i) {
+			phi_interior[i] = 0.0;
+		}
 		double residual_unused = 0.0;
 		cassie_pcg::solve_sparse(harmonic_impl->L_II, rhs.ptr(),
 				phi_interior.ptr(), harmonic_impl->diag_inv.ptr(),
@@ -1319,7 +1363,9 @@ Ref<ArrayMesh> CassieProfileMover::bake_skin(int p_max_weights_per_vert) const {
 
 		double sum = 0.0;
 		const int n_kept = MIN(k_max, int(pairs.size()));
-		for (int j = 0; j < n_kept; ++j) sum += double(pairs[j].second);
+		for (int j = 0; j < n_kept; ++j) {
+			sum += double(pairs[j].second);
+		}
 		// Edge case: vert has no positive harmonic weight (extreme cottan
 		// pathology). Fall back to weight 1.0 on bone 0 — the deformed
 		// vertex follows knot 0 rigidly. Rare, visible as an isolated
@@ -1352,12 +1398,16 @@ Ref<ArrayMesh> CassieProfileMover::bake_skin(int p_max_weights_per_vert) const {
 	const int tc = int(triangles.size());
 	PackedVector3Array verts;
 	verts.resize(vc);
-	for (int i = 0; i < vc; ++i) verts.write[i] = rest_vertex_positions[i];
+	for (int i = 0; i < vc; ++i) {
+		verts.write[i] = rest_vertex_positions[i];
+	}
 	PackedVector3Array normals;
 	const bool have_rest_normals = int(rest_vertex_normals.size()) == vc;
 	if (have_rest_normals) {
 		normals.resize(vc);
-		for (int i = 0; i < vc; ++i) normals.write[i] = rest_vertex_normals[i];
+		for (int i = 0; i < vc; ++i) {
+			normals.write[i] = rest_vertex_normals[i];
+		}
 	}
 	PackedInt32Array idx;
 	idx.resize(tc * 3);
@@ -1372,7 +1422,9 @@ Ref<ArrayMesh> CassieProfileMover::bake_skin(int p_max_weights_per_vert) const {
 	Array arrays;
 	arrays.resize(Mesh::ARRAY_MAX);
 	arrays[Mesh::ARRAY_VERTEX] = verts;
-	if (have_rest_normals) arrays[Mesh::ARRAY_NORMAL] = normals;
+	if (have_rest_normals) {
+		arrays[Mesh::ARRAY_NORMAL] = normals;
+	}
 	arrays[Mesh::ARRAY_INDEX] = idx;
 	arrays[Mesh::ARRAY_BONES] = bones_out;
 	arrays[Mesh::ARRAY_WEIGHTS] = weights_out;
@@ -1829,7 +1881,9 @@ Dictionary CassieProfileMover::compare_jacobi_mas_solve(int p_max_iter) {
 	col_idx_i.resize(nnz);
 	values_f.resize(nnz);
 	diag_inv_f.resize(Ni);
-	for (int i = 0; i <= Ni; ++i) row_ptr_i[i] = int32_t(A.row_ptr[i]);
+	for (int i = 0; i <= Ni; ++i) {
+		row_ptr_i[i] = int32_t(A.row_ptr[i]);
+	}
 	for (int k = 0; k < nnz; ++k) {
 		col_idx_i[k] = int32_t(A.col_idx[k]);
 		values_f[k] = float(A.val[k]);
@@ -1884,7 +1938,9 @@ Dictionary CassieProfileMover::compare_jacobi_mas_solve(int p_max_iter) {
 	// --- Solve A — Jacobi3 ---
 	LocalVector<float> x_init;
 	x_init.resize(Ni * 3);
-	for (int i = 0; i < Ni * 3; ++i) x_init[i] = 0.0f;
+	for (int i = 0; i < Ni * 3; ++i) {
+		x_init[i] = 0.0f;
+	}
 	LocalVector<float> x_jacobi;
 	x_jacobi.resize(Ni * 3);
 	const Time *time = Time::get_singleton();
@@ -1936,7 +1992,9 @@ Dictionary CassieProfileMover::compare_jacobi_mas_solve(int p_max_iter) {
 	double max_drift = 0.0, sum_drift = 0.0;
 	for (int i = 0; i < Ni * 3; ++i) {
 		const double d = Math::abs(double(x_jacobi[i]) - double(x_mas[i]));
-		if (d > max_drift) max_drift = d;
+		if (d > max_drift) {
+			max_drift = d;
+		}
 		sum_drift += d;
 	}
 	const double mean_drift = sum_drift / double(Ni * 3);
