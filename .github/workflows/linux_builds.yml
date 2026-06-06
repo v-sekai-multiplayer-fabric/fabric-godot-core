@@ -176,7 +176,7 @@ jobs:
           fi
 
       - name: Install mold linker
-        if: matrix.proj-test
+        if: "false"
         uses: rui314/setup-mold@v1
 
       - name: Compilation
