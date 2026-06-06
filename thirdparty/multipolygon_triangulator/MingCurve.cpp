@@ -199,7 +199,6 @@ double MingCurve::getAngle(int p1, int p2, int p3){
 	return acos(res);
 }
 double MingCurve::getPt2LineDist(int p1, int p2, int p3){
-	double res = 0.0;
 	Point3 v1 = tempC[p1];
 	Point3 v2 = tempC[p2];
 	Point3 v3 = tempC[p3];
@@ -257,8 +256,7 @@ void MingCurve::protectCorner(){
 	radius.clear();
 	cliped.clear();
 	vector<int> acuteList;
-	
-	int sizeCliped = org_n;
+
 	for(int i=0; i<org_n; i++){
 		newClip[0] = 0; newClip[1] = 0;
 		cliped.push_back(newClip);
@@ -493,7 +491,6 @@ void MingCurve::insertMidPointsTetgen(){
 //For getCurveAfterEP(), to check whether the orientation changes
 //if so, normals should be fliped
 bool MingCurve::sameOrientation(const vector<int> & newCurve){
-	int ncsize = newCurve.size();
 	int pos1 = -1,pos2 = -1,pos=0;
 	while(pos1==-1||pos2==-1){
 		if(newCurve[pos]==1) pos1 = pos;

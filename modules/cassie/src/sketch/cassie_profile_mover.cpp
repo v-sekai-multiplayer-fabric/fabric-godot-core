@@ -1289,11 +1289,11 @@ Ref<ArrayMesh> CassieProfileMover::bake_skin(int p_max_weights_per_vert) const {
 	}
 
 	// Step 2: per-vertex top-K + renormalize.
-	const int K = p_max_weights_per_vert;
+	const int k_max = p_max_weights_per_vert;
 	PackedInt32Array bones_out;
 	PackedFloat32Array weights_out;
-	bones_out.resize(vc * K);
-	weights_out.resize(vc * K);
+	bones_out.resize(vc * k_max);
+	weights_out.resize(vc * k_max);
 	for (int v = 0; v < vc; ++v) {
 		// Collect (knot_index, weight) pairs. Harmonic basis on the
 		// cottan Laplacian can produce small negative weights at
@@ -1318,7 +1318,7 @@ Ref<ArrayMesh> CassieProfileMover::bake_skin(int p_max_weights_per_vert) const {
 		std::sort(pairs.ptrw(), pairs.ptrw() + pairs.size(), CmpDesc());
 
 		double sum = 0.0;
-		const int n_kept = MIN(K, int(pairs.size()));
+		const int n_kept = MIN(k_max, int(pairs.size()));
 		for (int j = 0; j < n_kept; ++j) sum += double(pairs[j].second);
 		// Edge case: vert has no positive harmonic weight (extreme cottan
 		// pathology). Fall back to weight 1.0 on bone 0 — the deformed
@@ -1326,22 +1326,22 @@ Ref<ArrayMesh> CassieProfileMover::bake_skin(int p_max_weights_per_vert) const {
 		// artifact; would be fixed by switching to a max-principle-
 		// preserving Laplacian (intrinsic Delaunay) at bind time.
 		if (sum < 1e-12) {
-			bones_out.write[v * K + 0] = 0;
-			weights_out.write[v * K + 0] = 1.0f;
-			for (int j = 1; j < K; ++j) {
-				bones_out.write[v * K + j] = 0;
-				weights_out.write[v * K + j] = 0.0f;
+			bones_out.write[v * k_max + 0] = 0;
+			weights_out.write[v * k_max + 0] = 1.0f;
+			for (int j = 1; j < k_max; ++j) {
+				bones_out.write[v * k_max + j] = 0;
+				weights_out.write[v * k_max + j] = 0.0f;
 			}
 			continue;
 		}
 		const float norm = float(1.0 / sum);
 		for (int j = 0; j < n_kept; ++j) {
-			bones_out.write[v * K + j] = pairs[j].first;
-			weights_out.write[v * K + j] = pairs[j].second * norm;
+			bones_out.write[v * k_max + j] = pairs[j].first;
+			weights_out.write[v * k_max + j] = pairs[j].second * norm;
 		}
-		for (int j = n_kept; j < K; ++j) {
-			bones_out.write[v * K + j] = 0;
-			weights_out.write[v * K + j] = 0.0f;
+		for (int j = n_kept; j < k_max; ++j) {
+			bones_out.write[v * k_max + j] = 0;
+			weights_out.write[v * k_max + j] = 0.0f;
 		}
 	}
 
@@ -1376,7 +1376,7 @@ Ref<ArrayMesh> CassieProfileMover::bake_skin(int p_max_weights_per_vert) const {
 	arrays[Mesh::ARRAY_INDEX] = idx;
 	arrays[Mesh::ARRAY_BONES] = bones_out;
 	arrays[Mesh::ARRAY_WEIGHTS] = weights_out;
-	const uint64_t flags = (K == 8)
+	const uint64_t flags = (k_max == 8)
 			? uint64_t(Mesh::ARRAY_FLAG_USE_8_BONE_WEIGHTS)
 			: uint64_t(0);
 	mesh->add_surface_from_arrays(Mesh::PRIMITIVE_TRIANGLES,
