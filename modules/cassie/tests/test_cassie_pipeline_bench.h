@@ -1313,7 +1313,7 @@ static void _classify_failure(const PackedVector3Array &p_boundary,
 	const int ax0 = (drop + 1) % 3;
 	const int ax1 = (drop + 2) % 3;
 	auto proj2 = [&](const Vector3 &v) -> Vector2 {
-		const float arr[3] = { v.x, v.y, v.z };
+		const real_t arr[3] = { v.x, v.y, v.z };
 		return Vector2(arr[ax0], arr[ax1]);
 	};
 	for (int i = 0; i < n; ++i) {
