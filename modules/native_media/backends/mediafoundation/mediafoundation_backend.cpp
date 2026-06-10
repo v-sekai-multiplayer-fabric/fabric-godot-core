@@ -457,25 +457,42 @@ void MediaFoundationBackend::_on_video_sample(DWORD dwStreamFlags, IMFSample *pS
 			// 1080p), so chroma does NOT start at scan0 + h*pitch. Derive the actual
 			// Y allocation height from the total buffer length Lock2DSize gave us.
 			const DWORD content_len = length - DWORD(scan0 - start);
+			if (pitch <= 0) {
+				pitch = LONG(w); // Guard zero/negative stride; assume packed rows.
+			}
 			const LONG total_rows = LONG(content_len / uint32_t(pitch));
 
-			// NV12: Y plane is padded to 16-pixel height alignment (macroblocks)
-			// For 1080p, Y is padded to 1088 rows. Chroma starts right after Y.
-			const LONG y_padded_height = ((h + 15) / 16) * 16; // Round up to 16
-			const LONG y_alloc_rows = y_padded_height;
+			// The Y-plane height depends on the decoder: hardware MFTs pad Y to
+			// a 16-row macroblock boundary (1088 for 1080p), while the software
+			// path returns tightly-packed NV12 with chroma at row h. total_rows
+			// (the real buffer height) disambiguates: when it equals h + h/2 the
+			// buffer is tightly packed, otherwise Y is padded. Using the padded
+			// offset on a packed buffer reads past the end and crashes.
+			const LONG y_padded_height = ((h + 15) / 16) * 16; // Round up to 16.
+			const LONG y_alloc_rows = (total_rows == LONG(h) + LONG(h / 2))
+					? LONG(h)
+					: y_padded_height;
 
 			print_verbose(vformat("native_media: NV12: w=%d h=%d pitch=%d y_padded=%d total_rows=%d",
 					w, h, pitch, y_padded_height, total_rows));
 
-			// Copy Y plane (only the actual content rows, not padding)
+			// Copy Y plane (only the actual content rows, not padding). Bound
+			// each row so a truncated buffer (total_rows < h) can't over-read.
 			for (uint32_t row = 0; row < h; row++) {
+				if (LONG(row) * LONG(pitch) + LONG(w) > LONG(content_len)) {
+					break;
+				}
 				memcpy(dst + row * w, scan0 + LONG(row) * pitch, w);
 			}
 
-			// Chroma starts after the padded Y plane
+			// Chroma starts after the Y allocation. Bound every row against the
+			// locked buffer so a wrong offset can never read past the end.
 			BYTE *chroma_src = scan0 + y_alloc_rows * pitch;
 			uint8_t *chroma_dst = dst + y_plane_bytes;
 			for (uint32_t row = 0; row < h / 2; row++) {
+				if ((y_alloc_rows + LONG(row)) * LONG(pitch) + LONG(w) > LONG(content_len)) {
+					break;
+				}
 				memcpy(chroma_dst + row * w, chroma_src + LONG(row) * pitch, w);
 			}
 			buf2d->Unlock2D();
@@ -490,12 +507,18 @@ void MediaFoundationBackend::_on_video_sample(DWORD dwStreamFlags, IMFSample *pS
 			// (w*h/2 bytes). Row stride is always w regardless of what
 			// MF_MT_DEFAULT_STRIDE reported for the decoder's output type.
 			for (uint32_t row = 0; row < h; row++) {
-				memcpy(dst + row * w, bytes + row * w, w);
+				if ((row + 1) * w > size) {
+						break; // never read past the locked buffer
+					}
+					memcpy(dst + row * w, bytes + row * w, w);
 			}
 			BYTE *chroma_src = bytes + h * w;
 			uint8_t *chroma_dst = dst + y_plane_bytes;
 			for (uint32_t row = 0; row < h / 2; row++) {
-				memcpy(chroma_dst + row * w, chroma_src + row * w, w);
+				if (y_plane_bytes + (row + 1) * w > size) {
+						break; // never read past the locked buffer
+					}
+					memcpy(chroma_dst + row * w, chroma_src + row * w, w);
 			}
 			buffer->Unlock();
 		}
