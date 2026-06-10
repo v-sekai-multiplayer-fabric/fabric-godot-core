@@ -508,17 +508,17 @@ void MediaFoundationBackend::_on_video_sample(DWORD dwStreamFlags, IMFSample *pS
 			// MF_MT_DEFAULT_STRIDE reported for the decoder's output type.
 			for (uint32_t row = 0; row < h; row++) {
 				if ((row + 1) * w > size) {
-						break; // never read past the locked buffer
-					}
-					memcpy(dst + row * w, bytes + row * w, w);
+					break; // never read past the locked buffer
+				}
+				memcpy(dst + row * w, bytes + row * w, w);
 			}
 			BYTE *chroma_src = bytes + h * w;
 			uint8_t *chroma_dst = dst + y_plane_bytes;
 			for (uint32_t row = 0; row < h / 2; row++) {
 				if (y_plane_bytes + (row + 1) * w > size) {
-						break; // never read past the locked buffer
-					}
-					memcpy(chroma_dst + row * w, chroma_src + row * w, w);
+					break; // never read past the locked buffer
+				}
+				memcpy(chroma_dst + row * w, chroma_src + row * w, w);
 			}
 			buffer->Unlock();
 		}
