@@ -125,7 +125,10 @@ bool VideoStreamPlaybackNative::_ensure_gpu_pipeline() {
 	dst_fmt.format = RD::DATA_FORMAT_R8G8B8A8_UNORM;
 	dst_fmt.width = video_info.width;
 	dst_fmt.height = video_info.height;
-	dst_fmt.usage_bits = RD::TEXTURE_USAGE_SAMPLING_BIT | RD::TEXTURE_USAGE_STORAGE_BIT;
+	// CAN_COPY_FROM lets get_video_texture().get_image() read the frame back to
+	// the CPU (needed for ShaderMotion decoding); without it texture_get_data()
+	// refuses the read.
+	dst_fmt.usage_bits = RD::TEXTURE_USAGE_SAMPLING_BIT | RD::TEXTURE_USAGE_STORAGE_BIT | RD::TEXTURE_USAGE_CAN_COPY_FROM_BIT;
 	rd_dst_tex = rd->texture_create(dst_fmt, RD::TextureView());
 
 	if (!rd_y_tex.is_valid() || !rd_cbcr_tex.is_valid() || !rd_dst_tex.is_valid()) {
@@ -492,6 +495,26 @@ int VideoStreamNative::get_container_hint() const {
 	return container_hint;
 }
 
+double VideoStreamNative::get_frame_rate() {
+	if (frame_rate_cache > 0.0) {
+		return frame_rate_cache;
+	}
+	if (data.is_empty()) {
+		return 0.0;
+	}
+	// Open a throwaway backend just to read the container's video info. Cached
+	// so repeated GDScript queries don't re-open the decoder.
+	NativeMediaBackend *probe = NativeMediaBackend::create();
+	if (!probe) {
+		return 0.0;
+	}
+	if (probe->open(data, container_hint) == OK) {
+		frame_rate_cache = probe->get_video_info().frame_rate;
+	}
+	memdelete(probe);
+	return frame_rate_cache;
+}
+
 Ref<VideoStreamPlayback> VideoStreamNative::instantiate_playback() {
 	Ref<VideoStreamPlaybackNative> playback;
 	playback.instantiate();
@@ -509,6 +532,7 @@ void VideoStreamNative::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("get_data"), &VideoStreamNative::get_data);
 	ClassDB::bind_method(D_METHOD("set_container_hint", "hint"), &VideoStreamNative::set_container_hint);
 	ClassDB::bind_method(D_METHOD("get_container_hint"), &VideoStreamNative::get_container_hint);
+	ClassDB::bind_method(D_METHOD("get_frame_rate"), &VideoStreamNative::get_frame_rate);
 
 	ClassDB::bind_static_method("VideoStreamNative", D_METHOD("load_from_buffer", "buffer", "hint"), &VideoStreamNative::load_from_buffer, DEFVAL((int)NativeMediaBackend::CONTAINER_AUTO));
 	ClassDB::bind_static_method("VideoStreamNative", D_METHOD("load_from_file", "path"), &VideoStreamNative::load_from_file);

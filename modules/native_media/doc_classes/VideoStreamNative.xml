@@ -11,6 +11,12 @@
 		<link title="Playing videos">$DOCS_URL/tutorials/animation/playing_videos.html</link>
 	</tutorials>
 	<methods>
+		<method name="get_frame_rate">
+			<return type="float" />
+			<description>
+				Returns the source video's frame rate in frames per second, or [code]0.0[/code] if it is unknown or no [member data] has been set. Opens the native decoder lazily on the first call and caches the result.
+			</description>
+		</method>
 		<method name="load_from_buffer" qualifiers="static">
 			<return type="VideoStreamNative" />
 			<param index="0" name="buffer" type="PackedByteArray" />

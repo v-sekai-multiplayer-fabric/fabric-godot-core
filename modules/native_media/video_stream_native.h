@@ -133,6 +133,7 @@ class VideoStreamNative : public VideoStream {
 
 	Vector<uint8_t> data;
 	NativeMediaBackend::ContainerFormat container_hint = NativeMediaBackend::CONTAINER_AUTO;
+	double frame_rate_cache = 0.0; // Lazily filled by get_frame_rate().
 
 protected:
 	static void _bind_methods();
@@ -146,6 +147,10 @@ public:
 
 	void set_container_hint(int p_hint);
 	int get_container_hint() const;
+
+	// Source video frame rate in Hz, or 0 if unknown. Opens the backend lazily
+	// on the in-memory data and caches the result.
+	double get_frame_rate();
 
 	virtual Ref<VideoStreamPlayback> instantiate_playback() override;
 
