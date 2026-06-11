@@ -42,7 +42,6 @@
 #include "core/object/script_language.h"
 #include "core/string/translation_server.h"
 #include "editor/export/editor_export_platform.h"
-#include "editor/import/resource_importer_texture.h"
 #include "editor/settings/editor_settings.h"
 #include "scene/property_list_helper.h"
 #include "scene/resources/theme.h"
