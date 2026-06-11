@@ -301,7 +301,11 @@ env_mwt.add_source_files(env.modules_sources, mwt_sources)
 # and -Wctor-dtor-privacy under -Werror (the ReturnByValue guard class is
 # all-private by design); relax just those two diagnostics for this TU.
 env_refine = env_cassie.Clone()
-if "g++" in _compiler or "gcc" in _compiler:
+# "clang++" contains the substring "g++", so a bare substring test
+# matches every clang toolchain and feeds it the GCC-only
+# -Wno-duplicated-branches (clang errors with -Wunknown-warning-option);
+# require clang's absence like the determinism elif chain above does.
+if ("g++" in _compiler or "gcc" in _compiler) and "clang" not in _compiler:
     env_refine.Append(CCFLAGS=["-Wno-duplicated-branches", "-Wno-ctor-dtor-privacy"])
 env_refine.add_source_files(env.modules_sources, ["src/refine.cpp"])
 
