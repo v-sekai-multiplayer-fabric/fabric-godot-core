@@ -265,7 +265,11 @@ TEST_CASE("[Cassie][Curvenet] non-intersection knot — coincident with intersec
 	const Quaternion q = at_zero.get_rotation_quaternion();
 	const Quaternion q_a = R_a.get_rotation_quaternion();
 	const real_t dot = Math::abs(q.x * q_a.x + q.y * q_a.y + q.z * q_a.z + q.w * q_a.w);
-	CHECK(Math::abs(dot - real_t(1.0)) < 1e-9);
+	// Even for bitwise-identical quaternions, the fp32 self-dot lands at
+	// ~0.99999994 (components like sin(pi/4) square to just under 0.5), so a
+	// 1e-9 bound is below single-precision epsilon and can never hold in
+	// real_t=float builds. 1e-6 still asserts "same rotation" to fp32 limits.
+	CHECK(Math::abs(dot - real_t(1.0)) < 1e-6);
 }
 
 TEST_CASE("[Cassie][Curvenet] non-intersection knot on curved segment uses Curve3D parallel transport") {
