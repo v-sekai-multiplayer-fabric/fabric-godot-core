@@ -1,7 +1,32 @@
 /**************************************************************************/
-/*  test_cassie_profile_mover.h                                            */
+/*  test_cassie_profile_mover.h                                           */
 /**************************************************************************/
-/* Tests for CassieProfileMover (ENG-46 phase 1.4a — IDW fallback).        */
+/*                         This file is part of:                          */
+/*                             GODOT ENGINE                               */
+/*                        https://godotengine.org                         */
+/**************************************************************************/
+/* Copyright (c) 2014-present Godot Engine contributors (see AUTHORS.md). */
+/* Copyright (c) 2007-2014 Juan Linietsky, Ariel Manzur.                  */
+/*                                                                        */
+/* Permission is hereby granted, free of charge, to any person obtaining  */
+/* a copy of this software and associated documentation files (the        */
+/* "Software"), to deal in the Software without restriction, including    */
+/* without limitation the rights to use, copy, modify, merge, publish,    */
+/* distribute, sublicense, and/or sell copies of the Software, and to     */
+/* permit persons to whom the Software is furnished to do so, subject to  */
+/* the following conditions:                                              */
+/*                                                                        */
+/* The above copyright notice and this permission notice shall be         */
+/* included in all copies or substantial portions of the Software.        */
+/*                                                                        */
+/* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,        */
+/* EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF     */
+/* MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. */
+/* IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY   */
+/* CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,   */
+/* TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE      */
+/* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                 */
+/**************************************************************************/
 
 #pragma once
 
@@ -50,12 +75,18 @@ static Ref<ArrayMesh> _make_cube_mesh() {
 	v.push_back(Vector3(0, 1, 1));
 	v.push_back(Vector3(1, 1, 1));
 	const int faces[12][3] = {
-		{ 0, 2, 1 }, { 1, 2, 3 },
-		{ 4, 5, 6 }, { 5, 7, 6 },
-		{ 0, 1, 4 }, { 1, 5, 4 },
-		{ 2, 6, 3 }, { 3, 6, 7 },
-		{ 0, 4, 2 }, { 2, 4, 6 },
-		{ 1, 3, 5 }, { 3, 7, 5 },
+		{ 0, 2, 1 },
+		{ 1, 2, 3 },
+		{ 4, 5, 6 },
+		{ 5, 7, 6 },
+		{ 0, 1, 4 },
+		{ 1, 5, 4 },
+		{ 2, 6, 3 },
+		{ 3, 6, 7 },
+		{ 0, 4, 2 },
+		{ 2, 4, 6 },
+		{ 1, 3, 5 },
+		{ 3, 7, 5 },
 	};
 	Vector<int> idx;
 	for (int f = 0; f < 12; ++f) {
@@ -241,9 +272,16 @@ TEST_CASE("[Cassie][ProfileMover] harmonic bind on ~10k-vertex mesh under 2 s") 
 	const uint64_t t0 = Time::get_singleton()->get_ticks_usec();
 	mover->bind(patch, cn);
 	const uint64_t dt = Time::get_singleton()->get_ticks_usec() - t0;
+#if !defined(ASAN_ENABLED) && !defined(TSAN_ENABLED)
+	// Sanitizer instrumentation inflates wall-clock far past the budget, so
+	// the timing assertion is meaningless there; the bind still runs above
+	// to exercise correctness. vformat has no %llu, so cast to int (dt is
+	// well under INT_MAX microseconds for any non-pathological bind).
 	CHECK_MESSAGE(dt < 2ULL * 1000 * 1000,
-			vformat("harmonic bind took %llu us, exceeds 2 s budget",
-					(unsigned long long)dt));
+			vformat("harmonic bind took %d us, exceeds 2 s budget", int(dt)));
+#else
+	(void)dt;
+#endif
 	CHECK(mover->is_harmonic_ready());
 }
 

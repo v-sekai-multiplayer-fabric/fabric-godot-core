@@ -120,23 +120,12 @@ namespace GEO {
                 // basic/geofile.cpp, which we exclude. Delaunay doesn't need
                 // attribute serialization, so skip.
 
-#ifdef GEO_OS_EMSCRIPTEN
-
-                // This mounts the local file system when an emscripten-compiled
-                // program runs in node.js.
-                // Current working directory is mounted in /working,
-                // and root directory is mounted in /root
-
-                EM_ASM(
-                    if(typeof module !== 'undefined' && this.module !== module) {
-                        FS.mkdir('/working');
-                        FS.mkdir('/root');
-                        FS.mount(NODEFS, { root: '.' }, '/working');
-                        FS.mount(NODEFS, { root: '/' }, '/root');
-                    }
-                );
-
-#endif
+                // NODEFS patch: see thirdparty/geogram/patches/. Upstream
+                // mounts the node.js filesystem here via EM_ASM. Godot's web
+                // export targets the browser, never node, so the mount is
+                // dead — and the injected `NODEFS` reference is an undeclared
+                // global that the closure compiler rejects under
+                // use_closure_compiler=yes. The mount is dropped entirely.
 
                 // -fno-exceptions patch: ImageLibrary is excluded.
             }

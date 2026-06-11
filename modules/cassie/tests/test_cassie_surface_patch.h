@@ -1,8 +1,32 @@
 /**************************************************************************/
-/*  test_cassie_surface_patch.h                                            */
+/*  test_cassie_surface_patch.h                                           */
 /**************************************************************************/
-/* Tests for CassieSurfacePatch (ENG-43 / Step 1.1).                       */
-/* Six correctness cases + two scalability cases.                          */
+/*                         This file is part of:                          */
+/*                             GODOT ENGINE                               */
+/*                        https://godotengine.org                         */
+/**************************************************************************/
+/* Copyright (c) 2014-present Godot Engine contributors (see AUTHORS.md). */
+/* Copyright (c) 2007-2014 Juan Linietsky, Ariel Manzur.                  */
+/*                                                                        */
+/* Permission is hereby granted, free of charge, to any person obtaining  */
+/* a copy of this software and associated documentation files (the        */
+/* "Software"), to deal in the Software without restriction, including    */
+/* without limitation the rights to use, copy, modify, merge, publish,    */
+/* distribute, sublicense, and/or sell copies of the Software, and to     */
+/* permit persons to whom the Software is furnished to do so, subject to  */
+/* the following conditions:                                              */
+/*                                                                        */
+/* The above copyright notice and this permission notice shall be         */
+/* included in all copies or substantial portions of the Software.        */
+/*                                                                        */
+/* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,        */
+/* EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF     */
+/* MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. */
+/* IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY   */
+/* CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,   */
+/* TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE      */
+/* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                 */
+/**************************************************************************/
 
 #pragma once
 
@@ -288,8 +312,15 @@ TEST_CASE("[Cassie][SurfacePatch] BVH query on 100k-triangle mesh under 200 us (
 	}
 	samples.sort();
 	const uint64_t p95 = samples[uint32_t(real_t(samples.size()) * real_t(0.95))];
+#if !defined(ASAN_ENABLED) && !defined(TSAN_ENABLED)
+	// Sanitizer instrumentation inflates the per-query latency well past the
+	// budget (observed ~648 us under TSan vs the 200 us target), so skip the
+	// timing assertion there; the projections above still run and are checked.
 	CHECK_MESSAGE(p95 < 200ULL,
 			vformat("BVH p95 latency %d us exceeds 200 us budget", int(p95)));
+#else
+	(void)p95;
+#endif
 }
 
 TEST_CASE("[Cassie][SurfacePatch] BVH and brute-force return identical projections") {
