@@ -92,6 +92,10 @@ protected:
   int numofnormals;
   int numoftilingtris;
   int* tris;
+  // True when genTriCandidates allocated tris itself (3-point fast path,
+  // presupplied copy, 2D fallback); false when tris aliases the
+  // delaunay member's trifacelist, which delaunay frees.
+  bool owns_tris;
   double* points;
   double* deGenPoints;
   float* normals;
