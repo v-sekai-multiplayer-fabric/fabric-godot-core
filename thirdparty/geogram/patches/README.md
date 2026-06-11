@@ -21,6 +21,14 @@ without diverging from upstream's algorithm:
    crashes loudly instead of unwinding on actual bad input. Matches
    the "fail fast" philosophy of an in-engine triangulator.
 
+   A related **web-build patch** lives in `basic/common.cpp`: upstream's
+   `GeogramLibSingleton` constructor mounts the node.js filesystem via
+   `EM_ASM(... FS.mount(NODEFS, ...) ...)` under `GEO_OS_EMSCRIPTEN`.
+   Godot's web export targets the browser, never node, so the mount is
+   dead code — and the injected `NODEFS` global is undeclared to the
+   closure compiler, failing `use_closure_compiler=yes` builds. The
+   `EM_ASM` block is dropped.
+
 2. **Excluded-from-build .cpp files** (paths we never reach): listed
    in `modules/cassie/SCsub`'s `_without(...)` calls. Not patched —
    simpler to drop than to maintain a patch against unused code. The
