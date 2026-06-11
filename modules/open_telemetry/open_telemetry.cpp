@@ -101,6 +101,13 @@ OpenTelemetry::OpenTelemetry() {
 }
 
 OpenTelemetry::~OpenTelemetry() {
+	// The logger registered in init_tracer_provider() is owned by the OS
+	// CompositeLogger (freed at process exit); it must not outlive this
+	// instance with a dangling back-pointer.
+	if (_otel_logger) {
+		_otel_logger->detach_instance();
+		_otel_logger = nullptr;
+	}
 }
 
 void OpenTelemetry::_bind_methods() {
