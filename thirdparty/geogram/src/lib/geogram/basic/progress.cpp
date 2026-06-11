@@ -42,6 +42,7 @@
 #include <geogram/basic/assert.h>
 #include <geogram/basic/stopwatch.h>
 #include <stack>
+#include <cstdlib>
 
 namespace {
 
@@ -99,7 +100,11 @@ namespace {
      */
     void task_progress(index_t step, index_t percent) {
         if(task_canceled_) {
-            throw TaskCanceled();
+            // -fno-exceptions patch: see thirdparty/geogram/patches/.
+            // CASSIE never cancels a ProgressTask (cancel only fires from
+            // the SIGINT handler, which is already terminal); abort makes
+            // it loud.
+            ::std::abort();
         }
 
         if(progress_client_) {
