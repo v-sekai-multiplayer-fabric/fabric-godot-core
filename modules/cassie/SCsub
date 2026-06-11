@@ -194,12 +194,15 @@ def _without(globs, exclude_basenames):
 # Throw-heavy files in code paths we never reach are excluded entirely
 # rather than patched. See thirdparty/geogram/patches/README.md for
 # the full inventory.
+# line_stream.cpp and progress.cpp are compiled: process_unix.cpp's
+# os_max_used_memory() uses LineInput and its sigint_handler uses
+# Progress, so dropping them leaves undefined GEO::LineInput /
+# GEO::Progress symbols at link (macOS ld64, ld.lld with sanitizers).
+# Their throw sites carry the -fno-exceptions abort patches.
 basic_skip = {
     "geofile.cpp",  # GeoFile bin serialization + zlib macro collision
     "android_utils.cpp",  # JNI
     "boolean_expression.cpp",  # CSG expression parser
-    "line_stream.cpp",  # file-format line reader
-    "progress.cpp",  # progress UI callbacks
 }
 delaunay_skip = {
     "delaunay_2d.cpp",  # we use 3D only

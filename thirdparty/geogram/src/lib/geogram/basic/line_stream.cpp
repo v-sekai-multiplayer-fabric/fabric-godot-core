@@ -40,6 +40,7 @@
 #include <geogram/basic/line_stream.h>
 #include <geogram/basic/logger.h>
 #include <ctype.h>
+#include <cstdlib>
 
 namespace GEO {
 
@@ -133,6 +134,11 @@ namespace GEO {
         out << "Line " << line_num_
             << ": field #" << index
             << " is not a valid " << type << " value: " << field(index);
-        throw std::logic_error(out.str());
+        // -fno-exceptions patch: see thirdparty/geogram/patches/.
+        // LineInput in our build only parses /proc/self/status from
+        // Process::os_max_used_memory(), which never calls the typed
+        // field accessors; abort makes it loud.
+        Logger::err("LineInput") << out.str() << std::endl;
+        ::std::abort();
     }
 }
