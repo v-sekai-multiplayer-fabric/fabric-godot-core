@@ -82,6 +82,20 @@ CassieProfileMover::~CassieProfileMover() {
 
 namespace {
 
+// DynamicBVH::aabb_query is _FORCE_INLINE_ and allocates its traversal
+// stack with alloca. When GCC inlines it into a caller, the alloca lands in
+// the caller's frame, and memory alloca'd by an inlined callee is only
+// reclaimed when the caller returns — so the expanding-radius loop in
+// bind() (up to 24 queries per vertex across a 10k-vertex mesh) accumulates
+// ~1 KB of stack per query and overflows the thread stack: SIGSEGV on the
+// stack[0] write at dynamic_bvh.h:332 on every GCC build. Clang wraps
+// inlined allocas in stack save/restore and was unaffected. This noinline
+// wrapper gives each query its own frame, so the alloca dies on return.
+template <typename Collector>
+_NO_INLINE_ void query_bvh_frame_scoped(DynamicBVH &p_bvh, const AABB &p_box, Collector &r_collector) {
+	p_bvh.aabb_query(p_box, r_collector);
+}
+
 inline void insert_into_topk(int p_K, int *p_idx, real_t *p_dsq, int p_new_idx, real_t p_new_dsq) {
 	for (int k = 0; k < p_K; ++k) {
 		if (p_new_dsq < p_dsq[k]) {
@@ -261,7 +275,7 @@ void CassieProfileMover::bind(const Ref<CassieSurfacePatch> &p_patch,
 		real_t r = initial_sample_search_radius;
 		for (int attempt = 0; attempt < 24; ++attempt) {
 			AABB box(p - Vector3(r, r, r), Vector3(r, r, r) * real_t(2.0));
-			sample_bvh.aabb_query(box, c);
+			query_bvh_frame_scoped(sample_bvh, box, c);
 			// Converged once K slots are filled AND the farthest of the K
 			// lies within the search radius (any unseen sample would be
 			// strictly farther).

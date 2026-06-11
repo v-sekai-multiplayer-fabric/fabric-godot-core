@@ -4,6 +4,10 @@ namespace mwt {
 
 EdgeInfo::EdgeInfo(){
 	leftsize = -1; rightsize = -1;
+	// Null so ~EdgeInfo is safe for edges the buildList triangle scan
+	// never reaches (the arrays are only allocated on first visit).
+	leftTris = nullptr; leftEdgeInd = nullptr;
+	rightTris = nullptr; rightEdgeInd = nullptr;
 }
 
 EdgeInfo::~EdgeInfo(){

@@ -92,11 +92,14 @@ DMWT::DMWT(int ptn, double* pts, double* deGenPts, float* norms, bool isdegen) {
 }
 
 DMWT::~DMWT() {
-  // `tris` is owned by `delaunay` (cassie::DelaunayFaces) and freed
-  // when DMWT is destroyed; `points` is caller-owned.
+  // `points` is caller-owned. `tris` ownership depends on which
+  // genTriCandidates path ran: the 3-point fast path, the presupplied
+  // copy, and the 2D-fallback all allocate fresh int[] that DMWT owns
+  // (owns_tris == true); the 3D path aliases delaunay.trifacelist,
+  // which the `delaunay` member frees itself.
   // delete [] filename;
   if (!EXPSTOP) {
-    delete[] tiling; // delete [] tris; //delete [] points;
+    delete[] tiling; // delete [] points;
     if (withNormal)
       delete[] normals;
     if (!isDeGen) {
@@ -106,6 +109,14 @@ DMWT::~DMWT() {
         delete triangleInfoList[i];
     }
   }
+  // The element loops above free the EdgeInfo/TriangleInfo objects but
+  // not the pointer arrays themselves. All of these are null-initialized
+  // in initBasics, so delete[] is safe on every early-exit path.
+  delete[] edgeInfoList;
+  delete[] triangleInfoList;
+  delete[] deGenPoints;
+  if (owns_tris)
+    delete[] tris;
 }
 
 void DMWT::initBasics() {
@@ -124,6 +135,11 @@ void DMWT::initBasics() {
   round            = 0;
   numoftilingtris  = 0;
   isDeGen          = false;
+  owns_tris        = false;
+  tris             = nullptr;
+  deGenPoints      = nullptr;
+  edgeInfoList     = nullptr;
+  triangleInfoList = nullptr;
 }
 //==================================Weight Functions============================//
 
@@ -427,6 +443,7 @@ void DMWT::genTriCandidates() {
   if (numofpoints == 3) {
     numoftris = 1;
     tris      = new int[3];
+    owns_tris = true;
     tris[0]   = 0;
     tris[1]   = 1;
     tris[2]   = 2;
@@ -442,6 +459,7 @@ void DMWT::genTriCandidates() {
     last_delaunay_us = 0;
     numoftris        = presupplied_tris_n_;
     tris             = new int[numoftris * 3];
+    owns_tris        = true;
     std::copy(presupplied_tris_,
               presupplied_tris_ + numoftris * 3,
               tris);
@@ -483,7 +501,8 @@ void DMWT::genTriCandidates() {
     last_delaunay_us = std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0).count();
     if (ok) {
       numoftris = delaunay.numberoftrifaces;
-      tris      = delaunay.trifacelist;
+      tris      = delaunay.trifacelist; // delaunay-owned; freed by the member
+      owns_tris = false;
       return;
     }
   }
@@ -521,7 +540,8 @@ void DMWT::genTriCandidates() {
     if (cassie::delaunay_triangulate_2d_raw(xy.data(), numofpoints, &face_idx, &face_count) &&
             face_count > 0) {
       numoftris = face_count;
-      tris      = face_idx;
+      tris      = face_idx; // delaunay_triangulate_2d_raw transfers ownership
+      owns_tris = true;
     } else {
       numoftris = 0;
       tris      = nullptr;
