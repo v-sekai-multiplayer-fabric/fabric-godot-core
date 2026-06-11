@@ -36,6 +36,9 @@
 #include "core/object/worker_thread_pool.h"
 #include "core/os/os.h"
 #include "scene/3d/mesh_instance_3d.h"
+#ifdef REAL_T_IS_DOUBLE
+#include "servers/rendering/renderer_rd/storage_rd/material_storage.h"
+#endif // REAL_T_IS_DOUBLE
 #include "servers/rendering/rendering_device.h"
 #include "servers/rendering/rendering_server.h"
 #include "servers/resonanceaudio/resonance_audio_material_map.h"

@@ -34,7 +34,6 @@
 #include "servers/resonanceaudio/resonance_audio_wrapper.h"
 #ifndef PHYSICS_3D_DISABLED
 #include "scene/3d/physics/collision_shape_3d.h"
-#include "scene/3d/physics/static_body_3d.h"
 #endif // PHYSICS_3D_DISABLED
 #include "scene/main/scene_tree.h"
 
