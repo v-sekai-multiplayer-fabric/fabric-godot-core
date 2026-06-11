@@ -271,9 +271,23 @@ delaunay_faces_src = ["#thirdparty/multipolygon_triangulator/DelaunayFaces.cpp"]
 mwt_sources = [f for f in mwt_sources if not str(f).endswith("DelaunayFaces.cpp")]
 geogram_sources += delaunay_faces_src
 
+# refine.cpp pulls in PMP -> Eigen headers, which are not warning-clean under
+# Godot's -Werror (-Wduplicated-branches / -Wctor-dtor-privacy on GCC and the
+# analogous diagnostics on Clang / MinGW / clang-cl / emscripten -- every
+# compiler in CI). Compile the PMP/Eigen-consuming module TUs under a
+# warnings-disabled clone, the same policy env_geogram / env_slang already use
+# for vendored code, instead of disabling warnings module-wide or chasing
+# per-compiler -isystem / /external flags. The clone inherits the bit-
+# determinism FP flags above; disable_warnings() touches only warning flags.
+env_pmp = env_cassie.Clone()
+env_pmp.disable_warnings()
+pmp_consumer_sources = ["src/refine.cpp"]
+
+cassie_src = [f for f in Glob("src/*.cpp") if str(f).split(os.sep)[-1] != "refine.cpp"]
+
 sources = (
     ["register_types.cpp"]
-    + Glob("src/*.cpp")
+    + cassie_src
     + Glob("src/curves/*.cpp")
     + Glob("src/sketch/*.cpp")
     + Glob("src/constraints/*.cpp")
@@ -282,6 +296,7 @@ sources = (
 )
 
 env_cassie.add_source_files(env.modules_sources, sources)
+env_pmp.add_source_files(env.modules_sources, pmp_consumer_sources)
 
 # The slang_dispatch wrappers #include the vendored Slang CPU prelude, whose
 # COM-style interface structs (ISlangUnknown, ITexture, IRWTexture, ...) declare
