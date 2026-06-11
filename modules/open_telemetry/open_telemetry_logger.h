@@ -54,4 +54,14 @@ public:
 
 	void set_enabled(bool p_enabled) { enabled = p_enabled; }
 	bool is_enabled() const { return enabled; }
+
+	// Sever the link to the wrapped OpenTelemetry instance when that instance
+	// is about to be freed. The logger itself must NOT be deleted by whoever
+	// created it once it has been handed to OS::add_logger() — the OS's
+	// CompositeLogger takes ownership and memdeletes every registered logger
+	// in its destructor at process exit.
+	void detach_instance() {
+		otel_instance = nullptr;
+		enabled = false;
+	}
 };

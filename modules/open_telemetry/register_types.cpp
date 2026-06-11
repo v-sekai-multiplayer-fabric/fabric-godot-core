@@ -156,9 +156,14 @@ void initialize_open_telemetry_module(ModuleInitializationLevel p_level) {
 
 void uninitialize_open_telemetry_module(ModuleInitializationLevel p_level) {
 	if (p_level == MODULE_INITIALIZATION_LEVEL_SERVERS) {
-		// Clean up logger and OpenTelemetry instance
+		// Detach the logger from the instance we are about to free, but do
+		// NOT memdelete it: OS::add_logger() transferred ownership to the
+		// OS CompositeLogger, whose destructor memdeletes every registered
+		// logger at process exit. Deleting here too double-freed the logger
+		// and crashed every editor run on shutdown with an access violation
+		// in CompositeLogger::~CompositeLogger (core/io/logger.cpp).
 		if (global_otel_logger) {
-			memdelete(global_otel_logger);
+			global_otel_logger->detach_instance();
 			global_otel_logger = nullptr;
 		}
 
