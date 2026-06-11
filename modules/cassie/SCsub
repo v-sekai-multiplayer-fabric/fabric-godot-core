@@ -101,7 +101,10 @@ if env_cassie.get("platform") == "windows" and "g++" not in _compiler:
     # -ffp-model=strict as an unknown argument). /fp:strict disables
     # fused-multiply-add reassociation and holds rounding mode constant.
     # Excludes MinGW (g++), handled by the GCC branch below.
-    env_cassie.Append(CCFLAGS=["/fp:strict"])
+    # /wd4724: under /fp:strict /O2, MSVC raises a false-positive
+    # "potential mod by 0" (C4724) inside core/templates/cowdata.h
+    # template instantiations; clang-cl ignores unknown /wd numbers.
+    env_cassie.Append(CCFLAGS=["/fp:strict", "/wd4724"])
 elif "clang" in _compiler:
     # Non-Windows clang. -ffp-model=strict warns -Wunsupported-floating-point-opt
     # on targets without full strict-FP support (x86 + sanitizers), which
@@ -136,6 +139,13 @@ env_cassie.Depends(Glob("src/solver/slang_dispatch/*.cpp"), spv_gen_headers)
 # #includes the corresponding .cpu.cpp so the namespaced types are
 # visible only in that one TU (no duplicate-symbol risk).
 mwt_sources = Glob("#thirdparty/multipolygon_triangulator/*.cpp")
+
+# MWT is vendored upstream code (strcpy/strcat use trips clang-cl's
+# -Wdeprecated-declarations under -Werror, MSVC's C4996 likewise);
+# silence its warnings per the standard thirdparty policy. The clone
+# keeps env_cassie's strict-FP flags, so bit-determinism is unaffected.
+env_mwt = env_cassie.Clone()
+env_mwt.disable_warnings()
 
 # --- Geogram env clone ---
 # Godot's build is -fno-exceptions. Geogram has a handful of throw
@@ -273,15 +283,24 @@ geogram_sources += delaunay_faces_src
 
 sources = (
     ["register_types.cpp"]
-    + Glob("src/*.cpp")
+    + [f for f in Glob("src/*.cpp") if not str(f).endswith("refine.cpp")]
     + Glob("src/curves/*.cpp")
     + Glob("src/sketch/*.cpp")
     + Glob("src/constraints/*.cpp")
     + Glob("src/solver/*.cpp")
-    + mwt_sources
 )
 
 env_cassie.add_source_files(env.modules_sources, sources)
+env_mwt.add_source_files(env.modules_sources, mwt_sources)
+
+# refine.cpp is the one CASSIE TU that includes PMP headers, which pull
+# in Eigen. Eigen's expression templates trip GCC's -Wduplicated-branches
+# and -Wctor-dtor-privacy under -Werror (the ReturnByValue guard class is
+# all-private by design); relax just those two diagnostics for this TU.
+env_refine = env_cassie.Clone()
+if "g++" in _compiler or "gcc" in _compiler:
+    env_refine.Append(CCFLAGS=["-Wno-duplicated-branches", "-Wno-ctor-dtor-privacy"])
+env_refine.add_source_files(env.modules_sources, ["src/refine.cpp"])
 
 # The slang_dispatch wrappers #include the vendored Slang CPU prelude, whose
 # COM-style interface structs (ISlangUnknown, ITexture, IRWTexture, ...) declare
@@ -289,7 +308,7 @@ env_cassie.add_source_files(env.modules_sources, sources)
 # silences -Wnon-virtual-dtor on clang/clang-cl/gcc/mingw so -Werror doesn't
 # reject the vendored headers (plain MSVC has no such warning).
 env_slang = env_cassie.Clone()
-if "clang" in _compiler or "g++" in _compiler or "gcc" in _compiler:
+if "clang" in _compiler or "g++" in _compiler or "gcc" in _compiler or "em++" in _compiler or "emcc" in _compiler:
     env_slang.Append(CCFLAGS=["-Wno-non-virtual-dtor"])
 env_slang.add_source_files(env.modules_sources, Glob("src/solver/slang_dispatch/*.cpp"))
 # Geogram sources use the exceptions-enabled env clone.
