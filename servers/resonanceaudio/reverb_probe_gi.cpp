@@ -280,11 +280,11 @@ void ReverbProbeGI::_ensure_gpu_resources() {
 void ReverbProbeGI::_free_gpu_resources() {
 	if (_gpu_rd) {
 		if (_gpu_pipeline.is_valid()) {
-			_gpu_rd->free(_gpu_pipeline);
+			_gpu_rd->free_rid(_gpu_pipeline);
 			_gpu_pipeline = RID();
 		}
 		if (_gpu_shader.is_valid()) {
-			_gpu_rd->free(_gpu_shader);
+			_gpu_rd->free_rid(_gpu_shader);
 			_gpu_shader = RID();
 		}
 		memdelete(_gpu_rd);
@@ -694,18 +694,18 @@ bool ReverbProbeGI::_bake_gpu(const PackedVector3Array &p_probes, const Vector<V
 	}
 
 	// Cleanup.
-	rd->free(accum_buf);
-	rd->free(sorted_tri_buf);
-	rd->free(cluster_aabb_buf);
-	rd->free(cluster_idx_buf);
-	rd->free(grid_buf);
-	rd->free(mat_buf);
-	rd->free(probe_buf);
-	rd->free(tri_buf);
-	rd->free(vertex_buf);
-	rd->free(params_buf);
-	rd->free(uniform_set1);
-	rd->free(uniform_set0);
+	rd->free_rid(accum_buf);
+	rd->free_rid(sorted_tri_buf);
+	rd->free_rid(cluster_aabb_buf);
+	rd->free_rid(cluster_idx_buf);
+	rd->free_rid(grid_buf);
+	rd->free_rid(mat_buf);
+	rd->free_rid(probe_buf);
+	rd->free_rid(tri_buf);
+	rd->free_rid(vertex_buf);
+	rd->free_rid(params_buf);
+	rd->free_rid(uniform_set1);
+	rd->free_rid(uniform_set0);
 
 	return true;
 }
