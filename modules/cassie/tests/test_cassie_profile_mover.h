@@ -241,9 +241,16 @@ TEST_CASE("[Cassie][ProfileMover] harmonic bind on ~10k-vertex mesh under 2 s") 
 	const uint64_t t0 = Time::get_singleton()->get_ticks_usec();
 	mover->bind(patch, cn);
 	const uint64_t dt = Time::get_singleton()->get_ticks_usec() - t0;
+#if !defined(ASAN_ENABLED) && !defined(TSAN_ENABLED)
+	// Sanitizer instrumentation inflates wall-clock far past the budget, so
+	// the timing assertion is meaningless there; the bind still runs above
+	// to exercise correctness. vformat has no %llu, so cast to int (dt is
+	// well under INT_MAX microseconds for any non-pathological bind).
 	CHECK_MESSAGE(dt < 2ULL * 1000 * 1000,
-			vformat("harmonic bind took %llu us, exceeds 2 s budget",
-					(unsigned long long)dt));
+			vformat("harmonic bind took %d us, exceeds 2 s budget", int(dt)));
+#else
+	(void)dt;
+#endif
 	CHECK(mover->is_harmonic_ready());
 }
 

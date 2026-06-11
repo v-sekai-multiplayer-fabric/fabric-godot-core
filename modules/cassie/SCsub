@@ -104,7 +104,12 @@ if env_cassie.get("platform") == "windows" and "g++" not in _compiler:
     # /wd4724: under /fp:strict /O2, MSVC raises a false-positive
     # "potential mod by 0" (C4724) inside core/templates/cowdata.h
     # template instantiations; clang-cl ignores unknown /wd numbers.
-    env_cassie.Append(CCFLAGS=["/fp:strict", "/wd4724"])
+    # /wd4530: geogram's algorithm.cpp pulls in <concrt.h> via the MSVC
+    # parallel STL, whose try/catch raises C4530 ("exception handler used,
+    # but unwind semantics are not enabled") under Godot's _HAS_EXCEPTIONS=0
+    # build. disable_warnings() only lowers the level to /w; /WX still
+    # promotes it, so exclude this specific warning explicitly.
+    env_cassie.Append(CCFLAGS=["/fp:strict", "/wd4724", "/wd4530"])
 elif "clang" in _compiler:
     # Non-Windows clang. -ffp-model=strict warns -Wunsupported-floating-point-opt
     # on targets without full strict-FP support (x86 + sanitizers), which

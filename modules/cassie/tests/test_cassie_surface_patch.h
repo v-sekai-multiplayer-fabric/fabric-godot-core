@@ -288,8 +288,15 @@ TEST_CASE("[Cassie][SurfacePatch] BVH query on 100k-triangle mesh under 200 us (
 	}
 	samples.sort();
 	const uint64_t p95 = samples[uint32_t(real_t(samples.size()) * real_t(0.95))];
+#if !defined(ASAN_ENABLED) && !defined(TSAN_ENABLED)
+	// Sanitizer instrumentation inflates the per-query latency well past the
+	// budget (observed ~648 us under TSan vs the 200 us target), so skip the
+	// timing assertion there; the projections above still run and are checked.
 	CHECK_MESSAGE(p95 < 200ULL,
 			vformat("BVH p95 latency %d us exceeds 200 us budget", int(p95)));
+#else
+	(void)p95;
+#endif
 }
 
 TEST_CASE("[Cassie][SurfacePatch] BVH and brute-force return identical projections") {
