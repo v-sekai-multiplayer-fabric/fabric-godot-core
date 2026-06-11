@@ -64,8 +64,11 @@
 #include <new>
 
 // MUSL does not have execinfo (so we won't have backtrace with MUSL)
+// Android's bionic ships <execinfo.h> in the NDK sysroot but only
+// declares backtrace()/backtrace_symbols() from API level 33, so the
+// __has_include check alone is not enough there.
 #if defined(__has_include)
-#if __has_include(<execinfo.h>)
+#if __has_include(<execinfo.h>) && (!defined(__ANDROID_API__) || __ANDROID_API__ >= 33)
 #include <execinfo.h>
 #define HAS_EXECINFO
 #endif
