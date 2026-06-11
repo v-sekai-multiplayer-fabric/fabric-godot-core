@@ -65,7 +65,7 @@
 
 // MUSL does not have execinfo (so we won't have backtrace with MUSL)
 #if defined(__has_include)
-#if __has_include(<execinfo.h>)
+#if __has_include(<execinfo.h>) && !defined(__ANDROID__)
 #include <execinfo.h>
 #define HAS_EXECINFO
 #endif

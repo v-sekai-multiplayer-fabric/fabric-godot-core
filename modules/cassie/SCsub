@@ -304,7 +304,7 @@ env_pmp.add_source_files(env.modules_sources, pmp_consumer_sources)
 # silences -Wnon-virtual-dtor on clang/clang-cl/gcc/mingw so -Werror doesn't
 # reject the vendored headers (plain MSVC has no such warning).
 env_slang = env_cassie.Clone()
-if "clang" in _compiler or "g++" in _compiler or "gcc" in _compiler:
+if "clang" in _compiler or "g++" in _compiler or "gcc" in _compiler or env_cassie.get("platform") == "web":
     env_slang.Append(CCFLAGS=["-Wno-non-virtual-dtor"])
 env_slang.add_source_files(env.modules_sources, Glob("src/solver/slang_dispatch/*.cpp"))
 # Geogram sources use the exceptions-enabled env clone.
