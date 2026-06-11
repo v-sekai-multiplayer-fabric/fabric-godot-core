@@ -51,8 +51,20 @@ module_env.Prepend(CPPPATH=["#thirdparty/AEC3/base/abseil"])
 module_env.Prepend(CPPPATH=["include"])
 module_env.Prepend(CPPPATH=["include"])
 
+# ASan/UBSan builds: skip instrumenting the vendored thirdparty (opus+dnn,
+# rnnoise, AEC3, libsamplerate — several hundred TUs). Their instrumented
+# code and global redzones push the linuxbsd asan+ubsan+double editor binary
+# past the 2 GiB R_X86_64_PC32 relocation range and the link fails. Mixing
+# is safe for ASan/UBSan: module code stays instrumented, thirdparty just
+# isn't checked. Must be appended before each env's add_source_files calls
+# (object nodes snapshot flags at creation).
+_skip_sanitize_flags = []
+if not env.msvc and (env.get("use_asan") or env.get("use_ubsan")):
+    _skip_sanitize_flags = ["-fno-sanitize=all"]
+
 env_thirdparty = module_env.Clone()
 env_thirdparty.disable_warnings()
+env_thirdparty.Append(CCFLAGS=_skip_sanitize_flags)
 thirdparty_dir = "#thirdparty/opus_speech/"
 thirdparty_sources = [
     # Sync with opus_sources.mk (Opus 1.6.1)
@@ -305,6 +317,7 @@ env_thirdparty.add_source_files(env.modules_sources, [thirdparty_dir + s for s i
 rnnoise_dir = "#thirdparty/rnnoise/"
 env_rnnoise = module_env.Clone()
 env_rnnoise.disable_warnings()
+env_rnnoise.Append(CCFLAGS=_skip_sanitize_flags)
 env_rnnoise.Prepend(CPPPATH=["#thirdparty/rnnoise/include", "#thirdparty/rnnoise/src"])
 rnnoise_sources = [
     "src/denoise.c",
@@ -324,6 +337,7 @@ env_rnnoise.add_source_files(env.modules_sources, [rnnoise_dir + s for s in rnno
 aec3_dir = "#thirdparty/"
 env_aec3 = module_env.Clone()
 env_aec3.disable_warnings()
+env_aec3.Append(CCFLAGS=_skip_sanitize_flags)
 env_aec3.Prepend(
     CPPPATH=[
         "#thirdparty/AEC3",
