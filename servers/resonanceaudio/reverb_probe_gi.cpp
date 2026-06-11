@@ -31,13 +31,11 @@
 #include "reverb_probe_gi.h"
 
 #include "core/math/delaunay_3d.h"
-#include "core/math/geometry_3d.h"
 #include "core/math/static_raycaster.h"
 #include "core/object/class_db.h"
 #include "core/object/worker_thread_pool.h"
 #include "core/os/os.h"
 #include "scene/3d/mesh_instance_3d.h"
-#include "servers/rendering/renderer_rd/storage_rd/material_storage.h"
 #include "servers/rendering/rendering_device.h"
 #include "servers/rendering/rendering_server.h"
 #include "servers/resonanceaudio/resonance_audio_material_map.h"
