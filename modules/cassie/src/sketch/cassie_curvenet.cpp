@@ -72,6 +72,13 @@ Basis CassieCurvenet::parallel_transport_along(const Ref<Curve3D> &p_curve,
 	if (p_curve.is_null() || p_curve->get_baked_length() <= real_t(0.0)) {
 		return p_src_basis;
 	}
+	// Coincident source and destination: transport is the identity, so the
+	// source basis is returned unchanged. Short-circuiting also avoids the
+	// frame_dst * frame_src.inverse() round-trip, which under single
+	// precision leaves ~1e-6 drift that would otherwise perturb R.
+	if (p_src_offset == p_dest_offset) {
+		return p_src_basis;
+	}
 	const Transform3D frame_src = p_curve->sample_baked_with_rotation(p_src_offset, true, true);
 	const Transform3D frame_dst = p_curve->sample_baked_with_rotation(p_dest_offset, true, true);
 	// p_src_basis is the user's R at the source frame. Express it as a
