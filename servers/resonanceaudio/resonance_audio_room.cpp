@@ -2,8 +2,10 @@
 
 #include "core/config/project_settings.h"
 #include "resonance_audio_wrapper.h"
-#include "scene/3d/physics/static_body_3d.h"
+#ifndef PHYSICS_3D_DISABLED
 #include "scene/3d/physics/collision_shape_3d.h"
+#include "scene/3d/physics/static_body_3d.h"
+#endif // PHYSICS_3D_DISABLED
 #include "scene/main/scene_tree.h"
 
 #define _USE_MATH_DEFINES
@@ -61,6 +63,7 @@ void ResonanceAudioRoom::update_room_from_colliders() {
 		return;
 	}
 
+#ifndef PHYSICS_3D_DISABLED
 	TypedArray<Node> bodies = root->find_children("*", "StaticBody3D", true, false);
 	for (int i = 0; i < bodies.size(); i++) {
 		Node *node = Object::cast_to<Node>(bodies[i]);
@@ -98,7 +101,10 @@ void ResonanceAudioRoom::update_room_from_colliders() {
 			}
 		}
 	}
+#endif // PHYSICS_3D_DISABLED
 
+	// Without 3D physics there are no colliders to derive a room from, so
+	// `first` stays true and the room is left untouched.
 	if (first) {
 		return;
 	}

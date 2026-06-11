@@ -172,5 +172,18 @@ env_resonance.Append(
 )
 env_resonance.SpvGenH("shaders/reverb_bake.spv.gen.h", "shaders/reverb_bake.spv")
 
-# Godot source files
-env_resonance.add_source_files(env.servers_sources, "*.cpp")
+# Godot source files. The wrapper (ResonanceAudioServer) and bake data are
+# scene-independent and always built — main.cpp instantiates the server
+# unconditionally. The Node3D-derived helpers can't build with disable_3d
+# (scene/3d is excluded entirely there), so they're gated.
+godot_sources = [
+    "resonance_audio_wrapper.cpp",
+    "reverb_bake_data.cpp",
+]
+if not env["disable_3d"]:
+    godot_sources += [
+        "resonance_audio_material_map.cpp",
+        "resonance_audio_room.cpp",
+        "reverb_probe_gi.cpp",
+    ]
+env_resonance.add_source_files(env.servers_sources, godot_sources)
