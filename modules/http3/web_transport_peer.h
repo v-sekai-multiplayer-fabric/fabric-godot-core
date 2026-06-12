@@ -88,8 +88,9 @@ public:
 	static Error (*server_listen_func)(WebTransportPeer *peer, int port, const String &path,
 			const uint8_t *cert_der, size_t cert_der_len, const char *key_pem);
 	static void (*server_close_func)();
-	static Error (*server_send_datagram_func)(const uint8_t *bytes, size_t len);
-	static Error (*server_send_stream_func)(const uint8_t *bytes, size_t len);
+	// target <= 0 broadcasts to every session; > 0 routes to that peer id.
+	static Error (*server_send_datagram_func)(int target, const uint8_t *bytes, size_t len);
+	static Error (*server_send_stream_func)(int target, const uint8_t *bytes, size_t len);
 	// Set/cleared by the backend on WT session connect/disconnect.
 	bool server_session_active = false;
 
@@ -114,9 +115,9 @@ public:
 	static Error (*send_wt_stream_func)(void *ctx, const uint8_t *bytes, size_t len);
 
 	// Called by the backend when a WT datagram arrives via the session.
-	void _push_wt_incoming_datagram(const uint8_t *p_bytes, size_t p_len);
+	void _push_wt_incoming_datagram(const uint8_t *p_bytes, size_t p_len, int p_from = 1);
 	// Called by the backend when WT stream data arrives (reliable).
-	void _push_wt_incoming_stream(const uint8_t *p_bytes, size_t p_len);
+	void _push_wt_incoming_stream(const uint8_t *p_bytes, size_t p_len, int p_from = 1);
 
 	// In-process echo server for loopback testing.
 	static Error (*start_echo_server_func)(int port);

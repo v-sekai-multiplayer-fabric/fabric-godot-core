@@ -125,11 +125,14 @@ enum WorkKind {
 	WORK_OPEN_WT_STREAM, // picowt_create_local_stream + add_to_stream + FIN
 };
 
+struct WTServerSessionCtx;
+
 struct WorkItem {
 	WorkKind kind = WORK_SEND_STREAM;
 	uint64_t stream_id = 0;
 	LocalVector<uint8_t> bytes;
 	bool fin = false;
+	WTServerSessionCtx *session = nullptr; // server side: the target session
 };
 
 struct WorkQueue {
@@ -1098,6 +1101,7 @@ struct WTServerSessionCtx {
 	uint64_t session_stream_id = UINT64_MAX;
 	picoquic_cnx_t *cnx = nullptr;
 	h3zero_stream_ctx_t *control_stream_ctx = nullptr;
+	int peer_id = 0; // MultiplayerPeer id this session carries (2, 3, ...)
 };
 
 struct WTServerCtx {
@@ -1107,7 +1111,9 @@ struct WTServerCtx {
 	picohttp_server_parameters_t server_param{};
 	picohttp_server_path_item_t path_table[1]{};
 	WebTransportPeer *peer = nullptr;
-	WTServerSessionCtx *active_session = nullptr;
+	Mutex sessions_mutex;
+	LocalVector<WTServerSessionCtx *> sessions;
+	int next_peer_id = 2; // 1 is the server itself
 	WorkQueue wq;
 	CharString path_cs;
 };
@@ -1135,8 +1141,10 @@ static int _server_path_callback(picoquic_cnx_t *p_cnx, uint8_t *p_bytes, size_t
 							_server_path_callback, ctx);
 				}
 			}
-			if (_wt_server && _wt_server->active_session == nullptr) {
-				_wt_server->active_session = ctx;
+			if (_wt_server) {
+				MutexLock lock(_wt_server->sessions_mutex);
+				ctx->peer_id = _wt_server->next_peer_id++;
+				_wt_server->sessions.push_back(ctx);
 				if (_wt_server->peer) {
 					_wt_server->peer->server_session_active = true;
 				}
@@ -1147,7 +1155,7 @@ static int _server_path_callback(picoquic_cnx_t *p_cnx, uint8_t *p_bytes, size_t
 			if (!sctx || !sctx->peer || !p_bytes || p_length == 0) {
 				return 0;
 			}
-			sctx->peer->_push_wt_incoming_datagram(p_bytes, p_length);
+			sctx->peer->_push_wt_incoming_datagram(p_bytes, p_length, sctx->peer_id);
 			return 0;
 		case picohttp_callback_post_data:
 		case picohttp_callback_post_fin:
@@ -1155,7 +1163,7 @@ static int _server_path_callback(picoquic_cnx_t *p_cnx, uint8_t *p_bytes, size_t
 				return 0;
 			}
 			if (p_bytes && p_length > 0) {
-				sctx->peer->_push_wt_incoming_stream(p_bytes, p_length);
+				sctx->peer->_push_wt_incoming_stream(p_bytes, p_length, sctx->peer_id);
 			}
 			if (p_event == picohttp_callback_post_fin && p_stream_ctx) {
 				picoquic_add_to_stream(p_cnx, p_stream_ctx->stream_id, nullptr, 0, 1);
@@ -1164,13 +1172,21 @@ static int _server_path_callback(picoquic_cnx_t *p_cnx, uint8_t *p_bytes, size_t
 		case picohttp_callback_deregister:
 		case picohttp_callback_free:
 			if (sctx) {
-				if (_wt_server && _wt_server->active_session == sctx) {
-					_wt_server->active_session = nullptr;
+				bool owned = false;
+				if (_wt_server) {
+					MutexLock lock(_wt_server->sessions_mutex);
+					int64_t idx = _wt_server->sessions.find(sctx);
+					if (idx >= 0) {
+						_wt_server->sessions.remove_at(idx);
+						owned = true;
+					}
 					if (_wt_server->peer) {
-						_wt_server->peer->server_session_active = false;
+						_wt_server->peer->server_session_active = _wt_server->sessions.size() > 0;
 					}
 				}
-				delete sctx;
+				if (owned) {
+					delete sctx; // erase-then-delete: a second deregister/free finds nothing
+				}
 				if (p_stream_ctx) {
 					p_stream_ctx->path_callback_ctx = nullptr;
 				}
@@ -1190,10 +1206,43 @@ static int _server_loop_cb(picoquic_quic_t *p_quic, picoquic_packet_loop_cb_enum
 		return 0;
 	}
 	if (p_mode == picoquic_packet_loop_wake_up) {
-		if (sctx->active_session) {
-			_drain_work_queue(sctx->wq, sctx->active_session->cnx,
-					sctx->active_session->control_stream_ctx,
-					_server_path_callback, sctx->active_session);
+		LocalVector<WorkItem> items;
+		sctx->wq.drain(items);
+		MutexLock lock(sctx->sessions_mutex);
+		for (WorkItem &item : items) {
+			// Validate the target session still lives; it can close between
+			// queueing on the main thread and draining here.
+			if (!item.session || sctx->sessions.find(item.session) < 0) {
+				continue;
+			}
+			WTServerSessionCtx *target = item.session;
+			switch (item.kind) {
+				case WORK_SEND_DATAGRAM: {
+					picoquic_queue_datagram_frame(target->cnx, item.bytes.size(), item.bytes.ptr());
+				} break;
+				case WORK_OPEN_WT_STREAM: {
+					if (!target->control_stream_ctx) {
+						break;
+					}
+					h3zero_callback_ctx_t *h3 = (h3zero_callback_ctx_t *)picoquic_get_callback_context(target->cnx);
+					if (!h3) {
+						break;
+					}
+					h3zero_stream_ctx_t *stream = picowt_create_local_stream(
+							target->cnx, /*is_bidir=*/1, h3, target->control_stream_ctx->stream_id);
+					if (!stream) {
+						break;
+					}
+					stream->path_callback = _server_path_callback;
+					stream->path_callback_ctx = target;
+					picoquic_add_to_stream(target->cnx, stream->stream_id,
+							item.bytes.ptr(), item.bytes.size(), item.fin ? 1 : 0);
+				} break;
+				default: {
+					picoquic_add_to_stream(target->cnx, item.stream_id,
+							item.bytes.ptr(), item.bytes.size(), item.fin ? 1 : 0);
+				} break;
+			}
 		}
 	}
 	return 0;
@@ -1293,16 +1342,16 @@ static void _wt_server_close() {
 		picoquic_free(_wt_server->quic);
 		_wt_server->quic = nullptr;
 	}
-	_wt_server->active_session = nullptr; // freed by h3zero teardown
+	{
+		MutexLock lock(_wt_server->sessions_mutex);
+		_wt_server->sessions.clear(); // ctxs freed by h3zero teardown
+	}
 	delete _wt_server;
 	_wt_server = nullptr;
 }
 
-static Error _wt_server_send_datagram(const uint8_t *p_bytes, size_t p_len) {
-	if (!_wt_server || !_wt_server->active_session) {
-		return ERR_UNCONFIGURED;
-	}
-	uint64_t qid = _wt_server->active_session->session_stream_id / 4;
+static Error _wt_server_queue_datagram(WTServerSessionCtx *p_session, const uint8_t *p_bytes, size_t p_len) {
+	uint64_t qid = p_session->session_stream_id / 4;
 	size_t prefix_len;
 	uint8_t prefix[2];
 	if (qid < 64) {
@@ -1320,34 +1369,66 @@ static Error _wt_server_send_datagram(const uint8_t *p_bytes, size_t p_len) {
 	}
 	WorkItem dg;
 	dg.kind = WORK_SEND_DATAGRAM;
+	dg.session = p_session;
 	dg.bytes.resize(prefix_len + p_len);
 	memcpy(dg.bytes.ptr(), prefix, prefix_len);
 	if (p_len > 0) {
 		memcpy(dg.bytes.ptr() + prefix_len, p_bytes, p_len);
 	}
 	_wt_server->wq.push(std::move(dg));
-	if (_wt_server->thread_ctx) {
-		picoquic_wake_up_network_thread(_wt_server->thread_ctx);
-	}
 	return OK;
 }
 
-static Error _wt_server_send_stream(const uint8_t *p_bytes, size_t p_len) {
-	if (!_wt_server || !_wt_server->active_session) {
+static Error _wt_server_send_datagram(int p_target, const uint8_t *p_bytes, size_t p_len) {
+	if (!_wt_server) {
 		return ERR_UNCONFIGURED;
 	}
-	WorkItem w;
-	w.kind = WORK_OPEN_WT_STREAM;
-	w.bytes.resize(p_len);
-	if (p_len > 0) {
-		memcpy(w.bytes.ptr(), p_bytes, p_len);
+	Error err = ERR_UNCONFIGURED;
+	{
+		MutexLock lock(_wt_server->sessions_mutex);
+		for (WTServerSessionCtx *session : _wt_server->sessions) {
+			if (p_target > 0 && session->peer_id != p_target) {
+				continue;
+			}
+			err = _wt_server_queue_datagram(session, p_bytes, p_len);
+			if (err != OK) {
+				return err;
+			}
+		}
 	}
-	w.fin = true;
-	_wt_server->wq.push(std::move(w));
-	if (_wt_server->thread_ctx) {
+	if (err == OK && _wt_server->thread_ctx) {
 		picoquic_wake_up_network_thread(_wt_server->thread_ctx);
 	}
-	return OK;
+	return err;
+}
+
+static Error _wt_server_send_stream(int p_target, const uint8_t *p_bytes, size_t p_len) {
+	if (!_wt_server) {
+		return ERR_UNCONFIGURED;
+	}
+	Error err = ERR_UNCONFIGURED;
+	{
+		MutexLock lock(_wt_server->sessions_mutex);
+		for (WTServerSessionCtx *session : _wt_server->sessions) {
+			if (p_target > 0 && session->peer_id != p_target) {
+				continue;
+			}
+			WorkItem w;
+			w.kind = WORK_OPEN_WT_STREAM;
+			w.session = session;
+			w.bytes.resize(p_len);
+			if (p_len > 0) {
+				memcpy(w.bytes.ptr(), p_bytes, p_len);
+			}
+			w.fin = true;
+			_wt_server->wq.push(std::move(w));
+			err = OK;
+		}
+	}
+	if (err == OK && _wt_server->thread_ctx) {
+		picoquic_wake_up_network_thread(_wt_server->thread_ctx);
+	}
+	return err;
 }
 
 } // namespace
