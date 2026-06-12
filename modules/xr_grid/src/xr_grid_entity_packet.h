@@ -46,6 +46,7 @@ public:
 	XRGridEntityPacket() = default;
 
 	static constexpr int PACKET_SIZE = 100;
+	static constexpr int PAYLOAD_OFFSET = 58; // userdata starts here (42 bytes)
 	static constexpr int64_t PLAYER_ENTITY_BASE = 2'000'000;
 	static constexpr int64_t STROKE_ENTITY_BASE = 1'000'000;
 	static constexpr int64_t MAX_PLAYER_ID = 700'000'000;
@@ -61,11 +62,14 @@ public:
 			int p_owner_id,
 			int p_hlc_frame,
 			int p_hlc_counter,
-			int p_sub_index);
+			int p_sub_index,
+			const PackedByteArray &p_payload = PackedByteArray());
 
 	// Decode a packet. Returns:
 	//   {global_id, position, velocity, rotation, entity_class, owner_id,
-	//    sub_index, hlc_frame, hlc_counter}
+	//    sub_index, hlc_frame, hlc_counter, payload}
+	// Position is absolute int64 micrometers (no origin shift); payload is the
+	// 42-byte userdata tail.
 	// Returns an empty Dictionary on size mismatch.
 	static Dictionary decode(const PackedByteArray &p_data);
 };

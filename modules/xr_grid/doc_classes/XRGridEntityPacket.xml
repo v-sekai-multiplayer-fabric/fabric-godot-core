@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="UTF-8" ?>
 <class name="XRGridEntityPacket" inherits="RefCounted" api_type="core" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="../../../doc/class.xsd">
 	<brief_description>
+		Fixed 100-byte entity envelope: absolute int64-micrometer position (no origin shift), i16 velocity, swing-twist i16 rotation, HLC, and a 42-byte userdata payload.
 	</brief_description>
 	<description>
 	</description>
@@ -24,6 +25,7 @@
 			<param index="6" name="hlc_frame" type="int" />
 			<param index="7" name="hlc_counter" type="int" />
 			<param index="8" name="sub_index" type="int" />
+			<param index="9" name="payload" type="PackedByteArray" default="PackedByteArray()" />
 			<description>
 			</description>
 		</method>
