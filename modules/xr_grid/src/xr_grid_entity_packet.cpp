@@ -99,8 +99,12 @@ inline int64_t _get_i64_le(const uint8_t *p) {
 // origin shifting. Range +/- 9.2e12 m at 1 um. The authoritative value is r128;
 // this is its um-scale integer projection.
 static constexpr double POS_UM = 1000000.0;
-inline int64_t _pos_to_um(double m) { return int64_t(llround(m * POS_UM)); }
-inline double _um_to_pos(int64_t um) { return double(um) / POS_UM; }
+inline int64_t _pos_to_um(double m) {
+	return int64_t(llround(m * POS_UM));
+}
+inline double _um_to_pos(int64_t um) {
+	return double(um) / POS_UM;
+}
 
 // Velocity is i16, mapping +/- PBVH_V_MAX_PHYSICAL to +/- 32767 — the same scale
 // the Lean-proved predictive BVH uses. Keep VEL_MAX_UM_PER_TICK equal to

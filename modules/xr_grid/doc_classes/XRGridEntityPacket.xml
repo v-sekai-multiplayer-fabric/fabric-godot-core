@@ -33,6 +33,9 @@
 	<constants>
 		<constant name="PACKET_SIZE" value="100">
 		</constant>
+		<constant name="PAYLOAD_OFFSET" value="58">
+			The byte offset where the 42-byte userdata payload begins.
+		</constant>
 		<constant name="PLAYER_ENTITY_BASE" value="2000000">
 		</constant>
 		<constant name="STROKE_ENTITY_BASE" value="1000000">
