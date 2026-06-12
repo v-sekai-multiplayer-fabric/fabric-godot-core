@@ -3,7 +3,7 @@
 # and maintains a pool of visual nodes (JellyfishVisual / WhaleVisual).
 #
 # CH_INTEREST packet format (100 bytes per entity):
-#   [u32 gid(4)][f64 cx(8)][f64 cy(8)][f64 cz(8)]
+#   [u32 gid(4)][i64 cx_um(8)][i64 cy_um(8)][i64 cz_um(8)]
 #   [i16 vx(2)][i16 vy(2)][i16 vz(2)][i16 ax(2)][i16 ay(2)][i16 az(2)]
 #   [u32 hlc(4)][u32×14 payload(56)]
 #   hlc = tick(24b) | counter(8b)
@@ -152,9 +152,9 @@ func _send_xr_heartbeat() -> void:
 	pkt.resize(100)
 	pkt.fill(0)
 	pkt.encode_u32(0, player_id)
-	pkt.encode_double(4,  pos.x)
-	pkt.encode_double(12, pos.y)
-	pkt.encode_double(20, pos.z)
+	pkt.encode_s64(4,  int(round(pos.x * 1000000.0)))   # int64 um (absolute, no origin shift)
+	pkt.encode_s64(12, int(round(pos.y * 1000000.0)))
+	pkt.encode_s64(20, int(round(pos.z * 1000000.0)))
 	# vel/accel int16 at 28-39: leave 0 (no client-side extrapolation)
 	# hlc at 40: leave 0 (server assigns HLC on upsert)
 	# payload[0] low byte = 0 (cmd=0: player position update)
@@ -171,9 +171,9 @@ func _drain_interest() -> void:
 		var offset := 0
 		while offset + PACKET_ENTRY_SIZE <= pkt.size():
 			var gid: int   = pkt.decode_u32(offset)
-			var cx:  float = pkt.decode_double(offset + 4)
-			var cy:  float = pkt.decode_double(offset + 12)
-			var cz:  float = pkt.decode_double(offset + 20)
+			var cx:  float = pkt.decode_s64(offset + 4) / 1000000.0   # int64 um (absolute)
+			var cy:  float = pkt.decode_s64(offset + 12) / 1000000.0
+			var cz:  float = pkt.decode_s64(offset + 20) / 1000000.0
 			var vx:  float = pkt.decode_s16(offset + 28) / V_SCALE
 			var vy:  float = pkt.decode_s16(offset + 30) / V_SCALE
 			var vz:  float = pkt.decode_s16(offset + 32) / V_SCALE
@@ -286,16 +286,16 @@ func spawn_stroke_knot(pos: Vector3, stroke_id: int, color: Color) -> void:
 	if not _peer or not _peer.get_connection_status() == MultiplayerPeer.CONNECTION_CONNECTED:
 		return
 	# CH_PLAYER packet: 100 bytes, same skeleton as CH_INTEREST.
-	# [u32 player_id(4)][f64 cx(8)][f64 cy(8)][f64 cz(8)]
+	# [u32 player_id(4)][i64 cx_um(8)][i64 cy_um(8)][i64 cz_um(8)]
 	# [i16×6 vel/accel(12)][u32 hlc(4)][u32×14 payload(56)]
 	# payload[0] low byte = cmd; payload[1] = stroke_id; payload[2] = color RGBA8888
 	var pkt := PackedByteArray()
 	pkt.resize(100)
 	pkt.fill(0)
 	# player_id at 0: leave 0
-	pkt.encode_double(4,  pos.x)
-	pkt.encode_double(12, pos.y)
-	pkt.encode_double(20, pos.z)
+	pkt.encode_s64(4,  int(round(pos.x * 1000000.0)))
+	pkt.encode_s64(12, int(round(pos.y * 1000000.0)))
+	pkt.encode_s64(20, int(round(pos.z * 1000000.0)))
 	# vel/accel int16 at 28–39: leave 0
 	# hlc at 40: leave 0
 	pkt[44] = 3  # cmd=3 in low byte of payload[0]
