@@ -44,8 +44,8 @@ Error (*WebTransportPeer::start_echo_server_func)(int) = nullptr;
 void (*WebTransportPeer::stop_echo_server_func)() = nullptr;
 Error (*WebTransportPeer::server_listen_func)(WebTransportPeer *, int, const String &, const uint8_t *, size_t, const char *) = nullptr;
 void (*WebTransportPeer::server_close_func)() = nullptr;
-Error (*WebTransportPeer::server_send_datagram_func)(const uint8_t *, size_t) = nullptr;
-Error (*WebTransportPeer::server_send_stream_func)(const uint8_t *, size_t) = nullptr;
+Error (*WebTransportPeer::server_send_datagram_func)(int, const uint8_t *, size_t) = nullptr;
+Error (*WebTransportPeer::server_send_stream_func)(int, const uint8_t *, size_t) = nullptr;
 
 WebTransportPeer::WebTransportPeer() {
 	unique_id = generate_unique_id();
@@ -136,7 +136,7 @@ Error WebTransportPeer::get_packet(const uint8_t **r_buffer, int &r_buffer_size)
 	return OK;
 }
 
-void WebTransportPeer::_push_wt_incoming_datagram(const uint8_t *p_bytes, size_t p_len) {
+void WebTransportPeer::_push_wt_incoming_datagram(const uint8_t *p_bytes, size_t p_len, int p_from) {
 	IncomingPacket pkt;
 	if (p_len > 0 && p_bytes) {
 		pkt.bytes.resize(p_len);
@@ -144,11 +144,11 @@ void WebTransportPeer::_push_wt_incoming_datagram(const uint8_t *p_bytes, size_t
 	}
 	pkt.mode = TRANSFER_MODE_UNRELIABLE;
 	pkt.channel = 0;
-	pkt.from = 1;
+	pkt.from = p_from;
 	incoming.push_back(pkt);
 }
 
-void WebTransportPeer::_push_wt_incoming_stream(const uint8_t *p_bytes, size_t p_len) {
+void WebTransportPeer::_push_wt_incoming_stream(const uint8_t *p_bytes, size_t p_len, int p_from) {
 	IncomingPacket pkt;
 	if (p_len > 0 && p_bytes) {
 		pkt.bytes.resize(p_len);
@@ -156,7 +156,7 @@ void WebTransportPeer::_push_wt_incoming_stream(const uint8_t *p_bytes, size_t p
 	}
 	pkt.mode = TRANSFER_MODE_RELIABLE;
 	pkt.channel = 0;
-	pkt.from = 1;
+	pkt.from = p_from;
 	incoming.push_back(pkt);
 }
 
@@ -169,11 +169,11 @@ Error WebTransportPeer::put_packet(const uint8_t *p_buffer, int p_buffer_size) {
 		TransferMode m = get_transfer_mode();
 		if (m == TRANSFER_MODE_RELIABLE) {
 			ERR_FAIL_COND_V(!server_send_stream_func, ERR_UNCONFIGURED);
-			return server_send_stream_func(
+			return server_send_stream_func(target_peer,
 					reinterpret_cast<const uint8_t *>(p_buffer), p_buffer_size);
 		}
 		ERR_FAIL_COND_V(!server_send_datagram_func, ERR_UNCONFIGURED);
-		return server_send_datagram_func(
+		return server_send_datagram_func(target_peer,
 				reinterpret_cast<const uint8_t *>(p_buffer), p_buffer_size);
 	}
 	// Session-backend path: route through WT-session-aware APIs.
