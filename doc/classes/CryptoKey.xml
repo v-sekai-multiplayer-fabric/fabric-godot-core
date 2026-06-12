@@ -11,6 +11,13 @@
 		<link title="SSL certificates">$DOCS_URL/tutorials/networking/ssl_certificates.html</link>
 	</tutorials>
 	<methods>
+		<method name="get_der" qualifiers="const">
+			<return type="PackedByteArray" />
+			<param index="0" name="public_only" type="bool" default="false" />
+			<description>
+				Returns the key in raw DER encoding. With [param public_only] the public key alone is encoded. Certificate-hash flows (WebTransport) digest this DER form.
+			</description>
+		</method>
 		<method name="is_public_only" qualifiers="const">
 			<return type="bool" />
 			<description>
