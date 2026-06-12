@@ -30,7 +30,8 @@
 
 #pragma once
 
-#include "modules/native_media/backends/gstreamer/gst_decls.h"
+// Provides GStreamer type declarations for the generated stubs.
+#include "modules/native_media/backends/gstreamer/gst_decls.h" // IWYU pragma: keep
 
 // generate_stubs.py emits this macro on every dispatched call to opt out of
 // Chromium's Control Flow Integrity indirect-call check. Godot doesn't ship

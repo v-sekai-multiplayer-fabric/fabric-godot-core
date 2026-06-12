@@ -42,8 +42,8 @@
 // (GstMapInfo, GstMappedMemory). Internal struct fields stay untouched —
 // access goes through library functions.
 
-#include <stddef.h>
-#include <stdint.h>
+#include <cstddef>
+#include <cstdint>
 
 #ifdef __cplusplus
 extern "C" {
@@ -73,7 +73,7 @@ typedef float gfloat;
 typedef double gdouble;
 typedef gsize GType;
 
-typedef void (*GCallback)(void);
+typedef void (*GCallback)();
 typedef void (*GClosureNotify)(gpointer, void *);
 
 #define G_GNUC_CONST

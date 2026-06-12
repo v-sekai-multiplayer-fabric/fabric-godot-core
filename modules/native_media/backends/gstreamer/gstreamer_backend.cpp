@@ -34,13 +34,14 @@
 
 #include "core/error/error_macros.h"
 #include "core/os/mutex.h"
-#include "core/variant/variant.h" // For vformat/print_verbose argument packing.
+// For vformat/print_verbose argument packing.
+#include "core/variant/variant.h" // IWYU pragma: keep
 
 #include "modules/native_media/backends/gstreamer/gstreamer_stubs.h"
 
 #include <dlfcn.h>
-#include <stdio.h>
-#include <string.h>
+
+#include <cstring>
 
 namespace stubs = modules_native_media_backends_gstreamer;
 
