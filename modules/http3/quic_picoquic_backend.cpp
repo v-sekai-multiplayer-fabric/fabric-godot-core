@@ -70,6 +70,8 @@
 #include <netinet/in.h>
 #include <sys/socket.h>
 #endif
+#include "frame.h" // wtd_frame_encode/decode — persistent-stream WT framing
+
 #include <demoserver.h>
 #include <h3zero.h>
 #include <h3zero_common.h>
@@ -82,8 +84,6 @@
 #include <picoquic_utils.h>
 #include <ptls_mbedtls.h>
 #include <tls_api.h>
-
-#include "frame.h" // wtd_frame_encode/decode — persistent-stream WT framing
 
 #include <cstdio>
 #include <cstring>
