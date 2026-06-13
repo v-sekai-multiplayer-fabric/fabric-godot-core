@@ -35,6 +35,7 @@
 #include "../src/cassie_triangulator.h"
 #include "../src/constraints/cassie_constraint.h"
 #include "../src/constraints/cassie_intersection_constraint.h"
+#include "../src/constraints/cassie_intersection_finder.h"
 #include "../src/constraints/cassie_mirror_plane_constraint.h"
 #include "../src/curves/cassie_curve_fit.h"
 #include "../src/sketch/cassie_final_stroke.h"
@@ -47,7 +48,6 @@
 #include "core/os/time.h"
 #include "core/variant/typed_array.h"
 #include "scene/resources/curve.h"
-#include "scene/resources/mesh.h"
 #include "tests/test_macros.h"
 
 namespace TestCassieSolver {

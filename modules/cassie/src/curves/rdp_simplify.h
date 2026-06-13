@@ -30,7 +30,6 @@
 
 #pragma once
 
-#include "core/math/vector3.h"
 #include "core/variant/variant.h"
 
 // Ramer-Douglas-Peucker polyline simplification.

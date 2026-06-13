@@ -30,8 +30,6 @@
 
 #include "tangent_constraint.h"
 
-#include "core/math/math_funcs.h"
-
 namespace cassie_solver {
 
 TangentConstraint::TangentConstraint(int p_ctrl_pt_idx, const Vector3 &p_t_target,

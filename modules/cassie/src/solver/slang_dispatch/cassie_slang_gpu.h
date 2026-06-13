@@ -51,10 +51,7 @@
 //
 // Not thread-safe — one instance per worker thread.
 
-#include "core/object/ref_counted.h"
-#include "core/templates/local_vector.h"
 #include "core/templates/rid.h"
-#include "core/templates/vector.h"
 #include "servers/rendering/rendering_device.h"
 
 #include <cstdint>

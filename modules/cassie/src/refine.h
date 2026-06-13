@@ -29,7 +29,8 @@
 /**************************************************************************/
 
 #pragma once
-#include "cassie_remesh.h"
+
+#include "core/variant/variant.h"
 
 // Uniform remesh in-place. Pass the original DMWT verts/indices as the
 // reference surface so new vertices are projected back after each smooth pass.

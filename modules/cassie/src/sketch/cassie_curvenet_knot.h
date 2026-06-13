@@ -32,8 +32,6 @@
 
 #include "core/io/resource.h"
 #include "core/math/transform_3d.h"
-#include "core/math/vector3.h"
-#include "core/object/ref_counted.h"
 #include "core/variant/variant.h"
 
 // CassieCurvenetKnot is the per-knot animation primitive — the analog of

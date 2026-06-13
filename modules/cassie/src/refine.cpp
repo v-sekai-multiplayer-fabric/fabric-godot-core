@@ -30,8 +30,6 @@
 
 #include "refine.h"
 
-#include "cassie_remesh.h"
-
 // PMP path (ENG-88 follow-up). Mirrors upstream
 // E:\cassie-triangulation/src/refine.cpp: pmp::uniform_remeshing on a
 // SurfaceMesh built from p_verts + p_indices, with the boundary marked

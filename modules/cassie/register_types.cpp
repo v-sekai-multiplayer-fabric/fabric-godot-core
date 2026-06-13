@@ -98,5 +98,14 @@ void initialize_cassie_module(ModuleInitializationLevel p_level) {
 	ClassDB::register_class<CassieSketcher>();
 }
 
+// Defined in src/lean_ffi/cassie_geogram_ffi.cpp; calls GEO::terminate() if the
+// lazy geogram init ever ran, freeing its global Logger so LeakSanitizer stays
+// quiet at shutdown.
+void cassie_geogram_shutdown();
+
 void uninitialize_cassie_module(ModuleInitializationLevel p_level) {
+	if (p_level != MODULE_INITIALIZATION_LEVEL_SCENE) {
+		return;
+	}
+	cassie_geogram_shutdown();
 }

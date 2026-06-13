@@ -33,7 +33,6 @@
 #include "cassie_stroke_packet.h"
 #include "constraints/cassie_intersection_constraint.h"
 #include "constraints/cassie_intersection_finder.h"
-#include "constraints/cassie_surface_constraint.h"
 
 #include "core/object/class_db.h"
 

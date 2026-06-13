@@ -31,7 +31,6 @@
 #include "cassie_edge_collider.h"
 
 #include "core/math/geometry_3d.h"
-#include "core/math/math_funcs.h"
 #include "core/object/class_db.h"
 
 namespace {

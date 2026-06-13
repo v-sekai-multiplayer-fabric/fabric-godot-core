@@ -30,10 +30,8 @@
 
 #pragma once
 
-#include "core/io/resource.h"
 #include "core/object/ref_counted.h"
 #include "core/variant/dictionary.h"
-#include "core/variant/typed_array.h"
 #include "core/variant/variant.h"
 
 // CassieStrokePacket — fixed-shape, byte-deterministic serializer for the

@@ -37,7 +37,6 @@
 
 #include "core/math/math_funcs.h"
 #include "core/object/class_db.h"
-#include "core/templates/vector.h"
 #include "core/variant/callable.h"
 
 void CassieSketchContext::_bind_methods() {

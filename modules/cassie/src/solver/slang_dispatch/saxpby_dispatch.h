@@ -41,8 +41,6 @@
 //
 // Source-of-truth: `Cloth.SlangCodegen.Saxpby` Lean module.
 
-#include <cstdint>
-
 namespace cassie_slang_dispatch {
 
 void saxpby(int p_n, float p_alpha, float p_beta,

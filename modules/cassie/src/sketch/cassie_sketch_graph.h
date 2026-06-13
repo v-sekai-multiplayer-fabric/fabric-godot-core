@@ -34,7 +34,6 @@
 #include "core/math/vector3.h"
 #include "core/object/ref_counted.h"
 #include "core/templates/hash_map.h"
-#include "core/templates/local_vector.h"
 #include "core/variant/typed_array.h"
 
 // CassieSketchGraph — Tier 4 graph topology for CASSIE editing (ENG-77).

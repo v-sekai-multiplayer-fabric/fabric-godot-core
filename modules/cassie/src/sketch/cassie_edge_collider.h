@@ -32,10 +32,8 @@
 
 #include "cassie_surface_patch.h"
 
-#include "core/math/vector3.h"
 #include "core/object/ref_counted.h"
 #include "core/variant/array.h"
-#include "core/variant/typed_array.h"
 #include "scene/resources/curve.h"
 
 // CassieEdgeCollider — ENG-55 (Track 4 step 4.3). Discrete-proximity

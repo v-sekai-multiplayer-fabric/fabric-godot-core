@@ -30,8 +30,6 @@
 
 #include "cassie_polar.h"
 
-#include "core/math/math_funcs.h"
-
 #include <cmath>
 
 namespace cassie_polar {

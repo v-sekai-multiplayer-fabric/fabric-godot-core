@@ -37,8 +37,6 @@
 #include "../src/sketch/cassie_input_stroke.h"
 #include "../src/sketch/cassie_sketch_graph.h"
 
-#include "core/io/marshalls.h"
-#include "core/variant/typed_array.h"
 #include "tests/test_macros.h"
 
 namespace TestCassieBeautifyDeterminism {

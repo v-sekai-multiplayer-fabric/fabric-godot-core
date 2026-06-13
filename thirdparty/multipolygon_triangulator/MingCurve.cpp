@@ -44,14 +44,14 @@ MingCurve::MingCurve(const double* inCurve,const float* inNorm, const int inNum,
 }
 
 MingCurve::~MingCurve(){
+	// points/DeGenPoints/normals are getCurveAfterEP()-owned heap buffers,
+	// null-initialized in loadOrgCurve(). The old guard (!badInput && !isDeGen)
+	// leaked all three for every degenerate or rejected curve, and DeGenPoints
+	// was never freed at all. delete[] on nullptr is a no-op, so free them all.
 	delete [] filename;
-	if (!badInput&&!isDeGen){
-		delete [] points; 
-		// delete more
-		if(withNorm){
-			delete [] normals;
-		}
-	}
+	delete [] points;
+	delete [] DeGenPoints;
+	delete [] normals;
 }
 
 int MingCurve::getNumOfPoints(){ return numofpoints; }
@@ -104,8 +104,12 @@ bool MingCurve::readOrgCurveFile(const char* file){
 // Read in curve files before edge protection, 
 // store curve/adj index/norm index information in tempC/tempAdj/tempNorm //
 bool MingCurve::loadOrgCurve(const double* inCurve,const int inNum){
+	// Null the owned buffers up front so ~MingCurve() can delete[] them
+	// unconditionally; only getCurveAfterEP() allocates them, and not on every
+	// path (DeGenPoints only when degenerate, normals only with normals).
+	points = nullptr; DeGenPoints = nullptr; normals = nullptr;
 	const char* file = "null.curve";
-	filename = new char[300]; 
+	filename = new char[300];
 	strcpy(filename,file);
 
 	numofcurves = 1;
@@ -455,9 +459,11 @@ bool MingCurve::isProtected(){
 	if(besize>BADEDGE_LIMIT){
 		//errors(ERROR_DELAUNAY,filename);
 		badInput = true;
+		for (int i = 0; i < org_n; i++) delete [] used[i];
 		delete [] used;
 		return true;
 	}
+	for (int i = 0; i < org_n; i++) delete [] used[i];
 	delete [] used;
 	if(besize>0) return false;
 	//save points and tris

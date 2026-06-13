@@ -63,7 +63,6 @@
 #include "core/string/ustring.h"
 #include "servers/display/display_server.h"
 #include "servers/rendering/rendering_device.h"
-#include "servers/rendering/rendering_device_binds.h"
 #include "servers/rendering/rendering_server.h"
 
 namespace cassie_slang_gpu {

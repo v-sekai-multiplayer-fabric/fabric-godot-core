@@ -30,6 +30,9 @@
 
 #include "cassie_surface.h"
 
+#include "intrinsic_triangulation.h"
+#include "polygon_triangulation_godot.h"
+
 #include "core/error/error_macros.h"
 #include "core/object/class_db.h"
 #include "core/string/print_string.h"

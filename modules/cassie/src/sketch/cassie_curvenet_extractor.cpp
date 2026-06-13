@@ -31,7 +31,6 @@
 #include "cassie_curvenet_extractor.h"
 
 #include "../curves/cassie_curve_fit.h"
-#include "../curves/rdp_simplify.h"
 #include "cassie_final_stroke.h"
 
 #include "core/math/math_funcs.h"

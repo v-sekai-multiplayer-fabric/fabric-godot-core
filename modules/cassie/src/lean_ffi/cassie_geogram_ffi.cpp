@@ -59,6 +59,17 @@ inline DelaunayResult *as_result(size_t handle) {
 
 } // namespace
 
+// Tears down geogram if ensure_init() ever ran. GEO::initialize() allocates a
+// process-global Logger (CERRStream) that LeakSanitizer otherwise reports as a
+// leak at engine shutdown; the cassie module calls this from its uninitialize
+// hook. No-op when geogram was never initialized.
+void cassie_geogram_shutdown() {
+	bool expected = true;
+	if (geogram_initialized.compare_exchange_strong(expected, false)) {
+		GEO::terminate();
+	}
+}
+
 extern "C" {
 
 LEAN_EXPORT lean_obj_res cassie_geogram_delaunay_from_boundary(

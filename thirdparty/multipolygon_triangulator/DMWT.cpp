@@ -99,15 +99,23 @@ DMWT::~DMWT() {
   // which the `delaunay` member frees itself.
   // delete [] filename;
   if (!EXPSTOP) {
-    delete[] tiling; // delete [] points;
+    delete[] tiling;
+    // Both DMWT constructors allocate `points = new double[3*numofpoints]` and
+    // copy the caller's data in, so DMWT owns this buffer (the old "caller-owned"
+    // comment was wrong) and must free it.
+    delete[] points;
     if (withNormal)
       delete[] normals;
-    if (!isDeGen) {
-      for (int i = 0; i < numofedges; i++)
-        delete edgeInfoList[i];
-      for (int i = 0; i < numoftris; i++)
-        delete triangleInfoList[i];
-    }
+    // buildList() allocates every edgeInfoList[i]/triangleInfoList[i] element
+    // unconditionally (preprocess() always calls it, degenerate curves
+    // included), so the elements must be freed unconditionally too. Guarding
+    // these loops on !isDeGen leaked one EdgeInfo/TriangleInfo per edge/tri for
+    // every degenerate-curve triangulation. The pointers are null-initialized
+    // in initBasics, so delete on an unpopulated slot is a no-op.
+    for (int i = 0; i < numofedges; i++)
+      delete edgeInfoList[i];
+    for (int i = 0; i < numoftris; i++)
+      delete triangleInfoList[i];
   }
   // The element loops above free the EdgeInfo/TriangleInfo objects but
   // not the pointer arrays themselves. All of these are null-initialized

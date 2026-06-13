@@ -32,7 +32,6 @@
 
 #include "core/math/aabb.h"
 #include "core/math/dynamic_bvh.h"
-#include "core/math/math_funcs.h"
 #include "core/math/vector2.h"
 #include "core/os/os.h"
 #include "core/templates/local_vector.h"

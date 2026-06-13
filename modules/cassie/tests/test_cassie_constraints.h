@@ -35,7 +35,6 @@
 #include "../src/constraints/cassie_intersection_finder.h"
 #include "../src/constraints/cassie_mirror_plane_constraint.h"
 #include "../src/constraints/cassie_surface_constraint.h"
-#include "../src/curves/cassie_curve_fit.h"
 #include "../src/sketch/cassie_final_stroke.h"
 #include "../src/sketch/cassie_input_stroke.h"
 #include "test_cassie_curves.h" // reuses TestCassieCurves::make_unit_line_curve()

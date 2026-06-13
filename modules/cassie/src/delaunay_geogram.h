@@ -63,10 +63,7 @@
 // proven cassie-triangulation/src/Utility/DelaunayFaces wrapper but
 // produces godot-cpp containers instead of std::vector<>.
 
-#include "core/math/vector2.h"
-#include "core/math/vector3.h"
 #include "core/templates/vector.h"
-#include "core/variant/array.h"
 #include "core/variant/variant.h"
 
 namespace cassie {

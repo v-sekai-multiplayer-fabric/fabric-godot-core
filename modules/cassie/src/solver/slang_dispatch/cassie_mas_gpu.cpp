@@ -31,7 +31,6 @@
 #include "cassie_mas_gpu.h"
 
 #include "core/math/aabb.h"
-#include "core/math/disjoint_set.h"
 #include "core/string/ustring.h"
 #include "servers/display/display_server.h"
 #include "servers/rendering/rendering_device.h"

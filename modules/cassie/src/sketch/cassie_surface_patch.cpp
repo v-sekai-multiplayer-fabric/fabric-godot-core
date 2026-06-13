@@ -30,6 +30,7 @@
 
 #include "cassie_surface_patch.h"
 
+#include "core/math/aabb.h"
 #include "core/math/geometry_3d.h"
 #include "core/object/class_db.h"
 #include "core/variant/typed_array.h"

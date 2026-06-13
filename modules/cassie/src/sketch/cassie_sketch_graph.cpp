@@ -32,6 +32,7 @@
 
 #include "core/math/math_funcs.h"
 #include "core/object/class_db.h"
+#include "core/templates/local_vector.h"
 #include "core/templates/sort_array.h"
 
 void CassieSketchGraphNode::add_edge_id(int p_edge_id) {

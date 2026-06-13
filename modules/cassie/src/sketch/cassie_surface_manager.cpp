@@ -34,6 +34,8 @@
 
 #include "core/object/class_db.h"
 #include "core/object/worker_thread_pool.h"
+#include "core/templates/hash_set.h"
+#include "core/templates/local_vector.h"
 #include "scene/resources/mesh.h"
 
 String CassieSurfaceManager::_cycle_signature(const PackedInt32Array &p_cycle) {

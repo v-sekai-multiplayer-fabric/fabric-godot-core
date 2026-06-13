@@ -33,6 +33,7 @@
 #include "../curves/cassie_curve_fit.h"
 
 #include "core/math/geometry_3d.h"
+#include "core/templates/vector.h"
 #include "core/variant/dictionary.h"
 
 namespace {

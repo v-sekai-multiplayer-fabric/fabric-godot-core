@@ -47,13 +47,9 @@
 
 #include "../cassie_pcg.h"
 
-#include "core/object/ref_counted.h"
 #include "core/templates/local_vector.h"
 #include "core/templates/rid.h"
-#include "core/templates/vector.h"
 #include "servers/rendering/rendering_device.h"
-
-#include <cstdint>
 
 namespace cassie_mas_gpu {
 

@@ -30,8 +30,6 @@
 
 #include "fidelity_energy.h"
 
-#include "core/math/math_funcs.h"
-
 namespace cassie_solver {
 
 FidelityEnergy::FidelityEnergy(const Vector<Vector3> &p_initial_control_points,

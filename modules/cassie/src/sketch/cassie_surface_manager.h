@@ -37,8 +37,6 @@
 #include "core/object/ref_counted.h"
 #include "core/object/worker_thread_pool.h"
 #include "core/templates/hash_map.h"
-#include "core/templates/hash_set.h"
-#include "core/templates/local_vector.h"
 
 // CassieSurfaceManager — reactive cycle → patch lifecycle on top of
 // CassieSketchGraph (ENG-77 follow-up). Wraps the

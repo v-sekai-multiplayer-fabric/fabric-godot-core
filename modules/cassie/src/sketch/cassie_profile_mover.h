@@ -37,7 +37,6 @@
 #include "core/math/dynamic_bvh.h"
 #include "core/object/ref_counted.h"
 #include "core/templates/local_vector.h"
-#include "core/variant/typed_array.h"
 #include "scene/resources/3d/skin.h"
 #include "scene/resources/mesh.h"
 

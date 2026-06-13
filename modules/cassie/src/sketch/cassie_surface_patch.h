@@ -31,7 +31,6 @@
 #pragma once
 
 #include "core/io/resource.h"
-#include "core/math/aabb.h"
 #include "core/math/dynamic_bvh.h"
 #include "core/math/transform_3d.h"
 #include "core/math/vector3.h"

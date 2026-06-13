@@ -53,7 +53,7 @@
 
 #include "core/math/basis.h"
 #include "core/math/vector3.h"
-#include "core/variant/typed_array.h"
+#include "core/variant/variant.h" // PackedVector3Array
 
 namespace cassie_polar {
 

@@ -31,8 +31,6 @@
 #pragma once
 
 #include "cassie_path_3d.h"
-#include "intrinsic_triangulation.h"
-#include "polygon_triangulation_godot.h"
 
 #include "core/object/ref_counted.h"
 #include "core/templates/vector.h"
