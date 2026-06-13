@@ -49,14 +49,6 @@ inline void _put_i16_le(uint8_t *p, int16_t v) {
 	p[1] = uint8_t((u >> 8) & 0xFF);
 }
 
-inline void _put_f64_le(uint8_t *p, double v) {
-	uint64_t bits;
-	memcpy(&bits, &v, 8);
-	for (int i = 0; i < 8; ++i) {
-		p[i] = uint8_t((bits >> (i * 8)) & 0xFF);
-	}
-}
-
 inline uint32_t _get_u32_le(const uint8_t *p) {
 	return uint32_t(p[0]) |
 			(uint32_t(p[1]) << 8) |
@@ -67,16 +59,6 @@ inline uint32_t _get_u32_le(const uint8_t *p) {
 inline int16_t _get_i16_le(const uint8_t *p) {
 	const uint16_t u = uint16_t(p[0]) | (uint16_t(p[1]) << 8);
 	return int16_t(u);
-}
-
-inline double _get_f64_le(const uint8_t *p) {
-	uint64_t bits = 0;
-	for (int i = 0; i < 8; ++i) {
-		bits |= uint64_t(p[i]) << (i * 8);
-	}
-	double v;
-	memcpy(&v, &bits, 8);
-	return v;
 }
 
 inline void _put_i64_le(uint8_t *p, int64_t v) {
