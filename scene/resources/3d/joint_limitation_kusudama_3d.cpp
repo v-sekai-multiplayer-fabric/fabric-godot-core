@@ -200,7 +200,6 @@ void JointLimitationKusudama3D::_get_property_list(List<PropertyInfo> *p_list) c
 	}
 }
 
-
 void JointLimitationKusudama3D::_compute_hull_order() const {
 	uint32_t n = cones.size();
 	_hull_order.resize(n);
@@ -447,7 +446,7 @@ Vector3 JointLimitationKusudama3D::_solve(const Vector3 &p_direction) const {
 	//
 	// result = h00 * pos + h01 * target + h10 * vel
 
-	const real_t t = 1.0f / 60.0f;  // 1-second convergence at 60fps.
+	const real_t t = 1.0f / 60.0f; // 1-second convergence at 60fps.
 	const real_t t2 = t * t, t3 = t2 * t, t4 = t3 * t, t5 = t4 * t;
 	const real_t h00 = 1.0f - 10.0f * t3 + 15.0f * t4 - 6.0f * t5;
 	const real_t h01 = 10.0f * t3 - 15.0f * t4 + 6.0f * t5;
