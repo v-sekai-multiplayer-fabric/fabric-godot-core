@@ -44,6 +44,7 @@
 #include "core/error/error_macros.h"
 #include "core/io/file_access.h"
 #include "core/os/mutex.h"
+#include "core/os/os.h"
 #include "core/templates/local_vector.h"
 #include "core/templates/safe_refcount.h"
 
@@ -82,8 +83,40 @@
 #include <ptls_mbedtls.h>
 #include <tls_api.h>
 
+#include "frame.h" // wtd_frame_encode/decode — persistent-stream WT framing
+
+// Temporary stream-level tracing for the welcome-delivery race. Gated on the
+// WT_DEBUG env so it never floods normal runs.
+#include <cstdlib>
+static bool _wt_dbg() {
+	static int v = -1;
+	if (v < 0) {
+		const char *e = getenv("WT_DEBUG");
+		v = (e && e[0] == '1') ? 1 : 0;
+	}
+	return v == 1;
+}
+#define WT_DBG(...)                       \
+	do {                                  \
+		if (_wt_dbg()) {                  \
+			fprintf(stderr, "[WT] ");     \
+			fprintf(stderr, __VA_ARGS__); \
+			fprintf(stderr, "\n");        \
+			fflush(stderr);               \
+		}                                 \
+	} while (0)
+
 #include <cstdio>
 #include <cstring>
+
+// Authority and interest are split (FabricMultiplayerPeer channels): one
+// single-threaded server is authoritative for the players, but interest fans out
+// across up to ~1400 entities, so the QUIC connection table is sized for the
+// ENTITY/interest workload, not the player count. It must comfortably exceed the
+// entity budget (we target ≥150 players and 1400 entities, and more where the
+// transport allows). Sizing it to 1 (the previous value) collapsed every
+// concurrent session onto one table slot, stalling the server under load.
+static constexpr uint32_t WT_SERVER_MAX_CONNECTIONS = 4096; // ≥ 1400 entities + players + headroom
 
 // picoquic_ptls_minicrypto.c is excluded (it needs picotls minicrypto/uecc
 // symbols we don't compile). tls_api.c still has a link-time reference; we
@@ -151,6 +184,57 @@ struct WorkQueue {
 	}
 };
 
+// Frame a reliable payload as a length-prefixed wtd frame (channel 0, reliable)
+// for appending to the session's persistent bidi stream.
+static void _frame_reliable(const uint8_t *p_bytes, size_t p_len, LocalVector<uint8_t> &r_out) {
+	size_t cap = p_len + 9; // flag(1) + varint(<=8) + payload
+	r_out.resize(cap);
+	size_t flen = 0;
+	if (wtd_frame_encode(WTD_FRAME_FLAG(0, 1), p_bytes, p_len, r_out.ptr(), cap, &flen) == WTD_FRAME_OK) {
+		r_out.resize(flen);
+	} else {
+		r_out.clear();
+	}
+}
+
+// Append received stream bytes to a per-session accumulator.
+static void _reliable_accumulate(LocalVector<uint8_t> &r_acc, const uint8_t *p_bytes, size_t p_len) {
+	size_t old = r_acc.size();
+	r_acc.resize(old + p_len);
+	memcpy(r_acc.ptr() + old, p_bytes, p_len);
+}
+
+// Decode every complete frame out of the accumulator, pushing each payload to the
+// peer; keep the unconsumed tail for the next chunk.
+static void _reliable_decode(LocalVector<uint8_t> &r_acc, WebTransportPeer *p_peer, int p_peer_id) {
+	size_t off = 0;
+	while (off < r_acc.size()) {
+		size_t consumed = 0, plen = 0;
+		uint8_t flag = 0;
+		const uint8_t *payload = nullptr;
+		wtd_frame_status_t st = wtd_frame_decode(r_acc.ptr() + off, r_acc.size() - off,
+				&consumed, &flag, &payload, &plen);
+		if (st == WTD_FRAME_OK) {
+			if (p_peer) {
+				p_peer->_push_wt_incoming_stream(payload, plen, p_peer_id, WTD_FRAME_GET_CHANNEL(flag));
+			}
+			off += consumed;
+		} else if (st == WTD_FRAME_INCOMPLETE) {
+			break;
+		} else {
+			off = r_acc.size(); // protocol error: drop the buffer
+			break;
+		}
+	}
+	if (off > 0) {
+		size_t remain = r_acc.size() - off;
+		if (remain > 0) {
+			memmove(r_acc.ptr(), r_acc.ptr() + off, remain);
+		}
+		r_acc.resize(remain);
+	}
+}
+
 // Per-client backend state — opaque void* exposed to QUICClient.
 struct BackendCtx {
 	picoquic_quic_t *quic = nullptr;
@@ -164,7 +248,8 @@ struct BackendCtx {
 // Drain a work queue on the network thread, applying each item directly
 // to picoquic. cnx may be null if the connection is gone.
 void _drain_work_queue(WorkQueue &p_queue, picoquic_cnx_t *p_cnx,
-		h3zero_stream_ctx_t *p_control_stream, int (*p_app_cb)(picoquic_cnx_t *, uint8_t *, size_t, picohttp_call_back_event_t, h3zero_stream_ctx_t *, void *), void *p_app_ctx) {
+		h3zero_stream_ctx_t *p_control_stream, int (*p_app_cb)(picoquic_cnx_t *, uint8_t *, size_t, picohttp_call_back_event_t, h3zero_stream_ctx_t *, void *), void *p_app_ctx,
+		int64_t *p_persistent_stream = nullptr) {
 	LocalVector<WorkItem> items;
 	p_queue.drain(items);
 	if (!p_cnx) {
@@ -183,19 +268,29 @@ void _drain_work_queue(WorkQueue &p_queue, picoquic_cnx_t *p_cnx,
 				if (!p_control_stream) {
 					break;
 				}
-				h3zero_callback_ctx_t *h3 = (h3zero_callback_ctx_t *)picoquic_get_callback_context(p_cnx);
-				if (!h3) {
-					break;
+				// Open the persistent reliable stream once, then append framed bytes
+				// to it (no FIN) — not a fresh stream per message.
+				uint64_t sid;
+				if (p_persistent_stream && *p_persistent_stream >= 0) {
+					sid = (uint64_t)*p_persistent_stream;
+				} else {
+					h3zero_callback_ctx_t *h3 = (h3zero_callback_ctx_t *)picoquic_get_callback_context(p_cnx);
+					if (!h3) {
+						break;
+					}
+					h3zero_stream_ctx_t *stream = picowt_create_local_stream(
+							p_cnx, /*is_bidir=*/1, h3, p_control_stream->stream_id);
+					if (!stream) {
+						break;
+					}
+					stream->path_callback = p_app_cb;
+					stream->path_callback_ctx = p_app_ctx;
+					sid = stream->stream_id;
+					if (p_persistent_stream) {
+						*p_persistent_stream = (int64_t)sid;
+					}
 				}
-				h3zero_stream_ctx_t *stream = picowt_create_local_stream(
-						p_cnx, /*is_bidir=*/1, h3, p_control_stream->stream_id);
-				if (!stream) {
-					break;
-				}
-				stream->path_callback = p_app_cb;
-				stream->path_callback_ctx = p_app_ctx;
-				picoquic_add_to_stream(p_cnx, stream->stream_id,
-						item.bytes.ptr(), item.bytes.size(), item.fin ? 1 : 0);
+				picoquic_add_to_stream(p_cnx, sid, item.bytes.ptr(), item.bytes.size(), 0);
 			} break;
 		}
 	}
@@ -218,9 +313,9 @@ int _backend_loop_callback(picoquic_quic_t *p_quic, picoquic_packet_loop_cb_enum
 	if (!bctx) {
 		return 0;
 	}
-	if (p_mode == picoquic_packet_loop_wake_up) {
-		_drain_work_queue(bctx->work, bctx->cnx, nullptr, nullptr, nullptr);
-	}
+	// Drain on every callback, not only wake_up (see _server_loop_cb): a lost or
+	// coalesced wake would otherwise strand the client's queued sends forever.
+	_drain_work_queue(bctx->work, bctx->cnx, nullptr, nullptr, nullptr);
 	// Refresh the cached state for foreign readers on every loop tick.
 	picoquic_cnx_t *cnx = picoquic_get_first_cnx(p_quic);
 	bctx->cached_cnx_state.set(cnx ? static_cast<int>(picoquic_get_cnx_state(cnx)) : -1);
@@ -521,6 +616,10 @@ struct WTSessionCtx {
 	bool connect_pending = false;
 	// Foreign-thread send requests drain into picoquic on the network thread.
 	WorkQueue work;
+	// One persistent bidi data stream carrying reliable messages as length-prefixed
+	// wtd frames; reliable_rx accumulates inbound bytes for incremental decode.
+	int64_t reliable_stream_id = -1;
+	LocalVector<uint8_t> reliable_rx;
 };
 
 // Drain the WT work queue from the network thread.
@@ -532,10 +631,12 @@ int _wt_loop_callback(picoquic_quic_t *p_quic, picoquic_packet_loop_cb_enum p_mo
 	if (!wctx) {
 		return 0;
 	}
-	if (p_mode == picoquic_packet_loop_wake_up) {
-		_drain_work_queue(wctx->work, wctx->cnx, wctx->control_stream,
-				&_wt_app_callback, wctx);
-	}
+	// Drain on EVERY loop callback, not only wake_up (see _server_loop_cb): a lost
+	// or coalesced wake otherwise strands the WebTransport CLIENT's queued sends
+	// forever, so the client stops transmitting a few seconds into load while the
+	// thread stays alive in poll(). This is the client-side half of the wedge.
+	_drain_work_queue(wctx->work, wctx->cnx, wctx->control_stream,
+			&_wt_app_callback, wctx, &wctx->reliable_stream_id);
 	return 0;
 }
 
@@ -598,6 +699,7 @@ int _wt_app_callback(picoquic_cnx_t *p_cnx, uint8_t *p_bytes, size_t p_length,
 				if (cur == SS::SESSION_WT_CONNECTING) {
 					next = SS::SESSION_OPEN;
 				}
+				WT_DBG("client CONNECT_ACCEPTED cur=%d -> SESSION_OPEN", (int)cur);
 				break;
 			case picohttp_callback_post_datagram:
 				// {SESSION_OPEN, post_datagram} → SESSION_OPEN (data event, no transition)
@@ -607,9 +709,12 @@ int _wt_app_callback(picoquic_cnx_t *p_cnx, uint8_t *p_bytes, size_t p_length,
 				break;
 			case picohttp_callback_post_data:
 			case picohttp_callback_post_fin:
-				// Reliable stream data/FIN → push as a RELIABLE packet.
+				// The server's persistent stream carries length-prefixed wtd frames:
+				// accumulate and decode each complete frame into a RELIABLE packet.
+				WT_DBG("client POST_DATA cur=%d bytes=%d (event=%d)", (int)cur, (int)p_length, (int)p_event);
 				if (cur == SS::SESSION_OPEN && peer && p_bytes && p_length > 0) {
-					peer->_push_wt_incoming_stream(p_bytes, p_length);
+					_reliable_accumulate(wctx->reliable_rx, p_bytes, p_length);
+					_reliable_decode(wctx->reliable_rx, peer, 1);
 				}
 				break;
 			case picohttp_callback_connect_refused:
@@ -638,9 +743,14 @@ void *_create_wt_session_backend(WebTransportPeer *p_peer, const char *p_host, i
 	// TLS providers initialized once at module registration time.
 
 	// Per-process-shared quic_t that serves WT connections. picowt sets
-	// WT-friendly default transport parameters on it.
+	// WT-friendly default transport parameters on it. The first argument is
+	// `max_nb_connections`: the server's QUIC connection-table size. It was 1, so
+	// concurrent sessions collided onto one slot and the server stalled under
+	// multi-player load. This is the TRANSPORT budget (authority sessions +
+	// interest fanout), distinct from the 150-player AUTHORITY cap enforced by the
+	// application — see WT_SERVER_MAX_CONNECTIONS above.
 	picoquic_quic_t *quic = picoquic_create(
-			1, nullptr, nullptr, nullptr,
+			WT_SERVER_MAX_CONNECTIONS, nullptr, nullptr, nullptr,
 			"h3", nullptr, nullptr,
 			nullptr, nullptr, nullptr,
 			picoquic_current_time(),
@@ -652,8 +762,15 @@ void *_create_wt_session_backend(WebTransportPeer *p_peer, const char *p_host, i
 	// For loopback testing with self-signed certs: skip cert verification.
 	// Production will need proper CA trust store wiring.
 	picoquic_set_null_verifier(quic);
-	picoquic_set_textlog(quic, "-");
-	picoquic_set_log_level(quic, 1);
+	// NB: the picoquic textlog writes a full per-packet trace to stdout
+	// synchronously; under multi-session load the flush to stdout/journald blocks
+	// the picoquic network thread and the whole server stalls (every client goes
+	// silent at once). Gate it behind the engine's verbose flag (`--verbose`),
+	// the same convention other modules use, so it's off by default.
+	if (OS::get_singleton()->is_stdout_verbose()) {
+		picoquic_set_textlog(quic, "-");
+		picoquic_set_log_level(quic, 1);
+	}
 	picowt_set_default_transport_parameters(quic);
 
 	// Resolve peer.
@@ -832,16 +949,13 @@ Error _send_wt_stream(void *p_ctx, const uint8_t *p_bytes, size_t p_len) {
 	if (!wctx->cnx || !wctx->control_stream) {
 		return ERR_UNCONFIGURED;
 	}
-	// Stream creation touches the h3zero context tree, which is only safe
-	// on the network thread. Enqueue and let _loop_callback(wake_up) do the
-	// picowt_create_local_stream + picoquic_add_to_stream + FIN.
+	// Stream work touches the h3zero context tree, which is only safe on the
+	// network thread. Frame the payload (length-prefixed) and enqueue; the loop
+	// opens the persistent reliable stream once and appends (no FIN per message).
 	WorkItem w;
 	w.kind = WORK_OPEN_WT_STREAM;
-	w.bytes.resize(p_len);
-	if (p_len > 0) {
-		memcpy(w.bytes.ptr(), p_bytes, p_len);
-	}
-	w.fin = true;
+	_frame_reliable(p_bytes, p_len, w.bytes);
+	w.fin = false;
 	wctx->work.push(std::move(w));
 	if (wctx->thread_ctx) {
 		picoquic_wake_up_network_thread(wctx->thread_ctx);
@@ -1102,6 +1216,12 @@ struct WTServerSessionCtx {
 	picoquic_cnx_t *cnx = nullptr;
 	h3zero_stream_ctx_t *control_stream_ctx = nullptr;
 	int peer_id = 0; // MultiplayerPeer id this session carries (2, 3, ...)
+	// ONE persistent bidi data stream per session carries all reliable messages as
+	// length-prefixed wtd frames (vs a fresh stream per message, which exhausted
+	// stream credit and starved the connect handshake). reliable_rx accumulates
+	// inbound bytes for incremental frame decoding.
+	int64_t reliable_stream_id = -1;
+	LocalVector<uint8_t> reliable_rx;
 };
 
 struct WTServerCtx {
@@ -1148,6 +1268,8 @@ static int _server_path_callback(picoquic_cnx_t *p_cnx, uint8_t *p_bytes, size_t
 				if (_wt_server->peer) {
 					_wt_server->peer->server_session_active = true;
 				}
+				WT_DBG("server CONNECT peer_id=%d control_stream=%llu sessions=%d",
+						ctx->peer_id, (unsigned long long)ctx->session_stream_id, (int)_wt_server->sessions.size());
 			}
 			return 0;
 		}
@@ -1162,8 +1284,11 @@ static int _server_path_callback(picoquic_cnx_t *p_cnx, uint8_t *p_bytes, size_t
 			if (!sctx || !sctx->peer) {
 				return 0;
 			}
+			// The client's persistent stream carries length-prefixed wtd frames:
+			// accumulate and decode every complete frame.
 			if (p_bytes && p_length > 0) {
-				sctx->peer->_push_wt_incoming_stream(p_bytes, p_length, sctx->peer_id);
+				_reliable_accumulate(sctx->reliable_rx, p_bytes, p_length);
+				_reliable_decode(sctx->reliable_rx, sctx->peer, sctx->peer_id);
 			}
 			if (p_event == picohttp_callback_post_fin && p_stream_ctx) {
 				picoquic_add_to_stream(p_cnx, p_stream_ctx->stream_id, nullptr, 0, 1);
@@ -1205,7 +1330,16 @@ static int _server_loop_cb(picoquic_quic_t *p_quic, picoquic_packet_loop_cb_enum
 	if (!sctx) {
 		return 0;
 	}
-	if (p_mode == picoquic_packet_loop_wake_up) {
+	// Drain the work queue on EVERY loop callback, not only `wake_up`. picoquic is
+	// only touchable from this thread, and a wake-up can be lost or coalesced under
+	// load (the wake pipe saturates, write() returns short and the byte is dropped).
+	// If the drain were gated on wake_up, that one lost wake would strand every
+	// queued send forever — the server stays alive but goes permanently silent.
+	// Draining on wake_up / after_receive / after_send / time_check guarantees the
+	// queue is applied on whatever callback fires next (≤ the 10s poll timeout even
+	// when fully idle). Pairs with the inclusive sockloop iteration so a timeout
+	// also reaches the send pass. Modeled in http3_queue (WakeLoop).
+	{
 		LocalVector<WorkItem> items;
 		sctx->wq.drain(items);
 		MutexLock lock(sctx->sessions_mutex);
@@ -1221,22 +1355,33 @@ static int _server_loop_cb(picoquic_quic_t *p_quic, picoquic_packet_loop_cb_enum
 					picoquic_queue_datagram_frame(target->cnx, item.bytes.size(), item.bytes.ptr());
 				} break;
 				case WORK_OPEN_WT_STREAM: {
-					if (!target->control_stream_ctx) {
-						break;
+					// Open the session's persistent reliable stream once, then append
+					// framed bytes to it (no FIN). A fresh stream per message used to
+					// exhaust stream credit and starve the connect handshake.
+					if (target->reliable_stream_id < 0) {
+						if (!target->control_stream_ctx) {
+							break;
+						}
+						h3zero_callback_ctx_t *h3 = (h3zero_callback_ctx_t *)picoquic_get_callback_context(target->cnx);
+						if (!h3) {
+							break;
+						}
+						h3zero_stream_ctx_t *stream = picowt_create_local_stream(
+								target->cnx, /*is_bidir=*/1, h3, target->control_stream_ctx->stream_id);
+						if (!stream) {
+							break;
+						}
+						stream->path_callback = _server_path_callback;
+						stream->path_callback_ctx = target;
+						target->reliable_stream_id = (int64_t)stream->stream_id;
+						WT_DBG("server OPEN reliable stream=%lld for peer_id=%d (ctrl=%llu)",
+								(long long)target->reliable_stream_id, target->peer_id,
+								(unsigned long long)target->control_stream_ctx->stream_id);
 					}
-					h3zero_callback_ctx_t *h3 = (h3zero_callback_ctx_t *)picoquic_get_callback_context(target->cnx);
-					if (!h3) {
-						break;
-					}
-					h3zero_stream_ctx_t *stream = picowt_create_local_stream(
-							target->cnx, /*is_bidir=*/1, h3, target->control_stream_ctx->stream_id);
-					if (!stream) {
-						break;
-					}
-					stream->path_callback = _server_path_callback;
-					stream->path_callback_ctx = target;
-					picoquic_add_to_stream(target->cnx, stream->stream_id,
-							item.bytes.ptr(), item.bytes.size(), item.fin ? 1 : 0);
+					WT_DBG("server APPEND %d bytes to peer_id=%d stream=%lld",
+							(int)item.bytes.size(), target->peer_id, (long long)target->reliable_stream_id);
+					picoquic_add_to_stream(target->cnx, (uint64_t)target->reliable_stream_id,
+							item.bytes.ptr(), item.bytes.size(), 0);
 				} break;
 				default: {
 					picoquic_add_to_stream(target->cnx, item.stream_id,
@@ -1414,13 +1559,10 @@ static Error _wt_server_send_stream(int p_target, const uint8_t *p_bytes, size_t
 				continue;
 			}
 			WorkItem w;
-			w.kind = WORK_OPEN_WT_STREAM;
+			w.kind = WORK_OPEN_WT_STREAM; // append framed bytes to the persistent stream
 			w.session = session;
-			w.bytes.resize(p_len);
-			if (p_len > 0) {
-				memcpy(w.bytes.ptr(), p_bytes, p_len);
-			}
-			w.fin = true;
+			_frame_reliable(p_bytes, p_len, w.bytes);
+			w.fin = false; // never FIN: the stream persists for the session lifetime
 			_wt_server->wq.push(std::move(w));
 			err = OK;
 		}

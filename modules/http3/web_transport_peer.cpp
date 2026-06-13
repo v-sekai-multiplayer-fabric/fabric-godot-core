@@ -113,10 +113,12 @@ void WebTransportPeer::_bind_quic(const Ref<QUICClient> &p_quic, Mode p_mode) {
 }
 
 int WebTransportPeer::get_available_packet_count() const {
+	MutexLock lock(incoming_mutex);
 	return incoming.size();
 }
 
 Error WebTransportPeer::get_packet(const uint8_t **r_buffer, int &r_buffer_size) {
+	MutexLock lock(incoming_mutex);
 	if (incoming.is_empty()) {
 		return ERR_UNAVAILABLE;
 	}
@@ -145,18 +147,20 @@ void WebTransportPeer::_push_wt_incoming_datagram(const uint8_t *p_bytes, size_t
 	pkt.mode = TRANSFER_MODE_UNRELIABLE;
 	pkt.channel = 0;
 	pkt.from = p_from;
+	MutexLock lock(incoming_mutex);
 	incoming.push_back(pkt);
 }
 
-void WebTransportPeer::_push_wt_incoming_stream(const uint8_t *p_bytes, size_t p_len, int p_from) {
+void WebTransportPeer::_push_wt_incoming_stream(const uint8_t *p_bytes, size_t p_len, int p_from, int p_channel) {
 	IncomingPacket pkt;
 	if (p_len > 0 && p_bytes) {
 		pkt.bytes.resize(p_len);
 		memcpy(pkt.bytes.ptrw(), p_bytes, p_len);
 	}
 	pkt.mode = TRANSFER_MODE_RELIABLE;
-	pkt.channel = 0;
+	pkt.channel = p_channel; // decoded from the wtd frame flag (0-7)
 	pkt.from = p_from;
+	MutexLock lock(incoming_mutex);
 	incoming.push_back(pkt);
 }
 
@@ -234,16 +238,26 @@ void WebTransportPeer::set_target_peer(int p_peer) {
 	target_peer = p_peer;
 }
 
+// get_packet_peer/mode/channel describe the NEXT packet (the MultiplayerPeer
+// contract: peek the front BEFORE get_packet pops it), matching ENetMultiplayerPeer.
+// Returning the last-popped `current_*` instead caused an off-by-one: when packets
+// from several WT sessions interleave, a peer's packet was attributed to the
+// PREVIOUS packet's session (e.g. a late client's join credited to another peer,
+// so it never received its welcome). Fall back to current_* only when the queue is
+// empty (no next packet to peek).
 int WebTransportPeer::get_packet_peer() const {
-	return current_peer;
+	MutexLock lock(incoming_mutex);
+	return incoming.is_empty() ? current_peer : incoming.front()->get().from;
 }
 
 MultiplayerPeer::TransferMode WebTransportPeer::get_packet_mode() const {
-	return current_mode;
+	MutexLock lock(incoming_mutex);
+	return incoming.is_empty() ? current_mode : incoming.front()->get().mode;
 }
 
 int WebTransportPeer::get_packet_channel() const {
-	return current_channel;
+	MutexLock lock(incoming_mutex);
+	return incoming.is_empty() ? current_channel : incoming.front()->get().channel;
 }
 
 void WebTransportPeer::_ingest_datagrams() {
@@ -261,6 +275,7 @@ void WebTransportPeer::_ingest_datagrams() {
 		pkt.mode = TRANSFER_MODE_UNRELIABLE;
 		pkt.channel = 0;
 		pkt.from = 1;
+		MutexLock lock(incoming_mutex);
 		incoming.push_back(pkt);
 	}
 }
@@ -289,7 +304,10 @@ void WebTransportPeer::_ingest_peer_streams() {
 			pkt.mode = TRANSFER_MODE_RELIABLE;
 			pkt.channel = 0;
 			pkt.from = 1;
-			incoming.push_back(pkt);
+			{
+				MutexLock lock(incoming_mutex);
+				incoming.push_back(pkt);
+			}
 		}
 		if (quic->is_stream_peer_closed(sid)) {
 			pending_peer_streams.erase(it);
@@ -325,7 +343,10 @@ void WebTransportPeer::close() {
 	}
 	mode = MODE_NONE;
 	server_session_active = false;
-	incoming.clear();
+	{
+		MutexLock lock(incoming_mutex);
+		incoming.clear();
+	}
 	pending_peer_streams.clear();
 	current_packet_bytes.clear();
 }

@@ -1329,15 +1329,28 @@ void* picoquic_packet_loop_v3(void* v_ctx)
             /* The interrupt error is expected if the loop is closing. */
             ret = picoquic_atomic_load_int(&thread_ctx->thread_should_close) ? PICOQUIC_NO_ERROR_TERMINATE_PACKET_LOOP : -1;
         }
-        else if (bytes_recv == 0 && is_wake_up_event) {
-            ret = loop_callback(quic, picoquic_packet_loop_wake_up, loop_callback_ctx, NULL);
-        }
         else {
             uint64_t loop_time = current_time;
             size_t bytes_sent = 0;
             size_t nb_packets_sent = 0;
 
-            if (bytes_recv > 0) {
+            /* A wake-up is NOT mutually exclusive with receive/send. Drain the
+             * application work queue, then fall through to the receive and send
+             * passes so queued datagrams are actually transmitted and the socket is
+             * still serviced this iteration. The old code took a wake-only branch
+             * that re-polled immediately; under a steady wake stream (e.g. a server
+             * waking the loop once per outbound datagram while broadcasting to many
+             * clients) that branch monopolised every iteration and starved BOTH
+             * directions while the thread stayed alive. A bytes_recv==0 timeout
+             * already runs this block, so handling a wake here is the same path plus
+             * the work-queue drain. Modeled in http3_queue (WakeLoop): this inclusive
+             * iteration is proven starvation-free for all schedules; the exclusive
+             * wake branch strands inbound. */
+            if (is_wake_up_event) {
+                ret = loop_callback(quic, picoquic_packet_loop_wake_up, loop_callback_ctx, NULL);
+            }
+
+            if (ret == 0 && bytes_recv > 0) {
 #ifdef _WINDOWS
                 size_t recv_bytes = 0;
                 while (recv_bytes < (size_t)bytes_recv && ret == 0) {

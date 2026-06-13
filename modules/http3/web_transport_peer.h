@@ -33,6 +33,7 @@
 #include "quic_client.h"
 
 #include "core/crypto/crypto.h"
+#include "core/os/mutex.h"
 #include "core/templates/list.h"
 #include "core/templates/vector.h"
 #include "scene/main/multiplayer_peer.h"
@@ -117,7 +118,7 @@ public:
 	// Called by the backend when a WT datagram arrives via the session.
 	void _push_wt_incoming_datagram(const uint8_t *p_bytes, size_t p_len, int p_from = 1);
 	// Called by the backend when WT stream data arrives (reliable).
-	void _push_wt_incoming_stream(const uint8_t *p_bytes, size_t p_len, int p_from = 1);
+	void _push_wt_incoming_stream(const uint8_t *p_bytes, size_t p_len, int p_from = 1, int p_channel = 0);
 
 	// In-process echo server for loopback testing.
 	static Error (*start_echo_server_func)(int port);
@@ -166,7 +167,13 @@ private:
 	// Peer-initiated streams we haven't yet fully drained.
 	List<int64_t> pending_peer_streams;
 
-	// Parsed packets ready for get_packet().
+	// Parsed packets ready for get_packet(). Written from the picoquic network
+	// thread (_push_wt_incoming_*) and read from the main thread (get_packet),
+	// so every touch of `incoming` and its cached size MUST hold this mutex —
+	// otherwise the unguarded read-modify-write on the list's size strands the
+	// newest session's packets (proven in the http3_queue Lean/Plausible model).
+	// `mutable` so the const get_available_packet_count() can lock.
+	mutable Mutex incoming_mutex;
 	List<IncomingPacket> incoming;
 
 	// Set on get_packet, read back for get_packet_mode / _channel / _peer.

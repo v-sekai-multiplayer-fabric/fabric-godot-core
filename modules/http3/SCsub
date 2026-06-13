@@ -49,6 +49,7 @@ if picoquic_present and picotls_present and env["platform"] != "web":
             picoquic_root + "/picoquic",
             picoquic_root + "/picohttp",
             picoquic_root + "/picoquic_mbedtls",
+            "#thirdparty/webtransportd",  # wtd_frame codec for persistent WT stream framing
             "#thirdparty/mbedtls/include",
         ]
     )
@@ -131,6 +132,8 @@ elif env["platform"] == "web":
 # Godot module sources
 module_obj = []
 env_quic.add_source_files(module_obj, "*.cpp")
+# The webtransportd frame codec is compiled via the wt_frame_codec.cpp wrapper
+# (which #includes frame.c) so its object is owned by exactly one environment.
 
 if env["tests"]:
     env_quic.add_source_files(module_obj, "./tests/*.cpp")
