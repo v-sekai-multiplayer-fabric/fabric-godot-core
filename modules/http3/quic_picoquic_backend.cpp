@@ -169,7 +169,7 @@ static void _frame_reliable(const uint8_t *p_bytes, size_t p_len, LocalVector<ui
 	size_t cap = p_len + 9; // flag(1) + varint(<=8) + payload
 	r_out.resize(cap);
 	size_t flen = 0;
-	if (wtd_frame_encode(WTD_FRAME_FLAG(0, 1), p_bytes, p_len, r_out.ptr(), cap, &flen) == WTD_FRAME_OK) {
+	if (wtd_frame_encode(WTD_FRAME_FLAG(0, true), p_bytes, p_len, r_out.ptr(), cap, &flen) == WTD_FRAME_OK) {
 		r_out.resize(flen);
 	} else {
 		r_out.clear();

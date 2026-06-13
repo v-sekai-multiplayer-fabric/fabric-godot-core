@@ -126,6 +126,10 @@ if picoquic_present and picotls_present and env["platform"] != "web":
 elif env["platform"] == "web":
     # Web target: browser supplies WebTransport + HTTP/3 via fetch()/WebTransport globals.
     # No picoquic/picotls compiled — the JS library provides the transport.
+    # wt_frame_codec.cpp is still built on every platform and #includes frame.c,
+    # so the webtransportd path must be on CPPPATH here too (the native branch
+    # above adds it alongside the picoquic/picotls paths it doesn't need on web).
+    env_quic.Append(CPPPATH=["#thirdparty/webtransportd"])
     env_quic.AddJSLibraries([env_quic.File("quic_web_glue.js")])
     env_quic.Append(CPPDEFINES=["GODOT_QUIC_WEB_BACKEND"])
 
