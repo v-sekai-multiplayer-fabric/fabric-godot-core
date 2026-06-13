@@ -33,8 +33,6 @@
 #include "core/object/class_db.h"
 #include "core/typedefs.h"
 
-#include <algorithm>
-
 #define STEREO_CHANNEL_COUNT 2
 
 #define SIGNED_32_BIT_SIZE 2147483647
