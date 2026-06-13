@@ -28,8 +28,7 @@
 /* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                 */
 /**************************************************************************/
 
-#ifndef RESONANCE_AUDIO_WRAPPER_H
-#define RESONANCE_AUDIO_WRAPPER_H
+#pragma once
 
 #include "core/error/error_macros.h"
 #include "core/math/audio_frame.h"
@@ -43,9 +42,9 @@
 #include "core/templates/rid.h"
 #include "core/templates/rid_owner.h"
 #include "core/variant/variant.h"
-
 #include "servers/audio/spatial_audio_server.h"
-#include "thirdparty/resonanceaudio/resonance_audio/api/resonance_audio_api.h"
+
+#include <thirdparty/resonanceaudio/resonance_audio/api/resonance_audio_api.h>
 
 class AudioServer;
 
@@ -361,5 +360,3 @@ public:
 		singleton = nullptr;
 	}
 };
-
-#endif // RESONANCE_AUDIO_WRAPPER_H

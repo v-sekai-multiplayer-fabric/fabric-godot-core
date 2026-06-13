@@ -29,6 +29,7 @@
 /**************************************************************************/
 
 #include "resonance_audio_wrapper.h"
+
 #include "servers/audio/audio_server.h"
 
 ResonanceAudioServer *ResonanceAudioServer::singleton = nullptr;
@@ -47,4 +48,4 @@ ResonanceAudioBus::ResonanceAudioBus() {
 		}
 	}
 	resonance_api = vraudio::CreateResonanceAudioApi(2, frames, sample_rate);
-};
+}

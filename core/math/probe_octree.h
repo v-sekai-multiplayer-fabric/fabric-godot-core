@@ -120,8 +120,8 @@ public:
 
 		Cell octree;
 		uint64_t max_dim = (uint64_t)MAX(MAX(
-				(int)Math::ceil(p_bounds.size.x / subdiv_cell_size),
-				(int)Math::ceil(p_bounds.size.y / subdiv_cell_size)),
+												 (int)Math::ceil(p_bounds.size.x / subdiv_cell_size),
+												 (int)Math::ceil(p_bounds.size.y / subdiv_cell_size)),
 				(int)Math::ceil(p_bounds.size.z / subdiv_cell_size));
 		octree.size = (uint32_t)Math::next_power_of_2(max_dim);
 

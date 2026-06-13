@@ -72,7 +72,6 @@
 #include "scene/theme/theme_db.h"
 #include "servers/audio/audio_driver_dummy.h"
 #include "servers/audio/audio_server.h"
-#include "servers/resonanceaudio/resonance_audio_wrapper.h"
 #include "servers/camera/camera_server.h"
 #include "servers/display/accessibility_server.h"
 #include "servers/display/display_server.h"
@@ -81,6 +80,7 @@
 #include "servers/rendering/rendering_device.h"
 #include "servers/rendering/rendering_server.h"
 #include "servers/rendering/rendering_server_default.h"
+#include "servers/resonanceaudio/resonance_audio_wrapper.h"
 #include "servers/text/text_server.h"
 #include "servers/text/text_server_dummy.h"
 
