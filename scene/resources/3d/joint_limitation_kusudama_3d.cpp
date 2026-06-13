@@ -45,10 +45,26 @@ void JointLimitationKusudama3D::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("get_cone_count"), &JointLimitationKusudama3D::get_cone_count);
 	ClassDB::bind_method(D_METHOD("set_cone_center", "index", "center"), &JointLimitationKusudama3D::set_cone_center);
 	ClassDB::bind_method(D_METHOD("get_cone_center", "index"), &JointLimitationKusudama3D::get_cone_center);
+	ClassDB::bind_method(D_METHOD("set_cone_axes", "index", "axes"), &JointLimitationKusudama3D::set_cone_axes);
+	ClassDB::bind_method(D_METHOD("get_cone_axes", "index"), &JointLimitationKusudama3D::get_cone_axes);
 	ClassDB::bind_method(D_METHOD("set_cone_radius", "index", "radius"), &JointLimitationKusudama3D::set_cone_radius);
 	ClassDB::bind_method(D_METHOD("get_cone_radius", "index"), &JointLimitationKusudama3D::get_cone_radius);
 
+	ClassDB::bind_method(D_METHOD("set_twist_from", "radians"), &JointLimitationKusudama3D::set_twist_from);
+	ClassDB::bind_method(D_METHOD("get_twist_from"), &JointLimitationKusudama3D::get_twist_from);
+	ClassDB::bind_method(D_METHOD("set_twist_to", "radians"), &JointLimitationKusudama3D::set_twist_to);
+	ClassDB::bind_method(D_METHOD("get_twist_to"), &JointLimitationKusudama3D::get_twist_to);
+	ClassDB::bind_method(D_METHOD("has_twist_limit"), &JointLimitationKusudama3D::has_twist_limit);
+	ClassDB::bind_method(D_METHOD("clamp_twist_angle", "angle"), &JointLimitationKusudama3D::clamp_twist_angle);
+	ClassDB::bind_method(D_METHOD("limit_twist", "rotation", "axis"), &JointLimitationKusudama3D::limit_twist);
+	ClassDB::bind_method(D_METHOD("swing_to_normalized", "direction"), &JointLimitationKusudama3D::swing_to_normalized);
+	ClassDB::bind_method(D_METHOD("swing_from_normalized", "normalized"), &JointLimitationKusudama3D::swing_from_normalized);
+	ClassDB::bind_method(D_METHOD("twist_to_normalized", "angle"), &JointLimitationKusudama3D::twist_to_normalized);
+	ClassDB::bind_method(D_METHOD("twist_from_normalized", "normalized"), &JointLimitationKusudama3D::twist_from_normalized);
+
 	ADD_PROPERTY(PropertyInfo(Variant::ARRAY, "cones", PROPERTY_HINT_NONE, "", PROPERTY_USAGE_STORAGE), "set_cones", "get_cones");
+	ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "twist_from", PROPERTY_HINT_RANGE, "-6.29,6.29,0.001,radians_as_radians"), "set_twist_from", "get_twist_from");
+	ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "twist_to", PROPERTY_HINT_RANGE, "-6.29,6.29,0.001,radians_as_radians"), "set_twist_to", "get_twist_to");
 }
 
 void JointLimitationKusudama3D::set_cones(const Vector<Vector4> &p_cones) {
@@ -113,6 +129,20 @@ Vector3 JointLimitationKusudama3D::get_cone_center(int p_index) const {
 	return Vector3(cone_data.x, cone_data.y, cone_data.z);
 }
 
+void JointLimitationKusudama3D::set_cone_axes(int p_index, const Vector2 &p_axes) {
+	ERR_FAIL_INDEX(p_index, (int)cones.size());
+	const real_t x = CLAMP(p_axes.x, (real_t)-1.0, (real_t)1.0); // right (basis X)
+	const real_t z = CLAMP(p_axes.y, (real_t)-1.0, (real_t)1.0); // forward (basis Z)
+	const real_t y = Math::sqrt(MAX((real_t)0.0, (real_t)1.0 - x * x - z * z)); // up (basis Y), implied
+	set_cone_center(p_index, Vector3(x, y, z));
+}
+
+Vector2 JointLimitationKusudama3D::get_cone_axes(int p_index) const {
+	ERR_FAIL_INDEX_V(p_index, (int)cones.size(), Vector2());
+	const Vector3 c = _get_cone_center_normalized(p_index);
+	return Vector2(c.x, c.z);
+}
+
 void JointLimitationKusudama3D::_invalidate_normalized_cache() const {
 	_normalized_cone_centers_cache.clear();
 }
@@ -149,6 +179,160 @@ real_t JointLimitationKusudama3D::get_cone_radius(int p_index) const {
 	return cones[p_index].w;
 }
 
+// --- Twist limit (about the bone forward axis). Verified in Lean+Plausible:
+//     in-range identity, output always in range, swing preserved, idempotent. ---
+void JointLimitationKusudama3D::set_twist_from(real_t p_radians) {
+	twist_from = p_radians;
+}
+real_t JointLimitationKusudama3D::get_twist_from() const {
+	return twist_from;
+}
+void JointLimitationKusudama3D::set_twist_to(real_t p_radians) {
+	twist_to = p_radians;
+}
+real_t JointLimitationKusudama3D::get_twist_to() const {
+	return twist_to;
+}
+bool JointLimitationKusudama3D::has_twist_limit() const {
+	return twist_to > twist_from + (real_t)1e-6;
+}
+
+real_t JointLimitationKusudama3D::clamp_twist_angle(real_t p_angle) const {
+	if (!has_twist_limit()) {
+		return p_angle;
+	}
+	return CLAMP(p_angle, twist_from, twist_to);
+}
+
+Quaternion JointLimitationKusudama3D::limit_twist(const Quaternion &p_rotation, const Vector3 &p_axis) const {
+	if (!has_twist_limit()) {
+		return p_rotation;
+	}
+	const Vector3 a = p_axis.normalized();
+	// Swing-twist decomposition about a: twist angle = 2*atan2(q.vec . a, q.w).
+	const real_t d = p_rotation.x * a.x + p_rotation.y * a.y + p_rotation.z * a.z;
+	const real_t t = 2.0 * Math::atan2(d, p_rotation.w);
+	const real_t tc = CLAMP(t, twist_from, twist_to);
+	Quaternion twist_q = Quaternion(d * a.x, d * a.y, d * a.z, p_rotation.w).normalized();
+	const Quaternion swing = p_rotation * twist_q.inverse();
+	const real_t h = tc * 0.5;
+	const real_t s = Math::sin(h);
+	const Quaternion clamped(a.x * s, a.y * s, a.z * s, Math::cos(h));
+	return (swing * clamped).normalized();
+}
+
+real_t JointLimitationKusudama3D::twist_to_normalized(real_t p_angle) const {
+	if (!has_twist_limit()) {
+		return 0.0;
+	}
+	return CLAMP((p_angle - twist_from) / (twist_to - twist_from), (real_t)0.0, (real_t)1.0);
+}
+
+real_t JointLimitationKusudama3D::twist_from_normalized(real_t p_normalized) const {
+	if (!has_twist_limit()) {
+		return 0.0;
+	}
+	return twist_from + CLAMP(p_normalized, (real_t)0.0, (real_t)1.0) * (twist_to - twist_from);
+}
+
+// Deterministic tangent basis at a swing axis: build a Basis that rotates the rest
+// forward (+Y) onto the axis with minimal twist, and take its right (X) and forward (Z)
+// columns. This gives a CONSISTENT swing-axis convention (e1 = right, e2 = forward) for
+// every cone, instead of an arbitrary perpendicular.
+static void swing_axis_basis(const Vector3 &p_center, Vector3 &r_e1, Vector3 &r_e2) {
+	const Basis frame(Quaternion(Vector3(0, 1, 0), p_center));
+	r_e1 = frame.get_column(0);
+	r_e2 = frame.get_column(2);
+}
+
+// --- Swing normalization to a unit-disk coord (per-axis normalized): 0 at the ROM center,
+//     magnitude 1 on the ROM boundary, in the cone's canonical space. ---
+Vector3 JointLimitationKusudama3D::_swing_center() const {
+	Vector3 m;
+	for (uint32_t i = 0; i < cones.size(); i++) {
+		m += Vector3(cones[i].x, cones[i].y, cones[i].z).normalized();
+	}
+	if (m.length() < (real_t)1e-9) {
+		return Vector3(0, 1, 0);
+	}
+	return m.normalized();
+}
+
+bool JointLimitationKusudama3D::_point_in_cone_union(const Vector3 &p_point) const {
+	for (uint32_t i = 0; i < cones.size(); i++) {
+		if (is_point_in_cone(p_point, Vector3(cones[i].x, cones[i].y, cones[i].z).normalized(), cones[i].w)) {
+			return true;
+		}
+	}
+	return false;
+}
+
+real_t JointLimitationKusudama3D::_swing_boundary(const Vector3 &p_center, const Vector3 &p_tangent) const {
+	// Largest beta in (0, PI) with cos(beta)*center + sin(beta)*tangent still inside the cone union.
+	const int N = 64;
+	real_t last_in = 0.0;
+	for (int i = 1; i <= N; i++) {
+		const real_t b = Math::PI * (real_t)i / (real_t)N;
+		const Vector3 p = Math::cos(b) * p_center + Math::sin(b) * p_tangent;
+		if (_point_in_cone_union(p)) {
+			last_in = b;
+		} else if (last_in > 0.0) {
+			break;
+		}
+	}
+	if (last_in <= 0.0) {
+		return Math::deg_to_rad((real_t)1.0); // degenerate; avoid divide-by-zero
+	}
+	real_t a = last_in;
+	real_t b = MIN(last_in + Math::PI / (real_t)N, (real_t)Math::PI);
+	for (int i = 0; i < 24; i++) {
+		const real_t mid = 0.5 * (a + b);
+		const Vector3 p = Math::cos(mid) * p_center + Math::sin(mid) * p_tangent;
+		if (_point_in_cone_union(p)) {
+			a = mid;
+		} else {
+			b = mid;
+		}
+	}
+	return a;
+}
+
+Vector2 JointLimitationKusudama3D::swing_to_normalized(const Vector3 &p_direction) const {
+	if (cones.is_empty()) {
+		return Vector2();
+	}
+	const Vector3 center = _swing_center();
+	const Vector3 dir = p_direction.normalized();
+	const real_t cs = CLAMP(center.dot(dir), (real_t)-1.0, (real_t)1.0);
+	const real_t theta = Math::acos(cs);
+	Vector3 t = dir - cs * center;
+	if (t.length() < (real_t)1e-9) {
+		return Vector2();
+	}
+	t.normalize();
+	Vector3 e1, e2;
+	swing_axis_basis(center, e1, e2);
+	const real_t boundary = _swing_boundary(center, t);
+	const real_t m = theta / boundary;
+	return Vector2(m * t.dot(e1), m * t.dot(e2));
+}
+
+Vector3 JointLimitationKusudama3D::swing_from_normalized(const Vector2 &p_normalized) const {
+	if (cones.is_empty()) {
+		return Vector3(0, 1, 0);
+	}
+	const Vector3 center = _swing_center();
+	const real_t m = p_normalized.length();
+	if (m < (real_t)1e-9) {
+		return center;
+	}
+	Vector3 e1, e2;
+	swing_axis_basis(center, e1, e2);
+	const Vector3 t = (e1 * (p_normalized.x / m) + e2 * (p_normalized.y / m)).normalized();
+	const real_t theta = m * _swing_boundary(center, t);
+	return (Math::cos(theta) * center + Math::sin(theta) * t).normalized();
+}
+
 bool JointLimitationKusudama3D::_set(const StringName &p_name, const Variant &p_value) {
 	String prop_name = p_name;
 	if (prop_name == "cone_count") {
@@ -158,8 +342,12 @@ bool JointLimitationKusudama3D::_set(const StringName &p_name, const Variant &p_
 	if (prop_name.begins_with("cones/")) {
 		int index = prop_name.get_slicec('/', 1).to_int();
 		String what = prop_name.get_slicec('/', 2);
-		if (what == "center") {
-			set_cone_center(index, p_value);
+		if (what == "swing_x") { // basis right (X) axis in [-1,1]
+			set_cone_axes(index, Vector2(p_value, get_cone_axes(index).y));
+			return true;
+		}
+		if (what == "swing_z") { // basis forward (Z) axis in [-1,1]
+			set_cone_axes(index, Vector2(get_cone_axes(index).x, p_value));
 			return true;
 		}
 		if (what == "radius") {
@@ -179,8 +367,12 @@ bool JointLimitationKusudama3D::_get(const StringName &p_name, Variant &r_ret) c
 	if (prop_name.begins_with("cones/")) {
 		int index = prop_name.get_slicec('/', 1).to_int();
 		String what = prop_name.get_slicec('/', 2);
-		if (what == "center") {
-			r_ret = get_cone_center(index);
+		if (what == "swing_x") {
+			r_ret = get_cone_axes(index).x;
+			return true;
+		}
+		if (what == "swing_z") {
+			r_ret = get_cone_axes(index).y;
 			return true;
 		}
 		if (what == "radius") {
@@ -195,7 +387,9 @@ void JointLimitationKusudama3D::_get_property_list(List<PropertyInfo> *p_list) c
 	p_list->push_back(PropertyInfo(Variant::INT, PNAME("cone_count"), PROPERTY_HINT_RANGE, "0,30,1", PROPERTY_USAGE_DEFAULT | PROPERTY_USAGE_ARRAY, "Cones," + String(PNAME("cones")) + "/"));
 	for (int i = 0; i < get_cone_count(); i++) {
 		const String prefix = vformat("%s/%d/", PNAME("cones"), i);
-		p_list->push_back(PropertyInfo(Variant::VECTOR3, prefix + PNAME("center"), PROPERTY_HINT_NONE, ""));
+		// Cone center as two basis axes (right/X and forward/Z) in [-1,1]; up/Y is implied.
+		p_list->push_back(PropertyInfo(Variant::FLOAT, prefix + PNAME("swing_x"), PROPERTY_HINT_RANGE, "-1,1,0.001"));
+		p_list->push_back(PropertyInfo(Variant::FLOAT, prefix + PNAME("swing_z"), PROPERTY_HINT_RANGE, "-1,1,0.001"));
 		p_list->push_back(PropertyInfo(Variant::FLOAT, prefix + PNAME("radius"), PROPERTY_HINT_RANGE, "1,180,0.1,radians_as_degrees"));
 	}
 }

@@ -52,6 +52,16 @@ class JointLimitationKusudama3D : public JointLimitation3D {
 	mutable LocalVector<real_t> _tangent_radii;
 	mutable bool _polygon_dirty = true;
 
+	// Twist limit (about the bone forward axis). Active when twist_to > twist_from.
+	// Verified in Lean+Plausible (swing-twist clamp: in-range identity, output in range,
+	// swing preserved, idempotent). See /tmp/kusudama_lean/Kusudama.lean.
+	real_t twist_from = 0.0;
+	real_t twist_to = 0.0;
+
+	Vector3 _swing_center() const; // normalized mean of cone centers (the rest/forward axis)
+	bool _point_in_cone_union(const Vector3 &p_point) const;
+	real_t _swing_boundary(const Vector3 &p_center, const Vector3 &p_tangent) const;
+
 	void _invalidate_normalized_cache() const;
 	Vector3 _get_cone_center_normalized(int p_index) const;
 	void _invalidate_polygon_cache() const;
@@ -90,8 +100,32 @@ public:
 	void set_cone_center(int p_index, const Vector3 &p_center);
 	Vector3 get_cone_center(int p_index) const;
 
+	// A cone center as two basis axes in [-1,1]: the right (X) and forward (Z) components
+	// of the unit center; the up (Y) component is implied (positive). Lets a cone center be
+	// authored/encoded as two axes instead of a Vector3.
+	void set_cone_axes(int p_index, const Vector2 &p_axes);
+	Vector2 get_cone_axes(int p_index) const;
+
 	void set_cone_radius(int p_index, real_t p_radius);
 	real_t get_cone_radius(int p_index) const;
+
+	// --- Twist limit (radians, about the bone forward axis). Verified in Lean+Plausible. ---
+	void set_twist_from(real_t p_radians);
+	real_t get_twist_from() const;
+	void set_twist_to(real_t p_radians);
+	real_t get_twist_to() const;
+	bool has_twist_limit() const;
+	real_t clamp_twist_angle(real_t p_angle) const;
+	// Clamp the twist of p_rotation about p_axis into [twist_from, twist_to]; swing untouched.
+	Quaternion limit_twist(const Quaternion &p_rotation, const Vector3 &p_axis) const;
+
+	// --- normalization to [0,1] between the range limits (per-axis, 0 at center -> 1 at limit). ---
+	// Swing -> unit-disk coord: 0 at the ROM center, magnitude 1 on the ROM boundary.
+	Vector2 swing_to_normalized(const Vector3 &p_direction) const;
+	Vector3 swing_from_normalized(const Vector2 &p_normalized) const;
+	// Twist angle -> [0,1] between twist_from..twist_to (and back).
+	real_t twist_to_normalized(real_t p_angle) const;
+	real_t twist_from_normalized(real_t p_normalized) const;
 
 	static const int MAX_KUSUDAMA_CONES = 30;
 

@@ -1,0 +1,72 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<class name="HumanoidKusudamaRom" inherits="RefCounted" api_type="core" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="../class.xsd">
+	<brief_description>
+		Generates per-bone [JointLimitationKusudama3D] range-of-motion limits for a humanoid skeleton.
+	</brief_description>
+	<description>
+		Builds full-body joint range-of-motion (ROM) limits for a Godot humanoid from anatomical normal-range data baked into the engine (the ROM at the ANNY reference phenotype, aggregated over the AddBiomechanics dataset) plus clinical-normative gap-fills. Limits are keyed by [SkeletonProfileHumanoid] bone slots, so they follow Godot's humanoid auto-classification and apply to any retargeted humanoid.
+		The [code]phenotype[/code] [Dictionary] is the ANNY phenotype: the axes [code]gender[/code], [code]age[/code], [code]muscle[/code], [code]weight[/code], [code]height[/code], and [code]proportions[/code], each in [code][0, 1][/code] with [code]0.5[/code] the reference; unset axes default to [code]0.5[/code]. ROM is interpolated smoothly over these axes (it tightens with age and weight), which—combined with the normalized swing/twist coordinates on [JointLimitationKusudama3D]—lets animations transfer proportionally between body types.
+	</description>
+	<tutorials>
+	</tutorials>
+	<methods>
+		<method name="add_full_body_tracking" qualifiers="const">
+			<return type="Dictionary" />
+			<param index="0" name="ik" type="IterateIK3D" />
+			<description>
+				Adds a full-body 15-point VR tracking rig to [code]ik[/code]: fifteen [Marker3D] targets (hips, both upper/lower legs, both feet, chest, head, both upper/lower arms, both hands) created as children of the IK node and seated at the rest pose. The end-effector targets (hands, feet, head) drive the IK chains; the remaining targets are passive segment trackers usable as pole targets or extra constraints. Returns a [Dictionary] mapping each target name (e.g. [code]"HeadTarget"[/code]) to its [Marker3D].
+			</description>
+		</method>
+		<method name="apply_ik_limits" qualifiers="const">
+			<return type="int" />
+			<param index="0" name="ik" type="IterateIK3D" />
+			<param index="1" name="phenotype" type="Dictionary" />
+			<description>
+				Attaches the phenotype-scaled Kusudama ROM to every joint of [code]ik[/code] whose bone maps to a humanoid slot, and returns the number of limits applied. The IK must be parented to a [Skeleton3D]; the chains are resolved automatically (so this also works on a detached scene during import).
+			</description>
+		</method>
+		<method name="generate" qualifiers="const">
+			<return type="Dictionary" />
+			<param index="0" name="bones" type="PackedStringArray" />
+			<param index="1" name="phenotype" type="Dictionary" />
+			<description>
+				Returns a [Dictionary] mapping each requested humanoid bone name to a [JointLimitationKusudama3D] ROM limit for the given [code]phenotype[/code]. Bones with no ROM data are omitted.
+			</description>
+		</method>
+		<method name="generate_bone" qualifiers="const">
+			<return type="JointLimitationKusudama3D" />
+			<param index="0" name="bone" type="String" />
+			<param index="1" name="phenotype" type="Dictionary" />
+			<description>
+				Returns the [JointLimitationKusudama3D] ROM limit for a single humanoid bone slot, or [code]null[/code] if the slot has no ROM data. Cone radii are floored so a joint is never zero-ROM (animation-safe).
+			</description>
+		</method>
+		<method name="generate_humanoid" qualifiers="const">
+			<return type="Dictionary" />
+			<param index="0" name="phenotype" type="Dictionary" />
+			<description>
+				Returns a [Dictionary] mapping every supported humanoid bone slot to its [JointLimitationKusudama3D] ROM limit for the given [code]phenotype[/code].
+			</description>
+		</method>
+		<method name="get_supported_bones" qualifiers="const">
+			<return type="PackedStringArray" />
+			<description>
+				Returns the [SkeletonProfileHumanoid] bone slots that have baked ROM data (anatomical joints plus clinical gap-fills).
+			</description>
+		</method>
+		<method name="phenotype_scale" qualifiers="static">
+			<return type="float" />
+			<param index="0" name="phenotype" type="Dictionary" />
+			<description>
+				Returns the smooth ROM scale factor for an ANNY [code]phenotype[/code] [Dictionary] (axes [code]gender[/code], [code]age[/code], [code]muscle[/code], [code]weight[/code], [code]height[/code], [code]proportions[/code] in [code][0, 1][/code]). Values below [code]1.0[/code] tighten the range of motion.
+			</description>
+		</method>
+		<method name="setup_humanoid_chains" qualifiers="const">
+			<return type="int" />
+			<param index="0" name="ik" type="IterateIK3D" />
+			<description>
+				Configures the standard humanoid IK chains on [code]ik[/code] (two arms, two legs, spine) by [SkeletonProfileHumanoid] bone name, and returns the number of chains created. Bone names resolve once [code]ik[/code] is attached to a [Skeleton3D].
+			</description>
+		</method>
+	</methods>
+</class>

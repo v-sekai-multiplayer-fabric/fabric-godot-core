@@ -36,6 +36,11 @@ TEST_FORCE_LINK(test_joint_limitation_kusudama_3d)
 
 #include "core/string/print_string.h"
 #include "core/variant/variant.h"
+#include "scene/3d/fabr_ik_3d.h"
+#include "scene/3d/skeleton_3d.h"
+#include "scene/main/scene_tree.h"
+#include "scene/main/window.h"
+#include "scene/resources/3d/humanoid_kusudama_rom.h"
 #include "scene/resources/3d/joint_limitation_kusudama_3d.h"
 #include "tests/test_macros.h"
 
@@ -2068,6 +2073,356 @@ TEST_CASE("[Scene][JointLimitationKusudama3D] scaling - no teleports for 8 and 1
 		}
 		CHECK_MESSAGE(teleports == 0, vformat("Teleports with %d cones: %d", n, teleports));
 	}
+}
+
+// Twist of a quaternion about a unit axis (matches the Lean model's Q.twistAbout).
+static real_t twist_about(const Quaternion &q, const Vector3 &a) {
+	return 2.0 * Math::atan2(q.x * a.x + q.y * a.y + q.z * a.z, q.w);
+}
+
+TEST_CASE("[Scene][JointLimitationKusudama3D] Twist limit (Lean-verified properties)") {
+	Ref<JointLimitationKusudama3D> limitation;
+	limitation.instantiate();
+	Vector<Vector4> cones;
+	cones.push_back(Vector4(0, 1, 0, Math::deg_to_rad(30.0))); // swing cone about +Y
+	set_cones_from_vector4(limitation, cones);
+	const Vector3 axis(0, 1, 0);
+	limitation->set_twist_from(Math::deg_to_rad(-30.0));
+	limitation->set_twist_to(Math::deg_to_rad(30.0));
+	CHECK(limitation->has_twist_limit());
+
+	// P2: out-of-range twist is clamped INTO the window.
+	Quaternion over(axis, Math::deg_to_rad(70.0));
+	Quaternion lo = limitation->limit_twist(over, axis);
+	real_t t_lo = twist_about(lo, axis);
+	CHECK(t_lo <= Math::deg_to_rad(30.0) + 0.01);
+	CHECK(t_lo >= Math::deg_to_rad(-30.0) - 0.01);
+	CHECK(Math::abs(t_lo - Math::deg_to_rad(30.0)) < 0.02);
+
+	// P1: in-range twist is left unchanged (identity).
+	Quaternion in(axis, Math::deg_to_rad(15.0));
+	Quaternion same = limitation->limit_twist(in, axis);
+	CHECK(Math::abs(twist_about(same, axis) - Math::deg_to_rad(15.0)) < 0.01);
+
+	// P3: swing (bone direction) preserved while twist is clamped.
+	Quaternion combined = Quaternion(Vector3(1, 0, 0), Math::deg_to_rad(20.0)) * Quaternion(axis, Math::deg_to_rad(80.0));
+	Quaternion limited = limitation->limit_twist(combined, axis);
+	Vector3 swing_in = combined.xform(Vector3(0, 1, 0)).normalized();
+	Vector3 swing_out = limited.xform(Vector3(0, 1, 0)).normalized();
+	CHECK(swing_in.is_equal_approx(swing_out));
+
+	// P4: idempotent.
+	Quaternion twice = limitation->limit_twist(limited, axis);
+	CHECK(Math::abs(twist_about(twice, axis) - twist_about(limited, axis)) < 0.01);
+
+	// Twist normalize to [0,1] between the range limits (per-axis normalized).
+	limitation->set_twist_from(Math::deg_to_rad(-40.0));
+	limitation->set_twist_to(Math::deg_to_rad(80.0));
+	CHECK(Math::abs(limitation->twist_to_normalized(Math::deg_to_rad(20.0)) - (real_t)0.5) < 0.001);
+	CHECK(Math::abs(limitation->twist_from_normalized(0.5) - (real_t)Math::deg_to_rad(20.0)) < 0.001);
+}
+
+TEST_CASE("[Scene][JointLimitationKusudama3D] Swing normalize to [0,1] between range limits") {
+	Ref<JointLimitationKusudama3D> limitation;
+	limitation.instantiate();
+	const real_t radius = Math::deg_to_rad(30.0);
+	Vector<Vector4> cones;
+	cones.push_back(Vector4(0, 1, 0, radius)); // single symmetric cone about +Y
+	set_cones_from_vector4(limitation, cones);
+
+	// Center maps to 0.
+	CHECK(limitation->swing_to_normalized(Vector3(0, 1, 0)).length() < 0.02);
+
+	// Halfway to the boundary -> magnitude ~0.5; at the boundary -> ~1.0.
+	Vector3 half = (Quaternion(Vector3(1, 0, 0), radius * 0.5).xform(Vector3(0, 1, 0))).normalized();
+	CHECK(Math::abs(limitation->swing_to_normalized(half).length() - (real_t)0.5) < 0.03);
+	Vector3 edge = (Quaternion(Vector3(1, 0, 0), radius).xform(Vector3(0, 1, 0))).normalized();
+	CHECK(Math::abs(limitation->swing_to_normalized(edge).length() - (real_t)1.0) < 0.05);
+
+	// Round-trip: normalize -> denormalize returns the original direction (P5).
+	for (int i = 0; i < 8; i++) {
+		real_t az = Math::TAU * (real_t)i / 8.0;
+		Vector3 tangent = Vector3(Math::cos(az), 0, Math::sin(az));
+		Vector3 dir = (Quaternion(tangent.cross(Vector3(0, 1, 0)).normalized(), radius * 0.6).xform(Vector3(0, 1, 0))).normalized();
+		Vector2 n = limitation->swing_to_normalized(dir);
+		Vector3 back = limitation->swing_from_normalized(n);
+		CHECK_MESSAGE(dir.angle_to(back) < 0.01, vformat("Swing round-trip az=%f", az));
+	}
+}
+
+TEST_CASE("[Scene][HumanoidKusudamaRom] Generate full-body ROM (animation-safe, per-slot)") {
+	Ref<HumanoidKusudamaRom> gen;
+	gen.instantiate();
+	Dictionary pheno; // ANNY phenotype axes (0..1); unset axes default to 0.5 (reference).
+	pheno["age"] = 0.4;
+	pheno["weight"] = 0.5;
+	pheno["gender"] = 1.0;
+
+	// Every supported humanoid bone slot yields a valid, NON-zero-ROM Kusudama (so a
+	// transferred animation can never be crushed to the rest pose at any joint).
+	PackedStringArray bones = gen->get_supported_bones();
+	CHECK(bones.size() >= 20); // 11 data joints + clinical gap-fills (neck/head/hands/toes/...)
+	Dictionary full = gen->generate_humanoid(pheno);
+	for (int i = 0; i < bones.size(); i++) {
+		Ref<JointLimitationKusudama3D> k = full[bones[i]];
+		REQUIRE_MESSAGE(k.is_valid(), vformat("missing ROM for %s", bones[i]));
+		CHECK(k->get_cone_count() >= 1);
+		real_t max_r = 0.0;
+		for (int j = 0; j < k->get_cone_count(); j++) {
+			max_r = MAX(max_r, k->get_cone_radius(j));
+		}
+		CHECK_MESSAGE(max_r >= Math::deg_to_rad(7.0), vformat("zero-ROM at %s", bones[i]));
+	}
+	// Per-slot variation: knee (hinge) has many cones, hip/spine fewer.
+	Ref<JointLimitationKusudama3D> knee = full["LeftLowerLeg"];
+	Ref<JointLimitationKusudama3D> spine = full["Spine"];
+	CHECK(knee->get_cone_count() > spine->get_cone_count());
+}
+
+TEST_CASE("[Scene][HumanoidKusudamaRom] Animation transfer between phenotypes is correctly adjusted") {
+	Ref<HumanoidKusudamaRom> gen;
+	gen.instantiate();
+	// ANNY phenotype axes (0..1). Source: young, lean. Target: elderly, heavier -> tighter ROM.
+	Dictionary src;
+	src["age"] = 0.2;
+	src["weight"] = 0.3;
+	src["gender"] = 1.0;
+	Dictionary dst;
+	dst["age"] = 0.85;
+	dst["weight"] = 0.8;
+	dst["gender"] = 0.0;
+	const real_t s_src = HumanoidKusudamaRom::phenotype_scale(src);
+	const real_t s_dst = HumanoidKusudamaRom::phenotype_scale(dst);
+	CHECK_MESSAGE(s_src > s_dst, "elderly/heavier ANNY phenotype should have tighter ROM");
+
+	Ref<JointLimitationKusudama3D> knee_src = gen->generate_bone("LeftLowerLeg", src);
+	Ref<JointLimitationKusudama3D> knee_dst = gen->generate_bone("LeftLowerLeg", dst);
+	REQUIRE(knee_src.is_valid());
+	REQUIRE(knee_dst.is_valid());
+
+	// An animation FRAME authored on the source: knee at 60% of its flexion ROM.
+	const Vector2 swing_coord(0.6, 0.0); // normalized swing value (per-axis, 0..1)
+	const Vector3 pose_src = knee_src->swing_from_normalized(swing_coord);
+
+	// TRANSFER: encode against source ROM, decode against target ROM.
+	const Vector2 encoded = knee_src->swing_to_normalized(pose_src);
+	const Vector3 pose_dst = knee_dst->swing_from_normalized(encoded);
+
+	// (1) The normalized swing value is PRESERVED across phenotypes (proportional pose).
+	const Vector2 re_dst = knee_dst->swing_to_normalized(pose_dst);
+	CHECK_MESSAGE(Math::abs(encoded.length() - 0.6) < 0.05, "source encode ~0.6");
+	CHECK_MESSAGE(Math::abs(re_dst.length() - 0.6) < 0.05, "target re-encode ~0.6 (proportion kept)");
+	CHECK(encoded.is_equal_approx(re_dst));
+
+	// (2) The pose was actually ADJUSTED (target has tighter ROM -> different absolute pose).
+	CHECK_MESSAGE(pose_src.angle_to(pose_dst) > Math::deg_to_rad(0.5), "pose adjusted to target ROM");
+
+	// (3) The transferred pose stays WITHIN the target ROM (|normalized| <= 1).
+	CHECK(re_dst.length() <= 1.0 + 0.02);
+
+	// Twist transfers proportionally too: 0.5 of source twist -> 0.5 of target twist.
+	if (knee_src->has_twist_limit() && knee_dst->has_twist_limit()) {
+		const real_t tw_src = knee_src->twist_from_normalized(0.5);
+		const real_t tw_dst = knee_dst->twist_from_normalized(0.5);
+		CHECK(Math::abs(knee_src->twist_to_normalized(tw_src) - knee_dst->twist_to_normalized(tw_dst)) < 0.01);
+	}
+}
+
+TEST_CASE("[Scene][HumanoidKusudamaRom] Set up humanoid IK chains") {
+	Ref<HumanoidKusudamaRom> gen;
+	gen.instantiate();
+	FABRIK3D *ik = memnew(FABRIK3D);
+	const int chains = gen->setup_humanoid_chains(ik);
+	CHECK(chains == 5); // two arms, two legs, spine
+	CHECK(ik->get_setting_count() == 5);
+	CHECK(ik->get_root_bone_name(0) == StringName("LeftUpperArm"));
+	CHECK(ik->get_end_bone_name(0) == StringName("LeftHand"));
+	CHECK(ik->get_root_bone_name(4) == StringName("Spine"));
+	CHECK(ik->get_end_bone_name(4) == StringName("Head"));
+	memdelete(ik);
+}
+
+TEST_CASE("[SceneTree][HumanoidKusudamaRom] IK modifier carries the generated ROM limits") {
+	SceneTree *tree = SceneTree::get_singleton();
+	Skeleton3D *skeleton = memnew(Skeleton3D);
+	tree->get_root()->add_child(skeleton);
+
+	// Minimal humanoid arm chain: UpperArm -> LowerArm -> Hand.
+	const int ua = skeleton->add_bone("LeftUpperArm");
+	const int la = skeleton->add_bone("LeftLowerArm");
+	skeleton->set_bone_parent(la, ua);
+	const int hand = skeleton->add_bone("LeftHand");
+	skeleton->set_bone_parent(hand, la);
+	skeleton->set_bone_rest(ua, Transform3D(Basis(), Vector3(0.2, 0, 0)));
+	skeleton->set_bone_rest(la, Transform3D(Basis(), Vector3(0.3, 0, 0)));
+	skeleton->set_bone_rest(hand, Transform3D(Basis(), Vector3(0.3, 0, 0)));
+	skeleton->notification(Skeleton3D::NOTIFICATION_UPDATE_SKELETON);
+
+	FABRIK3D *ik = memnew(FABRIK3D);
+	skeleton->add_child(ik);
+	ik->set_setting_count(1);
+	ik->set_root_bone_name(0, "LeftUpperArm");
+	ik->set_end_bone_name(0, "LeftHand");
+	skeleton->notification(Skeleton3D::NOTIFICATION_UPDATE_SKELETON);
+
+	Ref<HumanoidKusudamaRom> gen;
+	gen.instantiate();
+	Dictionary pheno; // ANNY phenotype (all axes default to 0.5 reference)
+	pheno["age"] = 0.4;
+
+	const int applied = gen->apply_ik_limits(ik, pheno);
+	CHECK_MESSAGE(applied >= 1, "at least the elbow joint should receive a ROM limit");
+
+	// The elbow joint (LeftLowerArm) must carry a valid Kusudama limit.
+	bool elbow_has_limit = false;
+	for (int j = 0; j < ik->get_joint_count(0); j++) {
+		if (ik->get_joint_bone_name(0, j) == StringName("LeftLowerArm")) {
+			Ref<JointLimitation3D> lim = ik->get_joint_limitation(0, j);
+			elbow_has_limit = lim.is_valid();
+		}
+	}
+	CHECK(elbow_has_limit);
+
+	memdelete(ik);
+	memdelete(skeleton);
+}
+
+// Builds a minimal humanoid arm+leg skeleton with a FABRIK3D child (NOT added to the
+// SceneTree -- the import scenario). Caller frees the returned skeleton.
+static Skeleton3D *make_detached_rig(FABRIK3D **r_ik) {
+	Skeleton3D *sk = memnew(Skeleton3D);
+	const char *bones[][2] = { { "LeftUpperArm", "" }, { "LeftLowerArm", "LeftUpperArm" }, { "LeftHand", "LeftLowerArm" }, { "LeftUpperLeg", "" }, { "LeftLowerLeg", "LeftUpperLeg" }, { "LeftFoot", "LeftLowerLeg" } };
+	for (int i = 0; i < 6; i++) {
+		const int b = sk->add_bone(bones[i][0]);
+		if (String(bones[i][1]) != "") {
+			sk->set_bone_parent(b, sk->find_bone(bones[i][1]));
+		}
+		sk->set_bone_rest(b, Transform3D(Basis(), Vector3(0.25, 0, 0)));
+	}
+	sk->notification(Skeleton3D::NOTIFICATION_UPDATE_SKELETON);
+	FABRIK3D *ik = memnew(FABRIK3D);
+	sk->add_child(ik); // parented but NOT inside the SceneTree
+	*r_ik = ik;
+	return sk;
+}
+
+TEST_CASE("[Scene][HumanoidKusudamaRom] Limits attach on a detached scene (import path)") {
+	FABRIK3D *ik = nullptr;
+	Skeleton3D *sk = make_detached_rig(&ik);
+	CHECK_FALSE(ik->is_inside_tree()); // exactly the import situation
+
+	Ref<HumanoidKusudamaRom> gen;
+	gen.instantiate();
+	gen->setup_humanoid_chains(ik); // 5 chains by bone name
+	Dictionary ph;
+	ph["age"] = 0.5;
+	const int applied = gen->apply_ik_limits(ik, ph); // must resolve chains then attach
+	CHECK_MESSAGE(applied >= 2, "elbow + knee (at least) should receive ROM limits");
+
+	// The elbow joint must actually carry the Kusudama resource (the reported bug).
+	bool elbow_limit = false;
+	for (int j = 0; j < ik->get_joint_count(0); j++) {
+		if (ik->get_joint_bone_name(0, j) == StringName("LeftLowerArm")) {
+			elbow_limit = ik->get_joint_limitation(0, j).is_valid();
+		}
+	}
+	CHECK(elbow_limit);
+	memdelete(sk);
+}
+
+TEST_CASE("[Scene][HumanoidKusudamaRom] Full-body 15-point VR tracking targets") {
+	FABRIK3D *ik = nullptr;
+	Skeleton3D *sk = make_detached_rig(&ik);
+	Ref<HumanoidKusudamaRom> gen;
+	gen.instantiate();
+	gen->setup_humanoid_chains(ik);
+	Dictionary targets = gen->add_full_body_tracking(ik);
+
+	CHECK(targets.size() == 15); // sinew/ANNY full-body set
+	CHECK(targets.has("HipsTarget"));
+	CHECK(targets.has("ChestTarget"));
+	CHECK(targets.has("HeadTarget"));
+	CHECK(targets.has("LeftUpperLegTarget"));
+	CHECK(targets.has("RightLowerArmTarget"));
+	CHECK(targets.has("LeftHandTarget"));
+	// Each marker is parented under the IK node.
+	Node *head = Object::cast_to<Node>(targets["HeadTarget"]);
+	REQUIRE(head != nullptr);
+	CHECK(head->get_parent() == ik);
+	// End-effectors drive the chains; the left-arm chain (index 0) targets the left hand.
+	CHECK(ik->get_target_node(0) == NodePath("LeftHandTarget"));
+	CHECK(ik->get_target_node(2) == NodePath("LeftFootTarget"));
+	memdelete(sk);
+}
+
+TEST_CASE("[Scene][HumanoidKusudamaRom] Full rig: every chain joint keeps its limit (import order)") {
+	Skeleton3D *sk = memnew(Skeleton3D);
+	// parent, child pairs for a full humanoid.
+	const char *H[][2] = {
+		{ "Hips", "" }, { "Spine", "Hips" }, { "Chest", "Spine" }, { "UpperChest", "Chest" }, { "Neck", "UpperChest" }, { "Head", "Neck" },
+		{ "LeftShoulder", "UpperChest" }, { "LeftUpperArm", "LeftShoulder" }, { "LeftLowerArm", "LeftUpperArm" }, { "LeftHand", "LeftLowerArm" },
+		{ "RightShoulder", "UpperChest" }, { "RightUpperArm", "RightShoulder" }, { "RightLowerArm", "RightUpperArm" }, { "RightHand", "RightLowerArm" },
+		{ "LeftUpperLeg", "Hips" }, { "LeftLowerLeg", "LeftUpperLeg" }, { "LeftFoot", "LeftLowerLeg" },
+		{ "RightUpperLeg", "Hips" }, { "RightLowerLeg", "RightUpperLeg" }, { "RightFoot", "RightLowerLeg" }
+	};
+	for (auto &p : H) {
+		const int b = sk->add_bone(p[0]);
+		if (String(p[1]) != "") {
+			sk->set_bone_parent(b, sk->find_bone(p[1]));
+		}
+		sk->set_bone_rest(b, Transform3D(Basis(), Vector3(0, 0.2, 0)));
+	}
+	sk->notification(Skeleton3D::NOTIFICATION_UPDATE_SKELETON);
+	FABRIK3D *ik = memnew(FABRIK3D);
+	sk->add_child(ik);
+
+	Ref<HumanoidKusudamaRom> gen;
+	gen.instantiate();
+	Dictionary ph;
+	// exact import order:
+	gen->setup_humanoid_chains(ik);
+	gen->apply_ik_limits(ik, ph);
+	gen->add_full_body_tracking(ik);
+
+	int total = 0, with_limit = 0;
+	for (int c = 0; c < ik->get_setting_count(); c++) {
+		for (int j = 0; j < ik->get_joint_count(c); j++) {
+			total++;
+			if (ik->get_joint_limitation(c, j).is_valid()) {
+				with_limit++;
+			}
+		}
+	}
+	CHECK(total == 17); // 2 arms (3) + 2 legs (3) + spine->head (5)
+	CHECK_MESSAGE(with_limit == total, "every chain joint (legs, arms, spine, hands, feet, head) must keep its ROM limit after the import sequence");
+	memdelete(sk);
+}
+
+TEST_CASE("[Scene][JointLimitationKusudama3D] Cone center as two basis axes [-1,1]") {
+	Ref<JointLimitationKusudama3D> limitation;
+	limitation.instantiate();
+	Vector<Vector4> cones;
+	cones.push_back(Vector4(0, 1, 0, Math::deg_to_rad(20.0)));
+	set_cones_from_vector4(limitation, cones);
+
+	// Author the center as two axes (right=X, forward=Z); up=Y is implied.
+	limitation->set_cone_axes(0, Vector2(0.3, -0.2));
+	const Vector2 a = limitation->get_cone_axes(0);
+	CHECK(a.is_equal_approx(Vector2(0.3, -0.2)));
+	const Vector3 c = limitation->get_cone_center(0);
+	CHECK(Math::abs(c.x - 0.3) < 0.001);
+	CHECK(Math::abs(c.z + 0.2) < 0.001);
+	CHECK(Math::abs(c.y - Math::sqrt(1.0 - 0.09 - 0.04)) < 0.001); // up implied positive
+	CHECK(Math::abs(c.length() - 1.0) < 0.001); // unit center
+	// Center on the rest forward -> zero axes.
+	limitation->set_cone_center(0, Vector3(0, 1, 0));
+	CHECK(limitation->get_cone_axes(0).length() < 0.001);
+
+	// Inspector exposes the center as two float properties (not a Vector3).
+	limitation->set("cones/0/swing_x", 0.4);
+	limitation->set("cones/0/swing_z", 0.1);
+	CHECK(Math::abs((double)limitation->get("cones/0/swing_x") - 0.4) < 0.002);
+	CHECK(Math::abs((double)limitation->get("cones/0/swing_z") - 0.1) < 0.002);
 }
 
 } // namespace TestJointLimitationKusudama3D
