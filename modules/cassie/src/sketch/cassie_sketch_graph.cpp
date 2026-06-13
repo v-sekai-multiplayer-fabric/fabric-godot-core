@@ -1,3 +1,33 @@
+/**************************************************************************/
+/*  cassie_sketch_graph.cpp                                               */
+/**************************************************************************/
+/*                         This file is part of:                          */
+/*                             GODOT ENGINE                               */
+/*                        https://godotengine.org                         */
+/**************************************************************************/
+/* Copyright (c) 2014-present Godot Engine contributors (see AUTHORS.md). */
+/* Copyright (c) 2007-2014 Juan Linietsky, Ariel Manzur.                  */
+/*                                                                        */
+/* Permission is hereby granted, free of charge, to any person obtaining  */
+/* a copy of this software and associated documentation files (the        */
+/* "Software"), to deal in the Software without restriction, including    */
+/* without limitation the rights to use, copy, modify, merge, publish,    */
+/* distribute, sublicense, and/or sell copies of the Software, and to     */
+/* permit persons to whom the Software is furnished to do so, subject to  */
+/* the following conditions:                                              */
+/*                                                                        */
+/* The above copyright notice and this permission notice shall be         */
+/* included in all copies or substantial portions of the Software.        */
+/*                                                                        */
+/* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,        */
+/* EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF     */
+/* MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. */
+/* IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY   */
+/* CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,   */
+/* TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE      */
+/* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                 */
+/**************************************************************************/
+
 #include "cassie_sketch_graph.h"
 
 #include "core/math/math_funcs.h"
@@ -268,7 +298,7 @@ int CassieSketchGraph::add_stroke(const PackedVector3Array &p_points,
 	const Vector3 pb = p_points[p_points.size() - 1];
 	const Vector3 na = p_normals.is_empty() ? Vector3(0, 1, 0) : p_normals[0];
 	const Vector3 nb = p_normals.is_empty() ? Vector3(0, 1, 0)
-			: p_normals[p_normals.size() - 1];
+											: p_normals[p_normals.size() - 1];
 
 	const int node_a = _find_or_create_node(pa, na);
 	const int node_b = _find_or_create_node(pb, nb);
@@ -337,9 +367,24 @@ int CassieSketchGraph::build_from_polylines(
 		Vector3 mx = poly[0];
 		for (int k = 1; k < poly.size(); ++k) {
 			const Vector3 p = poly[k];
-			if (p.x < mn.x) mn.x = p.x; if (p.x > mx.x) mx.x = p.x;
-			if (p.y < mn.y) mn.y = p.y; if (p.y > mx.y) mx.y = p.y;
-			if (p.z < mn.z) mn.z = p.z; if (p.z > mx.z) mx.z = p.z;
+			if (p.x < mn.x) {
+				mn.x = p.x;
+			}
+			if (p.x > mx.x) {
+				mx.x = p.x;
+			}
+			if (p.y < mn.y) {
+				mn.y = p.y;
+			}
+			if (p.y > mx.y) {
+				mx.y = p.y;
+			}
+			if (p.z < mn.z) {
+				mn.z = p.z;
+			}
+			if (p.z > mx.z) {
+				mx.z = p.z;
+			}
 		}
 		const Vector3 pad(p_proximity, p_proximity, p_proximity);
 		poly_min[i] = mn - pad;
@@ -512,7 +557,6 @@ int CassieSketchGraph::build_from_polylines(
 	}
 	return total_edges;
 }
-
 
 Ref<CassieSketchGraphNode> CassieSketchGraph::get_node(int p_id) const {
 	HashMap<int, Ref<CassieSketchGraphNode>>::ConstIterator it = nodes.find(p_id);
@@ -808,7 +852,7 @@ Array CassieSketchGraph::find_cycles() const {
 	for (const KeyValue<int, Ref<CassieSketchGraphEdge>> &kv : edges) {
 		const int eid = kv.key;
 		const int starts[2] = { kv.value->get_node_a_id(),
-								kv.value->get_node_b_id() };
+			kv.value->get_node_b_id() };
 		for (int side = 0; side < 2; ++side) {
 			const int start_nid = starts[side];
 			const uint64_t key0 =
@@ -1065,6 +1109,6 @@ void CassieSketchGraph::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("find_cycles"),
 			&CassieSketchGraph::find_cycles);
 	ClassDB::bind_method(D_METHOD("sample_cycle_boundary",
-			"cycle_edge_ids", "target_edge_length"),
+								 "cycle_edge_ids", "target_edge_length"),
 			&CassieSketchGraph::sample_cycle_boundary);
 }

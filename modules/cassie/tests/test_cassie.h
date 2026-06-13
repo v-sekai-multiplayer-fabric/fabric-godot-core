@@ -1,9 +1,32 @@
 /**************************************************************************/
-/*  test_cassie.h                                                          */
+/*  test_cassie.h                                                         */
 /**************************************************************************/
-/* Tests for the CASSIE surface triangulation module.                     */
-/* Covers: cassie_remesh, CassieTriangulator, CassiePath3D,               */
-/*         IntrinsicTriangulation, PolygonTriangulationGodot               */
+/*                         This file is part of:                          */
+/*                             GODOT ENGINE                               */
+/*                        https://godotengine.org                         */
+/**************************************************************************/
+/* Copyright (c) 2014-present Godot Engine contributors (see AUTHORS.md). */
+/* Copyright (c) 2007-2014 Juan Linietsky, Ariel Manzur.                  */
+/*                                                                        */
+/* Permission is hereby granted, free of charge, to any person obtaining  */
+/* a copy of this software and associated documentation files (the        */
+/* "Software"), to deal in the Software without restriction, including    */
+/* without limitation the rights to use, copy, modify, merge, publish,    */
+/* distribute, sublicense, and/or sell copies of the Software, and to     */
+/* permit persons to whom the Software is furnished to do so, subject to  */
+/* the following conditions:                                              */
+/*                                                                        */
+/* The above copyright notice and this permission notice shall be         */
+/* included in all copies or substantial portions of the Software.        */
+/*                                                                        */
+/* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,        */
+/* EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF     */
+/* MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. */
+/* IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY   */
+/* CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,   */
+/* TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE      */
+/* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                 */
+/**************************************************************************/
 
 #pragma once
 
@@ -13,8 +36,8 @@
 #include "../src/intrinsic_triangulation.h"
 #include "../src/polygon_triangulation_godot.h"
 
-#include "core/os/time.h"
 #include "core/object/ref_counted.h"
+#include "core/os/time.h"
 #include "core/variant/variant.h"
 #include "tests/test_macros.h"
 
@@ -371,8 +394,12 @@ TEST_CASE("[Cassie][Remesh] Collapse fires: re-remesh at much larger target redu
 	v.push_back(Vector3(1, 0, 1));
 	v.push_back(Vector3(0, 0, 1));
 	PackedInt32Array idx;
-	idx.push_back(0); idx.push_back(1); idx.push_back(2);
-	idx.push_back(0); idx.push_back(2); idx.push_back(3);
+	idx.push_back(0);
+	idx.push_back(1);
+	idx.push_back(2);
+	idx.push_back(0);
+	idx.push_back(2);
+	idx.push_back(3);
 
 	cassie_remesh(v, idx, 0.05f, 3); // very dense
 	int dense = v.size();
@@ -388,9 +415,14 @@ TEST_CASE("[Cassie][Remesh] Collapse fires: re-remesh at much larger target redu
 TEST_CASE("[Cassie][Remesh] Deterministic: same input produces same output") {
 	PackedVector3Array v1, v2;
 	PackedInt32Array idx1, idx2;
-	v1.push_back(Vector3(0, 0, 0)); v1.push_back(Vector3(1, 0, 0)); v1.push_back(Vector3(0.5f, 0, 0.866f));
-	idx1.push_back(0); idx1.push_back(1); idx1.push_back(2);
-	v2 = v1; idx2 = idx1;
+	v1.push_back(Vector3(0, 0, 0));
+	v1.push_back(Vector3(1, 0, 0));
+	v1.push_back(Vector3(0.5f, 0, 0.866f));
+	idx1.push_back(0);
+	idx1.push_back(1);
+	idx1.push_back(2);
+	v2 = v1;
+	idx2 = idx1;
 
 	cassie_remesh(v1, idx1, 0.15f, 3);
 	cassie_remesh(v2, idx2, 0.15f, 3);
@@ -409,7 +441,9 @@ TEST_CASE("[Cassie][Remesh] Non-planar boundary stays valid") {
 	v.push_back(Vector3(1, 0.3f, 0));
 	v.push_back(Vector3(0.5f, 0.6f, 0.866f));
 	PackedInt32Array idx;
-	idx.push_back(0); idx.push_back(1); idx.push_back(2);
+	idx.push_back(0);
+	idx.push_back(1);
+	idx.push_back(2);
 
 	cassie_remesh(v, idx, 0.2f, 3);
 
@@ -427,10 +461,22 @@ TEST_CASE_PENDING("[Cassie][Remesh] Large boundary stays valid and finishes fast
 	// 16-point circle — representative of a mid-size Quest 3 sketch.
 	// Pre-computed to avoid trig in tests.
 	static const float pts[16][2] = {
-		{ 1.000f, 0.000f }, { 0.924f, 0.383f }, { 0.707f, 0.707f }, { 0.383f, 0.924f },
-		{ 0.000f, 1.000f }, { -0.383f, 0.924f }, { -0.707f, 0.707f }, { -0.924f, 0.383f },
-		{ -1.000f, 0.000f }, { -0.924f, -0.383f }, { -0.707f, -0.707f }, { -0.383f, -0.924f },
-		{ 0.000f, -1.000f }, { 0.383f, -0.924f }, { 0.707f, -0.707f }, { 0.924f, -0.383f },
+		{ 1.000f, 0.000f },
+		{ 0.924f, 0.383f },
+		{ 0.707f, 0.707f },
+		{ 0.383f, 0.924f },
+		{ 0.000f, 1.000f },
+		{ -0.383f, 0.924f },
+		{ -0.707f, 0.707f },
+		{ -0.924f, 0.383f },
+		{ -1.000f, 0.000f },
+		{ -0.924f, -0.383f },
+		{ -0.707f, -0.707f },
+		{ -0.383f, -0.924f },
+		{ 0.000f, -1.000f },
+		{ 0.383f, -0.924f },
+		{ 0.707f, -0.707f },
+		{ 0.924f, -0.383f },
 	};
 	PackedVector3Array b;
 	for (int i = 0; i < 16; ++i) {
@@ -460,7 +506,9 @@ TEST_CASE("[Cassie][IntrinsicTriangulation] Set mesh data and query counts") {
 	v.push_back(Vector3(1, 0, 0));
 	v.push_back(Vector3(0.5f, 0, 0.866f));
 	PackedInt32Array idx;
-	idx.push_back(0); idx.push_back(1); idx.push_back(2);
+	idx.push_back(0);
+	idx.push_back(1);
+	idx.push_back(2);
 
 	it->set_mesh_data(v, idx);
 
@@ -479,8 +527,12 @@ TEST_CASE("[Cassie][IntrinsicTriangulation] Flip to Delaunay does not corrupt a 
 	v.push_back(Vector3(1, 0, 1));
 	v.push_back(Vector3(0, 0, 1));
 	PackedInt32Array idx;
-	idx.push_back(0); idx.push_back(1); idx.push_back(2);
-	idx.push_back(0); idx.push_back(2); idx.push_back(3);
+	idx.push_back(0);
+	idx.push_back(1);
+	idx.push_back(2);
+	idx.push_back(0);
+	idx.push_back(2);
+	idx.push_back(3);
 
 	it->set_mesh_data(v, idx);
 	it->flip_to_delaunay();
@@ -502,7 +554,9 @@ TEST_CASE("[Cassie][IntrinsicTriangulation] get_mesh returns ArrayMesh") {
 	v.push_back(Vector3(1, 0, 0));
 	v.push_back(Vector3(0.5f, 0, 0.866f));
 	PackedInt32Array idx;
-	idx.push_back(0); idx.push_back(1); idx.push_back(2);
+	idx.push_back(0);
+	idx.push_back(1);
+	idx.push_back(2);
 	it->set_mesh_data(v, idx);
 
 	Ref<ArrayMesh> mesh = it->get_mesh();
@@ -519,7 +573,9 @@ TEST_CASE("[Cassie][IntrinsicTriangulation] get_statistics returns expected keys
 	v.push_back(Vector3(1, 0, 0));
 	v.push_back(Vector3(0.5f, 0, 0.866f));
 	PackedInt32Array idx;
-	idx.push_back(0); idx.push_back(1); idx.push_back(2);
+	idx.push_back(0);
+	idx.push_back(1);
+	idx.push_back(2);
 	it->set_mesh_data(v, idx);
 
 	Dictionary stats = it->get_statistics();
@@ -706,9 +762,18 @@ TEST_CASE_PENDING("[Cassie][Triangulator] Quest 3 budget: 12-point boundary unde
 	// Target: 250us desktop (1ms Quest 3). Same fix as Large boundary test above.
 	// 12-point circle at 0.5m radius — representative of a medium VR sketch.
 	static const float pts[12][2] = {
-		{ 0.500f, 0.000f }, { 0.433f, 0.250f }, { 0.250f, 0.433f }, { 0.000f, 0.500f },
-		{ -0.250f, 0.433f }, { -0.433f, 0.250f }, { -0.500f, 0.000f }, { -0.433f, -0.250f },
-		{ -0.250f, -0.433f }, { 0.000f, -0.500f }, { 0.250f, -0.433f }, { 0.433f, -0.250f },
+		{ 0.500f, 0.000f },
+		{ 0.433f, 0.250f },
+		{ 0.250f, 0.433f },
+		{ 0.000f, 0.500f },
+		{ -0.250f, 0.433f },
+		{ -0.433f, 0.250f },
+		{ -0.500f, 0.000f },
+		{ -0.433f, -0.250f },
+		{ -0.250f, -0.433f },
+		{ 0.000f, -0.500f },
+		{ 0.250f, -0.433f },
+		{ 0.433f, -0.250f },
 	};
 	PackedVector3Array b;
 	for (int i = 0; i < 12; ++i) {
@@ -726,7 +791,7 @@ TEST_CASE_PENDING("[Cassie][Triangulator] Quest 3 budget: 12-point boundary unde
 }
 
 // ── Regression baseline — capture metrics before Geogram→Godot swap ─────────
-// These tests record vertex/face counts and topology ratios so any behavioural
+// These tests record vertex/face counts and topology ratios so any behavioral
 // change in the Delaunay backend is caught immediately. Run them before and
 // after the swap; they must pass both times with the same values (±1 vertex).
 
@@ -809,7 +874,7 @@ TEST_CASE("[Cassie][Regression] Near-cocircular: 4 points on almost the same cir
 }
 
 // ── Exaggerated inputs — users will push the limits ───────────────────────
-// "If our tool is good, users will maximise usage."
+// "If our tool is good, users will maximize usage."
 // These tests are the floor: the tool must not crash, corrupt memory, or
 // produce degenerate output regardless of input size or shape.
 
@@ -895,7 +960,7 @@ TEST_CASE("[Cassie][Exaggerated] Non-convex (star-shaped) boundary") {
 	CHECK_MESSAGE(err.is_empty(), err);
 }
 
-TEST_CASE_PENDING("[Cassie][Exaggerated] Tiny patch (millimetre scale)") {
+TEST_CASE_PENDING("[Cassie][Exaggerated] Tiny patch (millimeter scale)") {
 	// 8-point polygon at 1mm radius. Currently fails: DMWT prints
 	// "No solution!" because Geogram's double-precision Delaunay loses
 	// accuracy below ~1cm. Godot's Delaunay3D uses R128 (128-bit fixed-point)
@@ -911,7 +976,7 @@ TEST_CASE_PENDING("[Cassie][Exaggerated] Tiny patch (millimetre scale)") {
 
 TEST_CASE("[Cassie][Exaggerated] Large patch (10m scale)") {
 	// 16-point polygon at 10m radius — tests that no integer overflow or
-	// precision loss in the Delaunay backend causes artefacts at room scale.
+	// precision loss in the Delaunay backend causes artifacts at room scale.
 	PackedVector3Array b = make_circle(16, 10.0f);
 	Dictionary r = CassieTriangulator::triangulate(b, 1.0f);
 	bool ok = r.get("success", false);

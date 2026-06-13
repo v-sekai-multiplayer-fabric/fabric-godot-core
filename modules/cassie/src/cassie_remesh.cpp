@@ -1,3 +1,33 @@
+/**************************************************************************/
+/*  cassie_remesh.cpp                                                     */
+/**************************************************************************/
+/*                         This file is part of:                          */
+/*                             GODOT ENGINE                               */
+/*                        https://godotengine.org                         */
+/**************************************************************************/
+/* Copyright (c) 2014-present Godot Engine contributors (see AUTHORS.md). */
+/* Copyright (c) 2007-2014 Juan Linietsky, Ariel Manzur.                  */
+/*                                                                        */
+/* Permission is hereby granted, free of charge, to any person obtaining  */
+/* a copy of this software and associated documentation files (the        */
+/* "Software"), to deal in the Software without restriction, including    */
+/* without limitation the rights to use, copy, modify, merge, publish,    */
+/* distribute, sublicense, and/or sell copies of the Software, and to     */
+/* permit persons to whom the Software is furnished to do so, subject to  */
+/* the following conditions:                                              */
+/*                                                                        */
+/* The above copyright notice and this permission notice shall be         */
+/* included in all copies or substantial portions of the Software.        */
+/*                                                                        */
+/* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,        */
+/* EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF     */
+/* MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. */
+/* IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY   */
+/* CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,   */
+/* TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE      */
+/* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                 */
+/**************************************************************************/
+
 #include "cassie_remesh.h"
 
 #include "core/math/aabb.h"
@@ -7,9 +37,8 @@
 #include "core/os/os.h"
 #include "core/templates/local_vector.h"
 
-#include <cfloat> // FLT_MAX
-
 #include <algorithm>
+#include <cfloat> // FLT_MAX
 #include <chrono>
 #include <cmath>
 #include <cstdint>
@@ -238,7 +267,7 @@ static void compact(CMMesh &m) {
 
 // ── Edge split ────────────────────────────────────────────────────────────
 
-// Split edge (va,vb) and update m.edge_tris incrementally — O(1) amortised.
+// Split edge (va,vb) and update m.edge_tris incrementally — O(1) amortized.
 // This avoids the full rebuild_adjacency that would otherwise be needed after
 // each split to keep triangle-index references current.
 //
@@ -374,7 +403,7 @@ static void split_long_edges(CMMesh &m, float hi, const RefMeshBVH *ref_bvh) {
 }
 
 // ── Edge collapse ─────────────────────────────────────────────────────────
-// Vertex one-ring index: maps each vertex to the set of its neighbours.
+// Vertex one-ring index: maps each vertex to the set of its neighbors.
 // Built once per collapse pass from m.edge_tris, then updated incrementally.
 using VertexRings = std::unordered_map<int, std::unordered_set<int>>;
 
@@ -390,7 +419,7 @@ static VertexRings build_vertex_rings(const CMMesh &m) {
 
 // Link condition via pre-built rings: O(min(deg_a, deg_b)) per call.
 // For interior edges (the only kind we collapse) manifold safety requires
-// exactly 2 common neighbours — the two apex vertices.
+// exactly 2 common neighbors — the two apex vertices.
 static bool can_collapse_with_rings(int va, int vb, const VertexRings &rings) {
 	auto ra = rings.find(va);
 	auto rb = rings.find(vb);
@@ -526,8 +555,8 @@ static bool in_circumcircle(Vector3 a, Vector3 b, Vector3 c, Vector3 p) {
 // path. The profile-on path pays a few atomic-style stores; the no-profile
 // path is unchanged.
 struct FlipCounters {
-	int guard_iters       = 0;
-	int flips_committed   = 0;
+	int guard_iters = 0;
+	int flips_committed = 0;
 	int circumcircle_calls = 0;
 };
 
@@ -626,7 +655,7 @@ static void smooth_vertices(CMMesh &m, const RefMeshBVH *ref_bvh) {
 			continue;
 		}
 		Vector3 fn = (m.verts[tri.v[1]].pos - m.verts[tri.v[0]].pos)
-				.cross(m.verts[tri.v[2]].pos - m.verts[tri.v[0]].pos);
+							 .cross(m.verts[tri.v[2]].pos - m.verts[tri.v[0]].pos);
 		vnorm[tri.v[0]] += fn;
 		vnorm[tri.v[1]] += fn;
 		vnorm[tri.v[2]] += fn;
@@ -719,7 +748,8 @@ void cassie_remesh(PackedVector3Array &p_verts, PackedInt32Array &p_indices,
 	auto stamp_us = [](const std::chrono::steady_clock::time_point &t0) {
 		const auto t1 = std::chrono::steady_clock::now();
 		return uint64_t(std::chrono::duration_cast<std::chrono::microseconds>(
-				t1 - t0).count());
+				t1 - t0)
+						.count());
 	};
 
 	CMMesh m = from_packed(p_verts, p_indices);
@@ -729,7 +759,9 @@ void cassie_remesh(PackedVector3Array &p_verts, PackedInt32Array &p_indices,
 								: std::chrono::steady_clock::time_point{};
 		m.rebuild_adjacency();
 		m.detect_boundary();
-		if (profile) g_refine_profile.adjacency_us += stamp_us(t0);
+		if (profile) {
+			g_refine_profile.adjacency_us += stamp_us(t0);
+		}
 	}
 
 	// Build DynamicBVH over the reference DMWT surface (O(n log n) once).
@@ -742,7 +774,9 @@ void cassie_remesh(PackedVector3Array &p_verts, PackedInt32Array &p_indices,
 								: std::chrono::steady_clock::time_point{};
 		ref = from_packed(p_ref_verts, p_ref_indices);
 		ref_bvh.build(ref.verts, ref.tris);
-		if (profile) g_refine_profile.bvh_build_us += stamp_us(t0);
+		if (profile) {
+			g_refine_profile.bvh_build_us += stamp_us(t0);
+		}
 	}
 	const RefMeshBVH *bvh_ptr = has_ref ? &ref_bvh : nullptr;
 
@@ -750,32 +784,42 @@ void cassie_remesh(PackedVector3Array &p_verts, PackedInt32Array &p_indices,
 	const float lo = (4.0f / 5.0f) * p_target_edge_length;
 
 	for (int iter = 0; iter < p_iterations; ++iter) {
-		if (profile) g_refine_profile.iterations++;
+		if (profile) {
+			g_refine_profile.iterations++;
+		}
 		{
 			const auto t0 = profile ? std::chrono::steady_clock::now()
 									: std::chrono::steady_clock::time_point{};
 			split_long_edges(m, hi, bvh_ptr);
-			if (profile) g_refine_profile.split_us += stamp_us(t0);
+			if (profile) {
+				g_refine_profile.split_us += stamp_us(t0);
+			}
 		}
 		{
 			const auto t0 = profile ? std::chrono::steady_clock::now()
 									: std::chrono::steady_clock::time_point{};
 			m.rebuild_adjacency();
 			m.detect_boundary();
-			if (profile) g_refine_profile.adjacency_us += stamp_us(t0);
+			if (profile) {
+				g_refine_profile.adjacency_us += stamp_us(t0);
+			}
 		}
 		{
 			const auto t0 = profile ? std::chrono::steady_clock::now()
 									: std::chrono::steady_clock::time_point{};
 			collapse_short_edges(m, lo);
-			if (profile) g_refine_profile.collapse_us += stamp_us(t0);
+			if (profile) {
+				g_refine_profile.collapse_us += stamp_us(t0);
+			}
 		}
 		{
 			const auto t0 = profile ? std::chrono::steady_clock::now()
 									: std::chrono::steady_clock::time_point{};
 			m.rebuild_adjacency();
 			m.detect_boundary();
-			if (profile) g_refine_profile.adjacency_us += stamp_us(t0);
+			if (profile) {
+				g_refine_profile.adjacency_us += stamp_us(t0);
+			}
 		}
 		{
 			const auto t0 = profile ? std::chrono::steady_clock::now()
@@ -799,13 +843,17 @@ void cassie_remesh(PackedVector3Array &p_verts, PackedInt32Array &p_indices,
 									: std::chrono::steady_clock::time_point{};
 			m.rebuild_adjacency();
 			m.detect_boundary();
-			if (profile) g_refine_profile.adjacency_us += stamp_us(t0);
+			if (profile) {
+				g_refine_profile.adjacency_us += stamp_us(t0);
+			}
 		}
 		{
 			const auto t0 = profile ? std::chrono::steady_clock::now()
 									: std::chrono::steady_clock::time_point{};
 			smooth_vertices(m, bvh_ptr);
-			if (profile) g_refine_profile.smooth_us += stamp_us(t0);
+			if (profile) {
+				g_refine_profile.smooth_us += stamp_us(t0);
+			}
 		}
 	}
 

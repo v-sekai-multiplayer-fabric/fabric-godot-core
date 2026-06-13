@@ -1,3 +1,33 @@
+/**************************************************************************/
+/*  refine.cpp                                                            */
+/**************************************************************************/
+/*                         This file is part of:                          */
+/*                             GODOT ENGINE                               */
+/*                        https://godotengine.org                         */
+/**************************************************************************/
+/* Copyright (c) 2014-present Godot Engine contributors (see AUTHORS.md). */
+/* Copyright (c) 2007-2014 Juan Linietsky, Ariel Manzur.                  */
+/*                                                                        */
+/* Permission is hereby granted, free of charge, to any person obtaining  */
+/* a copy of this software and associated documentation files (the        */
+/* "Software"), to deal in the Software without restriction, including    */
+/* without limitation the rights to use, copy, modify, merge, publish,    */
+/* distribute, sublicense, and/or sell copies of the Software, and to     */
+/* permit persons to whom the Software is furnished to do so, subject to  */
+/* the following conditions:                                              */
+/*                                                                        */
+/* The above copyright notice and this permission notice shall be         */
+/* included in all copies or substantial portions of the Software.        */
+/*                                                                        */
+/* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,        */
+/* EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF     */
+/* MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. */
+/* IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY   */
+/* CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,   */
+/* TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE      */
+/* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                 */
+/**************************************************************************/
+
 #include "refine.h"
 
 #include "cassie_remesh.h"
@@ -8,8 +38,8 @@
 // as a feature edge so pmp's split_long_edges keeps the polyline geometry
 // intact. use_projection=true projects refined vertices back onto the
 // DMWT reference surface.
-#include <pmp/surface_mesh.h>
 #include <pmp/algorithms/remeshing.h>
+#include <pmp/surface_mesh.h>
 
 void refine_patch(PackedVector3Array &p_verts, PackedInt32Array &p_indices,
 		float p_target_edge_length,
@@ -79,7 +109,9 @@ void refine_patch(PackedVector3Array &p_verts, PackedInt32Array &p_indices,
 		int k = 0;
 		int verts[3] = { 0, 0, 0 };
 		for (auto v : mesh.vertices(f)) {
-			if (k < 3) verts[k] = vmap_out[v.idx()];
+			if (k < 3) {
+				verts[k] = vmap_out[v.idx()];
+			}
 			++k;
 		}
 		if (k == 3) {

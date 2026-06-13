@@ -50,7 +50,7 @@ norm = sqrt(x² + y²)
 R    = (1/norm) · [x  −y; y  x]
 ```
 
-Specialised to upper-triangular `F_2D`: `x = a + d`, `y = −b`. No SVD
+Specialized to upper-triangular `F_2D`: `x = a + d`, `y = −b`. No SVD
 needed.
 
 Per triangle `c`:

@@ -1,15 +1,43 @@
-#include "cassie_triangulator.h"
+/**************************************************************************/
+/*  cassie_triangulator.cpp                                               */
+/**************************************************************************/
+/*                         This file is part of:                          */
+/*                             GODOT ENGINE                               */
+/*                        https://godotengine.org                         */
+/**************************************************************************/
+/* Copyright (c) 2014-present Godot Engine contributors (see AUTHORS.md). */
+/* Copyright (c) 2007-2014 Juan Linietsky, Ariel Manzur.                  */
+/*                                                                        */
+/* Permission is hereby granted, free of charge, to any person obtaining  */
+/* a copy of this software and associated documentation files (the        */
+/* "Software"), to deal in the Software without restriction, including    */
+/* without limitation the rights to use, copy, modify, merge, publish,    */
+/* distribute, sublicense, and/or sell copies of the Software, and to     */
+/* permit persons to whom the Software is furnished to do so, subject to  */
+/* the following conditions:                                              */
+/*                                                                        */
+/* The above copyright notice and this permission notice shall be         */
+/* included in all copies or substantial portions of the Software.        */
+/*                                                                        */
+/* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,        */
+/* EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF     */
+/* MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. */
+/* IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY   */
+/* CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,   */
+/* TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE      */
+/* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                 */
+/**************************************************************************/
 
-#include "refine.h"
+#include "cassie_triangulator.h"
 
 #include "DMWT.h"
 #include "MingCurve.h"
 #include "Point3.h"
-
 #include "polygon_triangulation.h"
+#include "refine.h"
 
-#include "core/object/class_db.h"
 #include "core/error/error_macros.h"
+#include "core/object/class_db.h"
 #include "core/os/os.h"
 #include "core/os/time.h"
 #include "core/string/print_string.h"
@@ -51,8 +79,12 @@ double point_segment_dist2(const double *p, const double *a, const double *b) {
 		return apx * apx + apy * apy + apz * apz;
 	}
 	double t = (apx * abx + apy * aby + apz * abz) / ab_len2;
-	if (t < 0.0) t = 0.0;
-	if (t > 1.0) t = 1.0;
+	if (t < 0.0) {
+		t = 0.0;
+	}
+	if (t > 1.0) {
+		t = 1.0;
+	}
 	const double fx = a[0] + t * abx - p[0];
 	const double fy = a[1] + t * aby - p[1];
 	const double fz = a[2] + t * abz - p[2];
@@ -131,8 +163,8 @@ Dictionary arrays_to_dict(PackedVector3Array &p_verts, PackedInt32Array &p_idx) 
 // Make the triangle winding self-consistent. DMWT consumes Delaunay faces
 // whose vertex indices were sorted ascending in DelaunayFaces — the
 // dedupe step destroys orientation. Each triangle in the output is
-// therefore independently oriented; neighbours may face opposite
-// directions. BFS over edge-shared neighbours, flipping any that
+// therefore independently oriented; neighbors may face opposite
+// directions. BFS over edge-shared neighbors, flipping any that
 // orient the shared edge in the same direction as the current
 // triangle (consistent winding has the shared edge traversed in
 // opposite directions on each side).
@@ -146,7 +178,9 @@ void _make_winding_consistent(PackedInt32Array &p_idx) {
 		for (int e = 0; e < 3; ++e) {
 			int a = p_idx[t * 3 + e];
 			int b = p_idx[t * 3 + (e + 1) % 3];
-			if (a > b) std::swap(a, b);
+			if (a > b) {
+				std::swap(a, b);
+			}
 			const uint64_t key = (uint64_t(uint32_t(a)) << 32) | uint64_t(uint32_t(b));
 			edge_to_tris[key].push_back(t);
 		}
@@ -167,7 +201,9 @@ void _make_winding_consistent(PackedInt32Array &p_idx) {
 			int ea = verts[e];
 			int eb = verts[(e + 1) % 3];
 			int key_a = ea, key_b = eb;
-			if (key_a > key_b) std::swap(key_a, key_b);
+			if (key_a > key_b) {
+				std::swap(key_a, key_b);
+			}
 			const uint64_t key =
 					(uint64_t(uint32_t(key_a)) << 32) | uint64_t(uint32_t(key_b));
 			const std::vector<int> &nbrs = edge_to_tris[key];
@@ -211,7 +247,7 @@ void _make_winding_consistent(PackedInt32Array &p_idx) {
 // shared by exactly 2 triangles, every boundary edge by exactly 1.
 // DMWT minimizes a weight sum and does NOT guarantee manifoldness —
 // it can output internal walls (edge shared by 3+ tris) and other
-// artefacts. Repeatedly: find an over-incident edge, drop the
+// artifacts. Repeatedly: find an over-incident edge, drop the
 // smallest-area triangle from the offending set, rebuild adjacency.
 // O((non_manifold_count) · E) — non_manifold_count is small in practice.
 void _enforce_manifold(const PackedVector3Array &p_verts,
@@ -221,7 +257,9 @@ void _enforce_manifold(const PackedVector3Array &p_verts,
 		return;
 	}
 	auto edge_key = [](int a, int b) -> uint64_t {
-		if (a > b) std::swap(a, b);
+		if (a > b) {
+			std::swap(a, b);
+		}
 		return (uint64_t(uint32_t(a)) << 32) | uint64_t(uint32_t(b));
 	};
 	std::vector<bool> alive(initial_nt, true);
@@ -230,7 +268,9 @@ void _enforce_manifold(const PackedVector3Array &p_verts,
 		any_dropped = false;
 		std::unordered_map<uint64_t, std::vector<int>> edge_to_tris;
 		for (int t = 0; t < initial_nt; ++t) {
-			if (!alive[t]) continue;
+			if (!alive[t]) {
+				continue;
+			}
 			for (int e = 0; e < 3; ++e) {
 				const int a = p_idx[t * 3 + e];
 				const int b = p_idx[t * 3 + (e + 1) % 3];
@@ -265,7 +305,9 @@ void _enforce_manifold(const PackedVector3Array &p_verts,
 	PackedInt32Array out;
 	out.reserve(initial_nt * 3);
 	for (int t = 0; t < initial_nt; ++t) {
-		if (!alive[t]) continue;
+		if (!alive[t]) {
+			continue;
+		}
 		out.push_back(p_idx[t * 3 + 0]);
 		out.push_back(p_idx[t * 3 + 1]);
 		out.push_back(p_idx[t * 3 + 2]);
@@ -279,10 +321,7 @@ void dmwt_to_packed(const std::vector<double> &verts, const std::vector<int> &fa
 	const int nv = int(verts.size()) / 3;
 	out_verts.resize(nv);
 	for (int i = 0; i < nv; ++i) {
-		out_verts.set(i, Vector3(
-				float(verts[3 * i]),
-				float(verts[3 * i + 1]),
-				float(verts[3 * i + 2])));
+		out_verts.set(i, Vector3(float(verts[3 * i]), float(verts[3 * i + 1]), float(verts[3 * i + 2])));
 	}
 	out_idx.resize(int(faces.size()));
 	for (int i = 0; i < int(faces.size()); ++i) {
@@ -493,13 +532,13 @@ Dictionary CassieTriangulator::triangulate(const PackedVector3Array &p_boundary,
 	if (verbose) {
 		t_refine = time->get_ticks_usec() - t_rf0;
 		const CassieRefineProfile &rp = cassie_refine_last_profile();
-		t_rf_bvh      = rp.bvh_build_us;
-		t_rf_split    = rp.split_us;
+		t_rf_bvh = rp.bvh_build_us;
+		t_rf_split = rp.split_us;
 		t_rf_collapse = rp.collapse_us;
-		t_rf_flip     = rp.flip_us;
-		t_rf_smooth   = rp.smooth_us;
-		t_rf_adj      = rp.adjacency_us;
-		rf_iters      = rp.iterations;
+		t_rf_flip = rp.flip_us;
+		t_rf_smooth = rp.smooth_us;
+		t_rf_adj = rp.adjacency_us;
+		rf_iters = rp.iterations;
 	}
 
 	if (verbose) {

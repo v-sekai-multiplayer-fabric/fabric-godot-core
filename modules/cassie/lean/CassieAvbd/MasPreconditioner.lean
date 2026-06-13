@@ -582,7 +582,7 @@ private def assembleSubmatrixEntry : SlangFunctionDecl :=
           -- Diagonal regularization: bump the diagonal entry by an
           -- absolute floor PLUS 10% of itself. The simple σ-bucket
           -- partition (no skipping-approach refinement) often produces
-          -- domains where verts have all their neighbours outside the
+          -- domains where verts have all their neighbors outside the
           -- domain; the absolute floor (0.1) keeps GJ pivots far from
           -- zero in fp32, and the 10% bump preserves the matrix shape
           -- for the well-coupled domains. This biases the per-domain

@@ -53,7 +53,7 @@ opaque uniformRemeshing (m : MeshHandle) (targetEdgeLength : Float)
 
 /-- `pmp::implicit_smoothing(mesh, timestep, hold_boundary)`.
     Backward-Euler Laplacian smoothing — pulls each interior vertex
-    toward the average of its neighbours by a fraction set by
+    toward the average of its neighbors by a fraction set by
     `timestep`. Boundary feature edges stay pinned when
     `hold_boundary = true`. This is the "give the patch some volume"
     operator for the cycle-detect → triangulate → fair pipeline. -/

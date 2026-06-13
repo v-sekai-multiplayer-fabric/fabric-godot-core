@@ -33,7 +33,6 @@ Run from anywhere:
 
 import datetime as _dt
 import json
-import os
 import statistics
 import subprocess
 import sys
@@ -90,9 +89,9 @@ def flatten_ctrl_pts(ctrl, spp=8):
             t = i / spp
             mt = 1.0 - t
             out.append((
-                mt*mt*mt*p0[0] + 3*mt*mt*t*p1[0] + 3*mt*t*t*p2[0] + t*t*t*p3[0],
-                mt*mt*mt*p0[1] + 3*mt*mt*t*p1[1] + 3*mt*t*t*p2[1] + t*t*t*p3[1],
-                mt*mt*mt*p0[2] + 3*mt*mt*t*p1[2] + 3*mt*t*t*p2[2] + t*t*t*p3[2],
+                mt * mt * mt * p0[0] + 3 * mt * mt * t * p1[0] + 3 * mt * t * t * p2[0] + t * t * t * p3[0],
+                mt * mt * mt * p0[1] + 3 * mt * mt * t * p1[1] + 3 * mt * t * t * p2[1] + t * t * t * p3[1],
+                mt * mt * mt * p0[2] + 3 * mt * mt * t * p1[2] + 3 * mt * t * t * p2[2] + t * t * t * p3[2],
             ))
     return out
 
@@ -153,13 +152,13 @@ def project_to_polyline(cp, pts, cum):
         ax, ay, az = pts[i]
         bx, by, bz = pts[i + 1]
         dx, dy, dz = bx - ax, by - ay, bz - az
-        seg_len2 = dx*dx + dy*dy + dz*dz
+        seg_len2 = dx * dx + dy * dy + dz * dz
         if seg_len2 < 1e-20:
             continue
         ux = cp[0] - ax
         uy = cp[1] - ay
         uz = cp[2] - az
-        s = (ux*dx + uy*dy + uz*dz) / seg_len2
+        s = (ux * dx + uy * dy + uz * dz) / seg_len2
         if s < 0.0:
             s = 0.0
         elif s > 1.0:
@@ -170,7 +169,7 @@ def project_to_polyline(cp, pts, cum):
         d2 = (cp[0] - px) ** 2 + (cp[1] - py) ** 2 + (cp[2] - pz) ** 2
         if d2 < best_d2:
             best_d2 = d2
-            seg_len = seg_len2 ** 0.5
+            seg_len = seg_len2**0.5
             best_arc = cum[i] + s * seg_len
     return best_arc
 
@@ -195,10 +194,10 @@ def stroke_splits(stroke, pts):
         return []
     cum = [0.0]
     for i in range(1, len(pts)):
-        dx = pts[i][0] - pts[i-1][0]
-        dy = pts[i][1] - pts[i-1][1]
-        dz = pts[i][2] - pts[i-1][2]
-        cum.append(cum[-1] + (dx*dx + dy*dy + dz*dz) ** 0.5)
+        dx = pts[i][0] - pts[i - 1][0]
+        dy = pts[i][1] - pts[i - 1][1]
+        dz = pts[i][2] - pts[i - 1][2]
+        cum.append(cum[-1] + (dx * dx + dy * dy + dz * dz) ** 0.5)
     splits = []
     for c in constraints:
         if "position" in c:
@@ -233,8 +232,12 @@ def run_probe(polylines_path):
     # Windows; calling the .exe directly hits STATUS_DLL_NOT_FOUND.
     res = subprocess.run(
         ["lake", "exe", "arrangement_probe", f"--input={polylines_path}"],
-        capture_output=True, text=True, timeout=180, cwd=str(LEAN_DIR),
-        shell=True)
+        capture_output=True,
+        text=True,
+        timeout=180,
+        cwd=str(LEAN_DIR),
+        shell=True,
+    )
     if res.returncode != 0:
         return None, (res.stderr.strip() or res.stdout.strip())[:200]
     # `lake exe` may interleave build/info messages on stdout; the probe
@@ -278,17 +281,27 @@ def main():
             merge_eps = UNITY_MERGE_EPS_BASE * scale
             polys = stroke_polylines(raw_doc)
             tmp = td_path / f"{sid}.polylines.json"
-            tmp.write_text(json.dumps({
-                "prox": prox, "merge_eps": merge_eps,
-                "samples_per_cubic": SAMPLES_PER_CUBIC,
-                "strokes": polys}))
+            tmp.write_text(
+                json.dumps({
+                    "prox": prox,
+                    "merge_eps": merge_eps,
+                    "samples_per_cubic": SAMPLES_PER_CUBIC,
+                    "strokes": polys,
+                })
+            )
             lean, err = run_probe(tmp)
             ref = ref_counts(REF / f"{sid}.json")
             if lean is None:
                 n_fail += 1
-                row = {"id": sid, "prox": prox, "merge_eps": merge_eps,
-                       "canvas_scale_median": scale,
-                       "lean": None, "ref": ref, "err": err}
+                row = {
+                    "id": sid,
+                    "prox": prox,
+                    "merge_eps": merge_eps,
+                    "canvas_scale_median": scale,
+                    "lean": None,
+                    "ref": ref,
+                    "err": err,
+                }
                 print(f"  {sid}: FAIL — {err}")
             else:
                 n_ok += 1
@@ -296,23 +309,29 @@ def main():
                     "nodes": lean["nodes"] - ref["nodes"],
                     "edges": lean["edges"] - ref["segments"],
                 }
-                row = {"id": sid, "prox": prox, "merge_eps": merge_eps,
-                       "canvas_scale_median": scale,
-                       "lean": lean, "ref": ref, "delta": delta}
-                print(f"  {sid}: scale={scale:.3f} "
-                      f"lean=({lean['nodes']}n,{lean['edges']}e) "
-                      f"ref=({ref['nodes']}n,{ref['segments']}s) "
-                      f"Δ=({delta['nodes']},{delta['edges']})")
+                row = {
+                    "id": sid,
+                    "prox": prox,
+                    "merge_eps": merge_eps,
+                    "canvas_scale_median": scale,
+                    "lean": lean,
+                    "ref": ref,
+                    "delta": delta,
+                }
+                print(
+                    f"  {sid}: scale={scale:.3f} "
+                    f"lean=({lean['nodes']}n,{lean['edges']}e) "
+                    f"ref=({ref['nodes']}n,{ref['segments']}s) "
+                    f"Δ=({delta['nodes']},{delta['edges']})"
+                )
             rows.append(row)
     agg = {
         "lean_nodes_total": sum(r["lean"]["nodes"] for r in rows if r.get("lean")),
         "lean_edges_total": sum(r["lean"]["edges"] for r in rows if r.get("lean")),
         "ref_nodes_total": sum(r["ref"]["nodes"] for r in rows if "ref" in r),
         "ref_segments_total": sum(r["ref"]["segments"] for r in rows if "ref" in r),
-        "exact_node_match": sum(1 for r in rows if r.get("lean")
-                                and r["lean"]["nodes"] == r["ref"]["nodes"]),
-        "exact_edge_match": sum(1 for r in rows if r.get("lean")
-                                and r["lean"]["edges"] == r["ref"]["segments"]),
+        "exact_node_match": sum(1 for r in rows if r.get("lean") and r["lean"]["nodes"] == r["ref"]["nodes"]),
+        "exact_edge_match": sum(1 for r in rows if r.get("lean") and r["lean"]["edges"] == r["ref"]["segments"]),
     }
     out = {
         "recorded": _dt.date.today().isoformat(),
@@ -328,8 +347,7 @@ def main():
             "merge_eps = 0.01 × median(canvasScale.x), per Unity's "
             "CASSIEParameters defaults (SmallDistance × 2 for "
             "ProximityThreshold, × 0.5 for MergeConstraintsThreshold).",
-            "spp=8 cubic-Bezier sampling per stroke. No per-mesh prox "
-            "tuning. See memory: feedback_no-prox-tuning.md.",
+            "spp=8 cubic-Bezier sampling per stroke. No per-mesh prox tuning. See memory: feedback_no-prox-tuning.md.",
             "Lean strokes can differ from ref strokes due to mirror twins "
             "recorded in raw_data but pruned from sketch_graph — counts may "
             "lean high.",

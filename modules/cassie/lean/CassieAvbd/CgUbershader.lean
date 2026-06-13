@@ -7,7 +7,7 @@ A Lean module that emits one Slang source with 10 `[shader("compute")]`
 entry points covering the preconditioned-CG iteration for Ax = b
 (A SPD, M = diag(A)). Every entry references the same set of bindings
 (0..11), so the C++ dispatch builds the uniform set in the bind
-pass and re-uses it for every entry-point dispatch — no
+pass and reuses it for every entry-point dispatch — no
 uniform_set_create per call.
 
 GPU-only path for the harmonic deform. The CPU path keeps using
@@ -471,7 +471,7 @@ def shader : SlangShaderModule :=
   { structs   := [paramsStruct]
   , groupShared :=
       -- Shared by dot_p_ap and dot_r_z; the two reductions run in
-      -- separate dispatches so re-using the storage is safe.
+      -- separate dispatches so reusing the storage is safe.
       [ { name := "s_hi", elemType := .scalar .float, dims := [256] }
       , { name := "s_lo", elemType := .scalar .float, dims := [256] } ]
   , globals   := globals

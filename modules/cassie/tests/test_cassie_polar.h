@@ -1,11 +1,32 @@
 /**************************************************************************/
-/*  test_cassie_polar.h                                                    */
+/*  test_cassie_polar.h                                                   */
 /**************************************************************************/
-/* ENG-68 — safeguarded polar decomposition fixtures.                      */
-/* Locks in the reflection-check + eigenvalue-clamp behavior of            */
-/* cassie_polar::polar_decompose_3x3_safe before it ships into the DDM     */
-/* runtime. The same safeguards must hold on the GPU side once the         */
-/* PolarKernel.lean ubershader lands.                                      */
+/*                         This file is part of:                          */
+/*                             GODOT ENGINE                               */
+/*                        https://godotengine.org                         */
+/**************************************************************************/
+/* Copyright (c) 2014-present Godot Engine contributors (see AUTHORS.md). */
+/* Copyright (c) 2007-2014 Juan Linietsky, Ariel Manzur.                  */
+/*                                                                        */
+/* Permission is hereby granted, free of charge, to any person obtaining  */
+/* a copy of this software and associated documentation files (the        */
+/* "Software"), to deal in the Software without restriction, including    */
+/* without limitation the rights to use, copy, modify, merge, publish,    */
+/* distribute, sublicense, and/or sell copies of the Software, and to     */
+/* permit persons to whom the Software is furnished to do so, subject to  */
+/* the following conditions:                                              */
+/*                                                                        */
+/* The above copyright notice and this permission notice shall be         */
+/* included in all copies or substantial portions of the Software.        */
+/*                                                                        */
+/* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,        */
+/* EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF     */
+/* MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. */
+/* IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY   */
+/* CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,   */
+/* TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE      */
+/* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                 */
+/**************************************************************************/
 
 #pragma once
 
@@ -20,9 +41,15 @@ namespace TestCassiePolar {
 
 // Row-major 3×3 identity / fill.
 static void fill_identity(double *p_M) {
-	p_M[0] = 1.0; p_M[1] = 0.0; p_M[2] = 0.0;
-	p_M[3] = 0.0; p_M[4] = 1.0; p_M[5] = 0.0;
-	p_M[6] = 0.0; p_M[7] = 0.0; p_M[8] = 1.0;
+	p_M[0] = 1.0;
+	p_M[1] = 0.0;
+	p_M[2] = 0.0;
+	p_M[3] = 0.0;
+	p_M[4] = 1.0;
+	p_M[5] = 0.0;
+	p_M[6] = 0.0;
+	p_M[7] = 0.0;
+	p_M[8] = 1.0;
 }
 
 static double mat3_det(const double *p_M) {
@@ -71,7 +98,8 @@ TEST_CASE("[Cassie][Polar] reflection input forces det(R) = +1") {
 	const double det = mat3_det(R);
 	CHECK_MESSAGE(std::abs(det - 1.0) < 0.01,
 			vformat("reflection input must produce det(R) = +1 after safeguard; "
-					"got %f", det));
+					"got %f",
+					det));
 	// Test vertex along z: rest = (0, 0, 1). Naive polar would mirror
 	// it to (0, 0, -1) (or close). Safe-polar should NOT mirror — the
 	// flip cancels the reflection, leaving |R · v - v| close to 0 or 2
@@ -119,21 +147,22 @@ TEST_CASE("[Cassie][Polar] near-rotation input recovered to fp64 precision") {
 	const double s = std::sin(Math::PI / 4.0);
 	const double eps = 1e-4;
 	double M[9] = {
-		c + eps, -s,         0.0,
-		s,         c + eps,  0.0,
-		0.0,      0.0,       1.0 + eps
+		c + eps, -s, 0.0,
+		s, c + eps, 0.0,
+		0.0, 0.0, 1.0 + eps
 	};
 	double R[9];
 	cassie_polar::polar_decompose_3x3_safe(M, R);
 	double R_true[9] = {
 		c, -s, 0.0,
-		s,  c, 0.0,
+		s, c, 0.0,
 		0.0, 0.0, 1.0
 	};
 	const double err = frob(R, R_true);
 	CHECK_MESSAGE(err < 1e-3,
 			vformat("near-rotation must be recovered (safeguards don't degrade "
-					"clean-input accuracy); err = %f", err));
+					"clean-input accuracy); err = %f",
+					err));
 	const double det = mat3_det(R);
 	CHECK_MESSAGE(std::abs(det - 1.0) < 1e-9,
 			vformat("det(R) for near-rotation must be +1; got %f", det));

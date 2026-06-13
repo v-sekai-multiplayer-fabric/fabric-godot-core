@@ -339,7 +339,7 @@ private def body : List SlangStmt :=
             (.bin "*" (.var "vn1y") (.var "e2y"))
             (.bin "*" (.var "vn1z") (.var "e2z")))
   -- Step 3: 2D polar adjoint.
-  -- rn3 = rn·rn·rn (rn is already the polar normalisation factor)
+  -- rn3 = rn·rn·rn (rn is already the polar normalization factor)
   , .declInit f "rn3" (.bin "*" (.var "rn") (.bin "*" (.var "rn") (.var "rn")))
   , .declInit f "trR" (.bin "+" (.var "vr00") (.var "vr11"))    -- v_r00 + v_r11
   , .declInit f "antR" (.bin "-" (.var "vr10") (.var "vr01"))   -- v_r10 - v_r01

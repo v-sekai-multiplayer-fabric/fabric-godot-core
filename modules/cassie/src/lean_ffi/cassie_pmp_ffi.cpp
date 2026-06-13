@@ -1,25 +1,37 @@
 /**************************************************************************/
-/*  cassie_pmp_ffi.cpp                                                     */
+/*  cassie_pmp_ffi.cpp                                                    */
 /**************************************************************************/
-/* C-linkage entry points that resolve the @[extern] declarations in       */
-/* `modules/cassie/lean/CassiePmp/Mesh.lean`. Lean handles `pmp::SurfaceMesh`*/
-/* by USize handle; this file allocates / frees / mutates the handle.      */
-/*                                                                         */
-/* Calling convention notes for Lean FFI:                                  */
-/*  - `USize` ↔ `size_t`                                                   */
-/*  - `Float` ↔ `double` (Lean's `Float` is fp64)                          */
-/*  - `Bool`  ↔ `uint8_t` (Lean returns 0 / 1)                             */
-/*  - Lean's `FloatArray` is a `lean_obj_arg` whose payload starts at      */
-/*    `lean_float_array_cptr(arr)` with length `lean_float_array_size`.    */
-/*  - `ByteArray` similarly via `lean_byte_array_cptr` /                   */
-/*    `lean_byte_array_size`. Output ByteArray-of-uint32 is stored LE.     */
+/*                         This file is part of:                          */
+/*                             GODOT ENGINE                               */
+/*                        https://godotengine.org                         */
 /**************************************************************************/
-
-#include <pmp/surface_mesh.h>
-#include <pmp/algorithms/remeshing.h>
-#include <pmp/algorithms/smoothing.h>
+/* Copyright (c) 2014-present Godot Engine contributors (see AUTHORS.md). */
+/* Copyright (c) 2007-2014 Juan Linietsky, Ariel Manzur.                  */
+/*                                                                        */
+/* Permission is hereby granted, free of charge, to any person obtaining  */
+/* a copy of this software and associated documentation files (the        */
+/* "Software"), to deal in the Software without restriction, including    */
+/* without limitation the rights to use, copy, modify, merge, publish,    */
+/* distribute, sublicense, and/or sell copies of the Software, and to     */
+/* permit persons to whom the Software is furnished to do so, subject to  */
+/* the following conditions:                                              */
+/*                                                                        */
+/* The above copyright notice and this permission notice shall be         */
+/* included in all copies or substantial portions of the Software.        */
+/*                                                                        */
+/* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,        */
+/* EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF     */
+/* MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. */
+/* IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY   */
+/* CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,   */
+/* TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE      */
+/* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                 */
+/**************************************************************************/
 
 #include <lean/lean.h>
+#include <pmp/algorithms/remeshing.h>
+#include <pmp/algorithms/smoothing.h>
+#include <pmp/surface_mesh.h>
 
 #include <cstring>
 #include <vector>

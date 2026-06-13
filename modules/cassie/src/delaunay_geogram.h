@@ -1,3 +1,33 @@
+/**************************************************************************/
+/*  delaunay_geogram.h                                                    */
+/**************************************************************************/
+/*                         This file is part of:                          */
+/*                             GODOT ENGINE                               */
+/*                        https://godotengine.org                         */
+/**************************************************************************/
+/* Copyright (c) 2014-present Godot Engine contributors (see AUTHORS.md). */
+/* Copyright (c) 2007-2014 Juan Linietsky, Ariel Manzur.                  */
+/*                                                                        */
+/* Permission is hereby granted, free of charge, to any person obtaining  */
+/* a copy of this software and associated documentation files (the        */
+/* "Software"), to deal in the Software without restriction, including    */
+/* without limitation the rights to use, copy, modify, merge, publish,    */
+/* distribute, sublicense, and/or sell copies of the Software, and to     */
+/* permit persons to whom the Software is furnished to do so, subject to  */
+/* the following conditions:                                              */
+/*                                                                        */
+/* The above copyright notice and this permission notice shall be         */
+/* included in all copies or substantial portions of the Software.        */
+/*                                                                        */
+/* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,        */
+/* EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF     */
+/* MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. */
+/* IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY   */
+/* CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,   */
+/* TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE      */
+/* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                 */
+/**************************************************************************/
+
 #pragma once
 
 // Windows headers leak LEFT/RIGHT/UP/DOWN/INF macros that collide
@@ -33,9 +63,9 @@
 // proven cassie-triangulation/src/Utility/DelaunayFaces wrapper but
 // produces godot-cpp containers instead of std::vector<>.
 
-#include "core/templates/vector.h"
 #include "core/math/vector2.h"
 #include "core/math/vector3.h"
+#include "core/templates/vector.h"
 #include "core/variant/array.h"
 #include "core/variant/variant.h"
 
@@ -43,12 +73,12 @@ namespace cassie {
 
 // Triangle output for the 2D path (replaces Delaunay2D::Triangle).
 struct DelaunayTriangle2D {
-    int points[3];
+	int points[3];
 };
 
 // Tetrahedron output for the 3D path (replaces Delaunay3D::OutputSimplex).
 struct DelaunayTet3D {
-    int points[4];
+	int points[4];
 };
 
 // 2D Delaunay triangulation. Returns triangles whose three indices
@@ -69,6 +99,6 @@ Vector<DelaunayTet3D> delaunay_tetrahedralize_3d(const PackedVector3Array &p_poi
 // 3 * *out_face_count) — caller owns and must `delete[]` it.
 // Returns false on degenerate input.
 bool delaunay_triangulate_2d_raw(const double *p_xy_coords, int n_points,
-        int **out_face_indices, int *out_face_count);
+		int **out_face_indices, int *out_face_count);
 
-}  // namespace cassie
+} // namespace cassie

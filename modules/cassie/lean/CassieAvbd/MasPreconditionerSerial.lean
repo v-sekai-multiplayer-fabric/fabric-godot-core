@@ -114,7 +114,7 @@ private def identityCopyL0Entry : SlangFunctionDecl :=
 /-- CPU-safe per-domain SymMV — same algorithm as Row 6
     (`01925dbddd`): packed lower-triangular layout with symmetry-aware
     addressing, reads r_input directly from global (no groupshared, no
-    barriers). slangc -target cpp serialises the workgroup into a
+    barriers). slangc -target cpp serializes the workgroup into a
     per-thread for-loop. -/
 private def perDomainSolveEntry : SlangFunctionDecl :=
   { attrs  := [.shaderCompute, .numthreads 32 1 1]

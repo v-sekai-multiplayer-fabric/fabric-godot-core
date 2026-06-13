@@ -1,28 +1,45 @@
 /**************************************************************************/
-/*  cassie_geogram_ffi.cpp                                                 */
+/*  cassie_geogram_ffi.cpp                                                */
 /**************************************************************************/
-/* C-linkage entry points that resolve the @[extern] declarations in       */
-/* `modules/cassie/lean/CassieGeogram/Delaunay.lean`.                      */
-/*                                                                         */
-/* Calls GEO::Delaunay directly (no Godot core / CassieTriangulator        */
-/* dependency, so the static lib stays self-contained for the Lake link).  */
-/* The MVP uses 2D Delaunay (BDEL2d if available, else regular 2d) over    */
-/* the boundary samples; constrained-edge support lands in a follow-up.    */
+/*                         This file is part of:                          */
+/*                             GODOT ENGINE                               */
+/*                        https://godotengine.org                         */
+/**************************************************************************/
+/* Copyright (c) 2014-present Godot Engine contributors (see AUTHORS.md). */
+/* Copyright (c) 2007-2014 Juan Linietsky, Ariel Manzur.                  */
+/*                                                                        */
+/* Permission is hereby granted, free of charge, to any person obtaining  */
+/* a copy of this software and associated documentation files (the        */
+/* "Software"), to deal in the Software without restriction, including    */
+/* without limitation the rights to use, copy, modify, merge, publish,    */
+/* distribute, sublicense, and/or sell copies of the Software, and to     */
+/* permit persons to whom the Software is furnished to do so, subject to  */
+/* the following conditions:                                              */
+/*                                                                        */
+/* The above copyright notice and this permission notice shall be         */
+/* included in all copies or substantial portions of the Software.        */
+/*                                                                        */
+/* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,        */
+/* EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF     */
+/* MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. */
+/* IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY   */
+/* CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,   */
+/* TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE      */
+/* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                 */
 /**************************************************************************/
 
 #include <geogram/basic/common.h>
 #include <geogram/delaunay/CDT_2d.h>
-
 #include <lean/lean.h>
 
 #include <atomic>
-#include <cstring>
 #include <cstdint>
+#include <cstring>
 #include <vector>
 
 namespace {
 
-std::atomic_bool geogram_initialized{false};
+std::atomic_bool geogram_initialized{ false };
 
 void ensure_init() {
 	bool expected = false;
@@ -63,19 +80,22 @@ LEAN_EXPORT lean_obj_res cassie_geogram_delaunay_from_boundary(
 		kept.reserve(n_pts);
 		const double eps2 = 1e-20;
 		auto same = [&](size_t i, size_t j) -> bool {
-			const double dx = src[3*i+0] - src[3*j+0];
-			const double dz = src[3*i+2] - src[3*j+2];
-			return dx*dx + dz*dz < eps2;
+			const double dx = src[3 * i + 0] - src[3 * j + 0];
+			const double dz = src[3 * i + 2] - src[3 * j + 2];
+			return dx * dx + dz * dz < eps2;
 		};
 		for (size_t i = 0; i < n_pts; ++i) {
-			if (!kept.empty() && same(i, kept.back())) continue;
+			if (!kept.empty() && same(i, kept.back())) {
+				continue;
+			}
 			kept.push_back(i);
-			xy.push_back(src[3*i+0]);
-			xy.push_back(src[3*i+2]);
+			xy.push_back(src[3 * i + 0]);
+			xy.push_back(src[3 * i + 2]);
 		}
 		while (kept.size() >= 2 && same(kept.front(), kept.back())) {
 			kept.pop_back();
-			xy.pop_back(); xy.pop_back();
+			xy.pop_back();
+			xy.pop_back();
 		}
 		n_pts = kept.size();
 		if (n_pts < 3) {
@@ -89,10 +109,10 @@ LEAN_EXPORT lean_obj_res cassie_geogram_delaunay_from_boundary(
 		// external triangles so only the interior triangulation remains.
 		double xmin = xy[0], xmax = xy[0], ymin = xy[1], ymax = xy[1];
 		for (size_t i = 1; i < n_pts; ++i) {
-			xmin = (xy[2*i+0] < xmin) ? xy[2*i+0] : xmin;
-			xmax = (xy[2*i+0] > xmax) ? xy[2*i+0] : xmax;
-			ymin = (xy[2*i+1] < ymin) ? xy[2*i+1] : ymin;
-			ymax = (xy[2*i+1] > ymax) ? xy[2*i+1] : ymax;
+			xmin = (xy[2 * i + 0] < xmin) ? xy[2 * i + 0] : xmin;
+			xmax = (xy[2 * i + 0] > xmax) ? xy[2 * i + 0] : xmax;
+			ymin = (xy[2 * i + 1] < ymin) ? xy[2 * i + 1] : ymin;
+			ymax = (xy[2 * i + 1] > ymax) ? xy[2 * i + 1] : ymax;
 		}
 		const double pad = ((xmax - xmin) + (ymax - ymin)) * 0.5 + 1.0;
 		GEO::CDT2d cdt;
@@ -103,7 +123,7 @@ LEAN_EXPORT lean_obj_res cassie_geogram_delaunay_from_boundary(
 		// boundary constraints.
 		std::vector<GEO::index_t> user_idx(n_pts);
 		for (size_t i = 0; i < n_pts; ++i) {
-			user_idx[i] = cdt.insert(GEO::vec2(xy[2*i+0], xy[2*i+1]));
+			user_idx[i] = cdt.insert(GEO::vec2(xy[2 * i + 0], xy[2 * i + 1]));
 		}
 		// Treat the input as a closed boundary polyline so we get a
 		// constrained Delaunay of the polygon interior (matches what
@@ -111,7 +131,9 @@ LEAN_EXPORT lean_obj_res cassie_geogram_delaunay_from_boundary(
 		for (size_t i = 0; i < n_pts; ++i) {
 			GEO::index_t a = user_idx[i];
 			GEO::index_t b = user_idx[(i + 1) % n_pts];
-			if (a != b) cdt.insert_constraint(a, b);
+			if (a != b) {
+				cdt.insert_constraint(a, b);
+			}
 		}
 		cdt.remove_external_triangles(false);
 		const GEO::index_t nb_v = cdt.nv();
@@ -129,7 +151,10 @@ LEAN_EXPORT lean_obj_res cassie_geogram_delaunay_from_boundary(
 					remap[v] = int32_t(inv.size());
 					int32_t input_idx = -1;
 					for (size_t i = 0; i < n_pts; ++i) {
-						if (user_idx[i] == v) { input_idx = int32_t(kept[i]); break; }
+						if (user_idx[i] == v) {
+							input_idx = int32_t(kept[i]);
+							break;
+						}
 					}
 					inv.push_back(input_idx);
 				}
@@ -138,7 +163,9 @@ LEAN_EXPORT lean_obj_res cassie_geogram_delaunay_from_boundary(
 		const size_t out_v = inv.size();
 		res->verts.resize(3 * out_v);
 		for (GEO::index_t v = 0; v < nb_v; ++v) {
-			if (remap[v] < 0) continue;
+			if (remap[v] < 0) {
+				continue;
+			}
 			const GEO::vec2 p = cdt.point(v);
 			const size_t o = size_t(remap[v]);
 			res->verts[3 * o + 0] = p.x;

@@ -1,3 +1,33 @@
+/**************************************************************************/
+/*  cassie_slang_gpu.h                                                    */
+/**************************************************************************/
+/*                         This file is part of:                          */
+/*                             GODOT ENGINE                               */
+/*                        https://godotengine.org                         */
+/**************************************************************************/
+/* Copyright (c) 2014-present Godot Engine contributors (see AUTHORS.md). */
+/* Copyright (c) 2007-2014 Juan Linietsky, Ariel Manzur.                  */
+/*                                                                        */
+/* Permission is hereby granted, free of charge, to any person obtaining  */
+/* a copy of this software and associated documentation files (the        */
+/* "Software"), to deal in the Software without restriction, including    */
+/* without limitation the rights to use, copy, modify, merge, publish,    */
+/* distribute, sublicense, and/or sell copies of the Software, and to     */
+/* permit persons to whom the Software is furnished to do so, subject to  */
+/* the following conditions:                                              */
+/*                                                                        */
+/* The above copyright notice and this permission notice shall be         */
+/* included in all copies or substantial portions of the Software.        */
+/*                                                                        */
+/* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,        */
+/* EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF     */
+/* MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. */
+/* IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY   */
+/* CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,   */
+/* TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE      */
+/* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                 */
+/**************************************************************************/
+
 #pragma once
 
 // GPU dispatch for the Slang-emitted CASSIE kernels.
@@ -168,7 +198,7 @@ public:
 
 	// Persistent state for one solver instance. All 12 bindings of the
 	// cg_pcg ubershader live here; the uniform set is built once at
-	// upload time and re-used across every solve. Matrix + RHS +
+	// upload time and reused across every solve. Matrix + RHS +
 	// preconditioner are uploaded once; x/r/z/p/Ap/scalars stay GPU-
 	// resident across calls so a re-solve with a new initial x just
 	// updates the x buffer.
@@ -243,8 +273,8 @@ public:
 		RID b_col_idx;
 		RID b_values;
 		RID b_diag_inv;
-		RID b_rhs;     // RWStructuredBuffer<float3>, length rows
-		RID b_x;       // RWStructuredBuffer<float3>, length rows
+		RID b_rhs; // RWStructuredBuffer<float3>, length rows
+		RID b_x; // RWStructuredBuffer<float3>, length rows
 		RID b_r;
 		RID b_z;
 		RID b_p;
@@ -266,7 +296,7 @@ public:
 			const int32_t *p_col_idx, int p_nnz,
 			const float *p_values,
 			const float *p_diag_inv,
-			const float *p_b_float3);  // length 3 * rows, packed xyz
+			const float *p_b_float3); // length 3 * rows, packed xyz
 
 	// Release every buffer + uniform set in a CgPcg3Handle. Idempotent.
 	void free_cg3_state(CgPcg3Handle &r_handle);

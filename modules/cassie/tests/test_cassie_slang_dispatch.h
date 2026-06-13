@@ -1,16 +1,32 @@
 /**************************************************************************/
-/*  test_cassie_slang_dispatch.h                                           */
+/*  test_cassie_slang_dispatch.h                                          */
 /**************************************************************************/
-/* Smoke test for the slangc -target cpp dispatch path. Verifies that     */
-/* the Slang-emitted SPMV kernel (under thirdparty/avbd/spmv.cpu.cpp)     */
-/* produces the same result as the reference textbook CSR-row loop on a   */
-/* tridiagonal SPD matrix.                                                  */
-/*                                                                          */
-/* The reference loop here is a literal transcription of the math — NOT    */
-/* `cassie_pcg::spmv`, which now delegates to the Slang dispatch (would be */
-/* a tautology). If this test breaks, the slangc-emitted kernel is wrong; */
-/* if cassie_pcg::spmv breaks separately, the dispatch wrapper layer is  */
-/* wrong.                                                                  */
+/*                         This file is part of:                          */
+/*                             GODOT ENGINE                               */
+/*                        https://godotengine.org                         */
+/**************************************************************************/
+/* Copyright (c) 2014-present Godot Engine contributors (see AUTHORS.md). */
+/* Copyright (c) 2007-2014 Juan Linietsky, Ariel Manzur.                  */
+/*                                                                        */
+/* Permission is hereby granted, free of charge, to any person obtaining  */
+/* a copy of this software and associated documentation files (the        */
+/* "Software"), to deal in the Software without restriction, including    */
+/* without limitation the rights to use, copy, modify, merge, publish,    */
+/* distribute, sublicense, and/or sell copies of the Software, and to     */
+/* permit persons to whom the Software is furnished to do so, subject to  */
+/* the following conditions:                                              */
+/*                                                                        */
+/* The above copyright notice and this permission notice shall be         */
+/* included in all copies or substantial portions of the Software.        */
+/*                                                                        */
+/* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,        */
+/* EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF     */
+/* MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. */
+/* IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY   */
+/* CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,   */
+/* TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE      */
+/* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                 */
+/**************************************************************************/
 
 #pragma once
 
@@ -377,7 +393,7 @@ TEST_CASE("[Cassie][SlangDispatch][MasMultiLevel] identity L_II → z = num_leve
 		return;
 	}
 
-	const int ni = 128;  // > 1 sigma-bucket; forces at least one coarse level.
+	const int ni = 128; // > 1 sigma-bucket; forces at least one coarse level.
 	cassie_pcg::CSRMatrix L_II;
 	L_II.rows = ni;
 	L_II.cols = ni;
@@ -389,7 +405,7 @@ TEST_CASE("[Cassie][SlangDispatch][MasMultiLevel] identity L_II → z = num_leve
 	L_II.val.resize(ni);
 	for (int i = 0; i < ni; ++i) {
 		L_II.col_idx[i] = i;
-		L_II.val[i] = 1.0;  // identity diagonal
+		L_II.val[i] = 1.0; // identity diagonal
 	}
 
 	// Spread positions so the Morton hierarchy lays out σ-buckets cleanly.
@@ -415,7 +431,7 @@ TEST_CASE("[Cassie][SlangDispatch][MasMultiLevel] identity L_II → z = num_leve
 	LocalVector<float> z;
 	z.resize(ni * 3);
 	for (int i = 0; i < ni * 3; ++i) {
-		z[i] = -1.0f;  // poison; apply must overwrite every entry.
+		z[i] = -1.0f; // poison; apply must overwrite every entry.
 	}
 
 	const bool ok = mas.apply_mas_gpu(h, r.ptr(), z.ptr());

@@ -1,15 +1,31 @@
 /**************************************************************************/
-/*  cassie_obj_ffi.cpp                                                     */
+/*  cassie_obj_ffi.cpp                                                    */
 /**************************************************************************/
-/* C-linkage entry points for the @[extern] declarations in               */
-/* `modules/cassie/lean/CassieObj.lean`. Loads a Wavefront OBJ into a     */
-/* heap-allocated handle Lean owns by USize; per-handle accessors copy   */
-/* positions + triangle indices into Lean FloatArray / ByteArray.        */
-/*                                                                         */
-/* Minimal subset parser: `v x y z`, `f i j k` (and `f i/_ j/_ k/_`,      */
-/* `f i//n j//n k//n`, `f i/_/_ j/_/_ k/_/_`). Quads + ngons triangulated*/
-/* as fans. Ignores normals/UVs/groups/materials. OBJ indices are 1-based*/
-/* in the file; we store 0-based.                                        */
+/*                         This file is part of:                          */
+/*                             GODOT ENGINE                               */
+/*                        https://godotengine.org                         */
+/**************************************************************************/
+/* Copyright (c) 2014-present Godot Engine contributors (see AUTHORS.md). */
+/* Copyright (c) 2007-2014 Juan Linietsky, Ariel Manzur.                  */
+/*                                                                        */
+/* Permission is hereby granted, free of charge, to any person obtaining  */
+/* a copy of this software and associated documentation files (the        */
+/* "Software"), to deal in the Software without restriction, including    */
+/* without limitation the rights to use, copy, modify, merge, publish,    */
+/* distribute, sublicense, and/or sell copies of the Software, and to     */
+/* permit persons to whom the Software is furnished to do so, subject to  */
+/* the following conditions:                                              */
+/*                                                                        */
+/* The above copyright notice and this permission notice shall be         */
+/* included in all copies or substantial portions of the Software.        */
+/*                                                                        */
+/* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,        */
+/* EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF     */
+/* MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. */
+/* IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY   */
+/* CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,   */
+/* TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE      */
+/* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                 */
 /**************************************************************************/
 
 #include <lean/lean.h>
@@ -28,7 +44,7 @@ namespace {
 
 struct ObjMesh {
 	std::vector<double> positions; // flat x,y,z
-	std::vector<uint32_t> faces;   // flat a,b,c (0-based)
+	std::vector<uint32_t> faces; // flat a,b,c (0-based)
 };
 
 inline ObjMesh *as_mesh(size_t handle) {
@@ -38,12 +54,20 @@ inline ObjMesh *as_mesh(size_t handle) {
 // Parse one vertex index from a face token like "12", "12/3", "12//5",
 // "12/3/5". Returns 0-based; -1 on parse failure.
 int32_t parse_face_index(const char *tok, int32_t n_verts) {
-	if (!tok || !*tok) return -1;
+	if (!tok || !*tok) {
+		return -1;
+	}
 	char *end = nullptr;
 	long idx = std::strtol(tok, &end, 10);
-	if (end == tok) return -1;
-	if (idx > 0) return static_cast<int32_t>(idx - 1);
-	if (idx < 0) return n_verts + static_cast<int32_t>(idx); // relative
+	if (end == tok) {
+		return -1;
+	}
+	if (idx > 0) {
+		return static_cast<int32_t>(idx - 1);
+	}
+	if (idx < 0) {
+		return n_verts + static_cast<int32_t>(idx); // relative
+	}
 	return -1;
 }
 
@@ -66,10 +90,15 @@ LEAN_EXPORT lean_obj_res cassie_obj_load(
 	face_tokens.reserve(8);
 	while (std::getline(f, line)) {
 		// strip trailing CR for CRLF files
-		while (!line.empty() && (line.back() == '\r' || line.back() == ' '))
+		while (!line.empty() && (line.back() == '\r' || line.back() == ' ')) {
 			line.pop_back();
-		if (line.empty() || line[0] == '#') continue;
-		if (line.size() < 2) continue;
+		}
+		if (line.empty() || line[0] == '#') {
+			continue;
+		}
+		if (line.size() < 2) {
+			continue;
+		}
 		if (line[0] == 'v' && line[1] == ' ') {
 			double x = 0, y = 0, z = 0;
 			std::istringstream s(line.substr(2));
@@ -87,9 +116,13 @@ LEAN_EXPORT lean_obj_res cassie_obj_load(
 			while (s >> tok) {
 				// keep only the position component (before first '/')
 				const size_t slash = tok.find('/');
-				if (slash != std::string::npos) tok.resize(slash);
+				if (slash != std::string::npos) {
+					tok.resize(slash);
+				}
 				const int32_t idx = parse_face_index(tok.c_str(), n_verts);
-				if (idx >= 0 && idx < n_verts) face_tokens.push_back(idx);
+				if (idx >= 0 && idx < n_verts) {
+					face_tokens.push_back(idx);
+				}
 			}
 			// fan-triangulate
 			for (size_t i = 2; i < face_tokens.size(); ++i) {

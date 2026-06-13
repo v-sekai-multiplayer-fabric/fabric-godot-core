@@ -20,7 +20,7 @@ single-thread serial fold:
 **Why this kernel exists.** The parallel `dot_reduce` uses a
 groupshared tree reduce with workgroup barriers; `slangc -target cpp`
 rejects the barrier (E36107) because its sequential per-thread
-dispatch can't honour cross-thread synchronisation. We isolated the
+dispatch can't honor cross-thread synchronization. We isolated the
 blocker by probing the two features individually — `groupshared`
 alone compiles fine; `GroupMemoryBarrierWithGroupSync()` is the wall.
 

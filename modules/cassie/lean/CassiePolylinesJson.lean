@@ -23,7 +23,7 @@ and `cycle_patch --input`:
 authoritative cubic Bezier control points used by `BezierIntersect` for
 true intersection detection; when absent (legacy hat fixtures), the
 loader emits an empty cubic list and the arrangement falls back to
-polyline-sample minimum behaviour on those strokes.
+polyline-sample minimum behavior on those strokes.
 -/
 
 open Lean (Json)

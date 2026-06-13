@@ -1,10 +1,32 @@
 /**************************************************************************/
 /*  test_cassie_curves.h                                                  */
 /**************************************************************************/
-/* Tests for the CASSIE Tier 1 curve utilities.                            */
-/* Covers: RDP polyline simplification (rdp_simplify.h),                   */
-/*         cubic Bezier fitter (cassie_curve_fit.h) — pending,             */
-/*         CassieInputStroke sample buffer — pending.                      */
+/*                         This file is part of:                          */
+/*                             GODOT ENGINE                               */
+/*                        https://godotengine.org                         */
+/**************************************************************************/
+/* Copyright (c) 2014-present Godot Engine contributors (see AUTHORS.md). */
+/* Copyright (c) 2007-2014 Juan Linietsky, Ariel Manzur.                  */
+/*                                                                        */
+/* Permission is hereby granted, free of charge, to any person obtaining  */
+/* a copy of this software and associated documentation files (the        */
+/* "Software"), to deal in the Software without restriction, including    */
+/* without limitation the rights to use, copy, modify, merge, publish,    */
+/* distribute, sublicense, and/or sell copies of the Software, and to     */
+/* permit persons to whom the Software is furnished to do so, subject to  */
+/* the following conditions:                                              */
+/*                                                                        */
+/* The above copyright notice and this permission notice shall be         */
+/* included in all copies or substantial portions of the Software.        */
+/*                                                                        */
+/* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,        */
+/* EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF     */
+/* MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. */
+/* IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY   */
+/* CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,   */
+/* TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE      */
+/* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                 */
+/**************************************************************************/
 
 #pragma once
 
@@ -82,9 +104,15 @@ TEST_CASE("[Cassie][RDP] zigzag keeps only above-threshold spikes") {
 	CHECK(keep.size() >= 4);
 	bool kept_3 = false, kept_5 = false, kept_7 = false;
 	for (int i = 0; i < keep.size(); ++i) {
-		if (keep[i] == 3) kept_3 = true;
-		if (keep[i] == 5) kept_5 = true;
-		if (keep[i] == 7) kept_7 = true;
+		if (keep[i] == 3) {
+			kept_3 = true;
+		}
+		if (keep[i] == 5) {
+			kept_5 = true;
+		}
+		if (keep[i] == 7) {
+			kept_7 = true;
+		}
 	}
 	CHECK(kept_3);
 	CHECK_FALSE(kept_5);
@@ -434,7 +462,7 @@ TEST_CASE("[Cassie][InputStroke] get_g1_sections returns a single section for a 
 	// Wide angular threshold, no hooks expected.
 	TypedArray<PackedVector3Array> sections = s->get_g1_sections(
 			real_t(Math::PI) * 0.45f, // discontinuity (corner)
-			real_t(Math::PI) * 0.5f,  // hook
+			real_t(Math::PI) * 0.5f, // hook
 			0.0f, 0.0f, 0.0f, 0.0f);
 	CHECK_EQ(sections.size(), 1);
 }

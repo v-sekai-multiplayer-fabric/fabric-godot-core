@@ -43,7 +43,7 @@ v_p_r     = w_r · (k · om · A + k · n_c · (A · s) / len³ · s)
 
 The position cotangent `v_p_r` is emitted PER-CORNER (4 entries per
 constraint, slot `4c+r`). The host orchestration accumulates it into
-per-vertex `v_positions` via re-use of `vbd_gather_bending`
+per-vertex `v_positions` via reuse of `vbd_gather_bending`
 (with `bendGrad := v_p`, `bendHessScalar := zeros`), which uses the
 existing bending-vertex CSR.
 

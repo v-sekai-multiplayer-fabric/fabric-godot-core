@@ -15,7 +15,7 @@ chord-length error.
 
 Falls back to (segment_length / 3)-tangent control points when the
 2×2 system is singular or yields a non-positive α — the same fallback
-the C++ port uses, preserving bug-for-bug behaviour.
+the C++ port uses, preserving bug-for-bug behavior.
 
 ## Bindings (set 0)
 

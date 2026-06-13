@@ -79,7 +79,7 @@ def SpringCsr.build (nVerts : Nat) (springs : List (Nat × Nat)) : SpringCsr := 
 
 /-! ## Fixture: 3 verts, 2 springs
 
-Springs: `[(0, 1), (0, 2)]`. Edges go 0—1 and 0—2 (a star centred on
+Springs: `[(0, 1), (0, 2)]`. Edges go 0—1 and 0—2 (a star centered on
 v0). Each spring has one endpoint at v0 (role 0) and one at the leaf.
 
 Expected:

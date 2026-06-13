@@ -11,7 +11,7 @@ intersection within prox.
 
 Returns the list of `(tA, tB, midPos)` intersection points. Caller
 clusters nearby hits per stroke-pair before emitting splits — the
-subdivision can produce a few neighbouring leaves at one true crossing
+subdivision can produce a few neighboring leaves at one true crossing
 that need to be coalesced.
 
 Termination: a leaf is declared when both sub-curves' control-polygon

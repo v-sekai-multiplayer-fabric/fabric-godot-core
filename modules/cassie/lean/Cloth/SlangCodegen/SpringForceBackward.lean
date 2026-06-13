@@ -39,7 +39,7 @@ v_stiffness = ((r − L) / r) · dot_vG_d + v_springHess
 
 The position cotangent is emitted PER-SPRING as `v_p_d[c]` (the
 gradient w.r.t. `d = p_a − p_b`). The host orchestration accumulates
-it into per-vertex `v_positions` via a re-use of `vbd_gather_spring`
+it into per-vertex `v_positions` via a reuse of `vbd_gather_spring`
 (with `springGradA := v_p_d`, `springHess := zeros`), which applies
 the role sign flip (+1 for endpoint a, −1 for endpoint b) using the
 existing spring-vertex CSR.

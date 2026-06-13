@@ -1,7 +1,32 @@
 /**************************************************************************/
-/*  test_cassie_sketch_graph.h                                             */
+/*  test_cassie_sketch_graph.h                                            */
 /**************************************************************************/
-/* Tests for CassieSketchGraph — Tier 4 graph topology (ENG-77).           */
+/*                         This file is part of:                          */
+/*                             GODOT ENGINE                               */
+/*                        https://godotengine.org                         */
+/**************************************************************************/
+/* Copyright (c) 2014-present Godot Engine contributors (see AUTHORS.md). */
+/* Copyright (c) 2007-2014 Juan Linietsky, Ariel Manzur.                  */
+/*                                                                        */
+/* Permission is hereby granted, free of charge, to any person obtaining  */
+/* a copy of this software and associated documentation files (the        */
+/* "Software"), to deal in the Software without restriction, including    */
+/* without limitation the rights to use, copy, modify, merge, publish,    */
+/* distribute, sublicense, and/or sell copies of the Software, and to     */
+/* permit persons to whom the Software is furnished to do so, subject to  */
+/* the following conditions:                                              */
+/*                                                                        */
+/* The above copyright notice and this permission notice shall be         */
+/* included in all copies or substantial portions of the Software.        */
+/*                                                                        */
+/* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,        */
+/* EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF     */
+/* MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. */
+/* IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY   */
+/* CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,   */
+/* TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE      */
+/* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                 */
+/**************************************************************************/
 
 #pragma once
 
@@ -28,7 +53,7 @@ static PackedVector3Array _up_normals(int p_count) {
 	PackedVector3Array out;
 	out.resize(p_count);
 	for (int i = 0; i < p_count; ++i) {
-		out.write[i] = Vector3(0, 0, 1);  // strokes lie in the xy plane
+		out.write[i] = Vector3(0, 0, 1); // strokes lie in the xy plane
 	}
 	return out;
 }
@@ -71,7 +96,7 @@ TEST_CASE("[Cassie][SketchGraph] three strokes forming a triangle yield exactly 
 	// Equilateral-ish triangle in the xy plane.
 	const Vector3 v0(0, 0, 0);
 	const Vector3 v1(1, 0, 0);
-	const Vector3 v2(0.5, real_t(0.866), 0);  // ~ √3/2
+	const Vector3 v2(0.5, real_t(0.866), 0); // ~ √3/2
 	const PackedVector3Array e0 = _segment(v0, v1);
 	const PackedVector3Array e1 = _segment(v1, v2);
 	const PackedVector3Array e2 = _segment(v2, v0);

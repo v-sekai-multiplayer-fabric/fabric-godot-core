@@ -1,3 +1,33 @@
+/**************************************************************************/
+/*  planarity_constraint.cpp                                              */
+/**************************************************************************/
+/*                         This file is part of:                          */
+/*                             GODOT ENGINE                               */
+/*                        https://godotengine.org                         */
+/**************************************************************************/
+/* Copyright (c) 2014-present Godot Engine contributors (see AUTHORS.md). */
+/* Copyright (c) 2007-2014 Juan Linietsky, Ariel Manzur.                  */
+/*                                                                        */
+/* Permission is hereby granted, free of charge, to any person obtaining  */
+/* a copy of this software and associated documentation files (the        */
+/* "Software"), to deal in the Software without restriction, including    */
+/* without limitation the rights to use, copy, modify, merge, publish,    */
+/* distribute, sublicense, and/or sell copies of the Software, and to     */
+/* permit persons to whom the Software is furnished to do so, subject to  */
+/* the following conditions:                                              */
+/*                                                                        */
+/* The above copyright notice and this permission notice shall be         */
+/* included in all copies or substantial portions of the Software.        */
+/*                                                                        */
+/* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,        */
+/* EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF     */
+/* MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. */
+/* IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY   */
+/* CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,   */
+/* TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE      */
+/* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                 */
+/**************************************************************************/
+
 #include "planarity_constraint.h"
 
 #include "cassie_eigen.h"
@@ -108,8 +138,11 @@ Plane cassie_fit_plane(const Vector<Vector3> &p_points, double &r_avg_distance) 
 	for (int i = 0; i < n; ++i) {
 		const Vector3 d = p_points[i] - centroid;
 		const double dx = double(d.x), dy = double(d.y), dz = double(d.z);
-		cov[0] += dx * dx; cov[1] += dx * dy; cov[2] += dx * dz;
-		cov[4] += dy * dy; cov[5] += dy * dz;
+		cov[0] += dx * dx;
+		cov[1] += dx * dy;
+		cov[2] += dx * dz;
+		cov[4] += dy * dy;
+		cov[5] += dy * dz;
 		cov[8] += dz * dz;
 	}
 	cov[3] = cov[1];

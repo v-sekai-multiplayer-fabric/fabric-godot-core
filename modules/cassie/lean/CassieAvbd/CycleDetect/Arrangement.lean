@@ -156,7 +156,7 @@ def findAllSplitsByCubic (polys : Array (Array Vec3))
             for h in coal do
               hits := hits.push (cAIx, cBIx, h.1, h.2.1, h.2.2)
         -- Cross-cubic-pair coalesce on world position. Two hits from
-        -- neighbouring cubic-pairs that lie within mergeEps-ish
+        -- neighboring cubic-pairs that lie within mergeEps-ish
         -- distance are the same intersection (split at a cubic
         -- boundary, eval'd on both sides of the boundary).
         let mut reps : Array (Nat × Nat × Float × Float × Vec3) := #[]

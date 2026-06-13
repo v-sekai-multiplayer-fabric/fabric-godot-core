@@ -96,25 +96,25 @@ def cycleBoundary (g : Graph) (cycle : Array EdgeId) : IO FloatArray := do
       out := out.push p.1
       out := out.push p.2.1
       out := out.push p.2.2
-  let mut prevEnd : NodeId := shared
+  let mut prevent : NodeId := shared
   -- Continuation edges: skip the duplicated start vertex.
   for k in [1 : cycle.size] do
     let e := g.edges[cycle[k]!]!
     let n := e.pts.size
-    if e.na == prevEnd then
+    if e.na == prevent then
       for i in [1 : n] do
         let p := e.pts[i]!
         out := out.push p.1
         out := out.push p.2.1
         out := out.push p.2.2
-      prevEnd := e.nb
+      prevent := e.nb
     else
       for i in [1 : n] do
         let p := e.pts[n - 1 - i]!
         out := out.push p.1
         out := out.push p.2.1
         out := out.push p.2.2
-      prevEnd := e.na
+      prevent := e.na
   return FloatArray.mk out
 
 def pickLongestCycle (g : Graph) (cs : Array (Array EdgeId)) :

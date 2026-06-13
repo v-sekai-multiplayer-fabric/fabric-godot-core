@@ -1,3 +1,33 @@
+/**************************************************************************/
+/*  cassie_slang_gpu.cpp                                                  */
+/**************************************************************************/
+/*                         This file is part of:                          */
+/*                             GODOT ENGINE                               */
+/*                        https://godotengine.org                         */
+/**************************************************************************/
+/* Copyright (c) 2014-present Godot Engine contributors (see AUTHORS.md). */
+/* Copyright (c) 2007-2014 Juan Linietsky, Ariel Manzur.                  */
+/*                                                                        */
+/* Permission is hereby granted, free of charge, to any person obtaining  */
+/* a copy of this software and associated documentation files (the        */
+/* "Software"), to deal in the Software without restriction, including    */
+/* without limitation the rights to use, copy, modify, merge, publish,    */
+/* distribute, sublicense, and/or sell copies of the Software, and to     */
+/* permit persons to whom the Software is furnished to do so, subject to  */
+/* the following conditions:                                              */
+/*                                                                        */
+/* The above copyright notice and this permission notice shall be         */
+/* included in all copies or substantial portions of the Software.        */
+/*                                                                        */
+/* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,        */
+/* EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF     */
+/* MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. */
+/* IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY   */
+/* CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,   */
+/* TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE      */
+/* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                 */
+/**************************************************************************/
+
 #include "cassie_slang_gpu.h"
 
 // SPIR-V byte arrays are baked at SCons build time from the .spv files
@@ -90,32 +120,32 @@ CassieSlangGpu::CassieSlangGpu() {
 	};
 	using namespace cassie_slang_spirv;
 	const KernelBlob blobs[KERNEL_COUNT] = {
-		{ spmv_spv,                   spmv_spv_size,                   "cassie_slang_gpu_spmv" },
-		{ saxpby_spv,                 saxpby_spv_size,                 "cassie_slang_gpu_saxpby" },
-		{ cg_pcg_init_spv,            cg_pcg_init_spv_size,            "cassie_slang_gpu_cg_init" },
-		{ cg_pcg_spmv_p_to_ap_spv,    cg_pcg_spmv_p_to_ap_spv_size,    "cassie_slang_gpu_cg_spmv_p_to_ap" },
-		{ cg_pcg_dot_p_ap_spv,        cg_pcg_dot_p_ap_spv_size,        "cassie_slang_gpu_cg_dot_p_ap" },
-		{ cg_pcg_alpha_update_spv,    cg_pcg_alpha_update_spv_size,    "cassie_slang_gpu_cg_alpha_update" },
-		{ cg_pcg_x_axpy_p_spv,        cg_pcg_x_axpy_p_spv_size,        "cassie_slang_gpu_cg_x_axpy_p" },
-		{ cg_pcg_r_axpy_neg_ap_spv,   cg_pcg_r_axpy_neg_ap_spv_size,   "cassie_slang_gpu_cg_r_axpy_neg_ap" },
-		{ cg_pcg_jacobi_z_spv,        cg_pcg_jacobi_z_spv_size,        "cassie_slang_gpu_cg_jacobi_z" },
-		{ cg_pcg_dot_r_z_spv,         cg_pcg_dot_r_z_spv_size,         "cassie_slang_gpu_cg_dot_r_z" },
-		{ cg_pcg_beta_update_spv,     cg_pcg_beta_update_spv_size,     "cassie_slang_gpu_cg_beta_update" },
-		{ cg_pcg_p_update_spv,        cg_pcg_p_update_spv_size,        "cassie_slang_gpu_cg_p_update" },
-		{ cg_pcg_check_residual_spv,  cg_pcg_check_residual_spv_size,  "cassie_slang_gpu_cg_check_residual" },
+		{ spmv_spv, spmv_spv_size, "cassie_slang_gpu_spmv" },
+		{ saxpby_spv, saxpby_spv_size, "cassie_slang_gpu_saxpby" },
+		{ cg_pcg_init_spv, cg_pcg_init_spv_size, "cassie_slang_gpu_cg_init" },
+		{ cg_pcg_spmv_p_to_ap_spv, cg_pcg_spmv_p_to_ap_spv_size, "cassie_slang_gpu_cg_spmv_p_to_ap" },
+		{ cg_pcg_dot_p_ap_spv, cg_pcg_dot_p_ap_spv_size, "cassie_slang_gpu_cg_dot_p_ap" },
+		{ cg_pcg_alpha_update_spv, cg_pcg_alpha_update_spv_size, "cassie_slang_gpu_cg_alpha_update" },
+		{ cg_pcg_x_axpy_p_spv, cg_pcg_x_axpy_p_spv_size, "cassie_slang_gpu_cg_x_axpy_p" },
+		{ cg_pcg_r_axpy_neg_ap_spv, cg_pcg_r_axpy_neg_ap_spv_size, "cassie_slang_gpu_cg_r_axpy_neg_ap" },
+		{ cg_pcg_jacobi_z_spv, cg_pcg_jacobi_z_spv_size, "cassie_slang_gpu_cg_jacobi_z" },
+		{ cg_pcg_dot_r_z_spv, cg_pcg_dot_r_z_spv_size, "cassie_slang_gpu_cg_dot_r_z" },
+		{ cg_pcg_beta_update_spv, cg_pcg_beta_update_spv_size, "cassie_slang_gpu_cg_beta_update" },
+		{ cg_pcg_p_update_spv, cg_pcg_p_update_spv_size, "cassie_slang_gpu_cg_p_update" },
+		{ cg_pcg_check_residual_spv, cg_pcg_check_residual_spv_size, "cassie_slang_gpu_cg_check_residual" },
 		// cg_pcg3 — float3 variant of the CG outer loop, same 11-entry
 		// sequence. The bind masks are identical to cg_pcg's; only the
 		// buffer sizes change.
-		{ cg_pcg3_init_spv,           cg_pcg3_init_spv_size,           "cassie_slang_gpu_cg3_init" },
-		{ cg_pcg3_spmv_p_to_ap_spv,   cg_pcg3_spmv_p_to_ap_spv_size,   "cassie_slang_gpu_cg3_spmv_p_to_ap" },
-		{ cg_pcg3_dot_p_ap_spv,       cg_pcg3_dot_p_ap_spv_size,       "cassie_slang_gpu_cg3_dot_p_ap" },
-		{ cg_pcg3_alpha_update_spv,   cg_pcg3_alpha_update_spv_size,   "cassie_slang_gpu_cg3_alpha_update" },
-		{ cg_pcg3_x_axpy_p_spv,       cg_pcg3_x_axpy_p_spv_size,       "cassie_slang_gpu_cg3_x_axpy_p" },
-		{ cg_pcg3_r_axpy_neg_ap_spv,  cg_pcg3_r_axpy_neg_ap_spv_size,  "cassie_slang_gpu_cg3_r_axpy_neg_ap" },
-		{ cg_pcg3_jacobi_z_spv,       cg_pcg3_jacobi_z_spv_size,       "cassie_slang_gpu_cg3_jacobi_z" },
-		{ cg_pcg3_dot_r_z_spv,        cg_pcg3_dot_r_z_spv_size,        "cassie_slang_gpu_cg3_dot_r_z" },
-		{ cg_pcg3_beta_update_spv,    cg_pcg3_beta_update_spv_size,    "cassie_slang_gpu_cg3_beta_update" },
-		{ cg_pcg3_p_update_spv,       cg_pcg3_p_update_spv_size,       "cassie_slang_gpu_cg3_p_update" },
+		{ cg_pcg3_init_spv, cg_pcg3_init_spv_size, "cassie_slang_gpu_cg3_init" },
+		{ cg_pcg3_spmv_p_to_ap_spv, cg_pcg3_spmv_p_to_ap_spv_size, "cassie_slang_gpu_cg3_spmv_p_to_ap" },
+		{ cg_pcg3_dot_p_ap_spv, cg_pcg3_dot_p_ap_spv_size, "cassie_slang_gpu_cg3_dot_p_ap" },
+		{ cg_pcg3_alpha_update_spv, cg_pcg3_alpha_update_spv_size, "cassie_slang_gpu_cg3_alpha_update" },
+		{ cg_pcg3_x_axpy_p_spv, cg_pcg3_x_axpy_p_spv_size, "cassie_slang_gpu_cg3_x_axpy_p" },
+		{ cg_pcg3_r_axpy_neg_ap_spv, cg_pcg3_r_axpy_neg_ap_spv_size, "cassie_slang_gpu_cg3_r_axpy_neg_ap" },
+		{ cg_pcg3_jacobi_z_spv, cg_pcg3_jacobi_z_spv_size, "cassie_slang_gpu_cg3_jacobi_z" },
+		{ cg_pcg3_dot_r_z_spv, cg_pcg3_dot_r_z_spv_size, "cassie_slang_gpu_cg3_dot_r_z" },
+		{ cg_pcg3_beta_update_spv, cg_pcg3_beta_update_spv_size, "cassie_slang_gpu_cg3_beta_update" },
+		{ cg_pcg3_p_update_spv, cg_pcg3_p_update_spv_size, "cassie_slang_gpu_cg3_p_update" },
 		{ cg_pcg3_check_residual_spv, cg_pcg3_check_residual_spv_size, "cassie_slang_gpu_cg3_check_residual" },
 	};
 
@@ -548,10 +578,10 @@ CassieSlangGpu::CgPcgHandle CassieSlangGpu::upload_cg_state(int p_rows,
 	Vector<uint8_t> zero_rows;
 	zero_rows.resize(int(p_rows * sizeof(float)));
 	memset(zero_rows.ptrw(), 0, zero_rows.size());
-	h.b_x  = rd->storage_buffer_create(zero_rows.size(), zero_rows);
-	h.b_r  = rd->storage_buffer_create(zero_rows.size(), zero_rows);
-	h.b_z  = rd->storage_buffer_create(zero_rows.size(), zero_rows);
-	h.b_p  = rd->storage_buffer_create(zero_rows.size(), zero_rows);
+	h.b_x = rd->storage_buffer_create(zero_rows.size(), zero_rows);
+	h.b_r = rd->storage_buffer_create(zero_rows.size(), zero_rows);
+	h.b_z = rd->storage_buffer_create(zero_rows.size(), zero_rows);
+	h.b_p = rd->storage_buffer_create(zero_rows.size(), zero_rows);
 	h.b_ap = rd->storage_buffer_create(zero_rows.size(), zero_rows);
 
 	// scalars: 10 floats — [rz_hi, rz_lo, pAp_hi, pAp_lo, alpha, -alpha,
@@ -580,27 +610,44 @@ CassieSlangGpu::CgPcgHandle CassieSlangGpu::upload_cg_state(int p_rows,
 	// the mask here MUST follow — there's no auto-reflection yet.
 	// Per-pipeline binding masks under the constant-work design
 	// (no earlyExitGuard; per-iter entries don't read scalars[8]).
-	static constexpr uint32_t bind_mask_init           = 0b0000'0011'1111'1111u; // 0-9
-	static constexpr uint32_t bind_mask_spmv_p_to_ap   = 0b0000'0110'0000'1111u; // 0,1,2,3,9,10
-	static constexpr uint32_t bind_mask_dot_p_ap       = 0b0000'1110'0000'0001u; // 0,9,10,11
-	static constexpr uint32_t bind_mask_alpha_update   = 0b0000'1000'0000'0000u; // 11
-	static constexpr uint32_t bind_mask_x_axpy_p       = 0b0000'1010'0100'0001u; // 0,6,9,11
-	static constexpr uint32_t bind_mask_r_axpy_neg_ap  = 0b0000'1100'1000'0001u; // 0,7,10,11
-	static constexpr uint32_t bind_mask_jacobi_z       = 0b0000'0001'1001'0001u; // 0,4,7,8
-	static constexpr uint32_t bind_mask_dot_r_z        = 0b0000'1001'1000'0001u; // 0,7,8,11
-	static constexpr uint32_t bind_mask_beta_update    = 0b0000'1000'0000'0000u; // 11
-	static constexpr uint32_t bind_mask_p_update       = 0b0000'1011'0000'0001u; // 0,8,9,11
+	static constexpr uint32_t bind_mask_init = 0b0000'0011'1111'1111u; // 0-9
+	static constexpr uint32_t bind_mask_spmv_p_to_ap = 0b0000'0110'0000'1111u; // 0,1,2,3,9,10
+	static constexpr uint32_t bind_mask_dot_p_ap = 0b0000'1110'0000'0001u; // 0,9,10,11
+	static constexpr uint32_t bind_mask_alpha_update = 0b0000'1000'0000'0000u; // 11
+	static constexpr uint32_t bind_mask_x_axpy_p = 0b0000'1010'0100'0001u; // 0,6,9,11
+	static constexpr uint32_t bind_mask_r_axpy_neg_ap = 0b0000'1100'1000'0001u; // 0,7,10,11
+	static constexpr uint32_t bind_mask_jacobi_z = 0b0000'0001'1001'0001u; // 0,4,7,8
+	static constexpr uint32_t bind_mask_dot_r_z = 0b0000'1001'1000'0001u; // 0,7,8,11
+	static constexpr uint32_t bind_mask_beta_update = 0b0000'1000'0000'0000u; // 11
+	static constexpr uint32_t bind_mask_p_update = 0b0000'1011'0000'0001u; // 0,8,9,11
 	static constexpr uint32_t bind_mask_check_residual = 0b0000'1000'1000'0001u; // 0,7,11
 	const uint32_t bind_masks[11] = {
-		bind_mask_init, bind_mask_spmv_p_to_ap, bind_mask_dot_p_ap,
-		bind_mask_alpha_update, bind_mask_x_axpy_p,
-		bind_mask_r_axpy_neg_ap, bind_mask_jacobi_z, bind_mask_dot_r_z,
-		bind_mask_beta_update, bind_mask_p_update, bind_mask_check_residual,
+		bind_mask_init,
+		bind_mask_spmv_p_to_ap,
+		bind_mask_dot_p_ap,
+		bind_mask_alpha_update,
+		bind_mask_x_axpy_p,
+		bind_mask_r_axpy_neg_ap,
+		bind_mask_jacobi_z,
+		bind_mask_dot_r_z,
+		bind_mask_beta_update,
+		bind_mask_p_update,
+		bind_mask_check_residual,
 	};
 	// Binding b → RID + uniform_type. Index by binding number.
 	const RID bind_rids[12] = {
-		h.b_params, h.b_row_ptr, h.b_col_idx, h.b_values, h.b_diag_inv,
-		h.b_rhs, h.b_x, h.b_r, h.b_z, h.b_p, h.b_ap, h.b_scalars,
+		h.b_params,
+		h.b_row_ptr,
+		h.b_col_idx,
+		h.b_values,
+		h.b_diag_inv,
+		h.b_rhs,
+		h.b_x,
+		h.b_r,
+		h.b_z,
+		h.b_p,
+		h.b_ap,
+		h.b_scalars,
 	};
 	for (int k = 0; k < 11; ++k) {
 		Vector<RenderingDevice::Uniform> uniforms;
@@ -642,10 +689,18 @@ void CassieSlangGpu::free_cg_state(CgPcgHandle &r_handle) {
 		}
 	}
 	const RID rids[] = {
-		r_handle.b_scalars, r_handle.b_ap, r_handle.b_p,
-		r_handle.b_z, r_handle.b_r, r_handle.b_x, r_handle.b_rhs,
-		r_handle.b_diag_inv, r_handle.b_values, r_handle.b_col_idx,
-		r_handle.b_row_ptr, r_handle.b_params,
+		r_handle.b_scalars,
+		r_handle.b_ap,
+		r_handle.b_p,
+		r_handle.b_z,
+		r_handle.b_r,
+		r_handle.b_x,
+		r_handle.b_rhs,
+		r_handle.b_diag_inv,
+		r_handle.b_values,
+		r_handle.b_col_idx,
+		r_handle.b_row_ptr,
+		r_handle.b_params,
 	};
 	for (RID rid : rids) {
 		if (rid.is_valid()) {
@@ -817,10 +872,10 @@ CassieSlangGpu::CgPcg3Handle CassieSlangGpu::upload_cg3_state(int p_rows,
 	Vector<uint8_t> zero_float3_rows;
 	zero_float3_rows.resize(int(p_rows * 4 * sizeof(float)));
 	memset(zero_float3_rows.ptrw(), 0, zero_float3_rows.size());
-	h.b_x  = rd->storage_buffer_create(zero_float3_rows.size(), zero_float3_rows);
-	h.b_r  = rd->storage_buffer_create(zero_float3_rows.size(), zero_float3_rows);
-	h.b_z  = rd->storage_buffer_create(zero_float3_rows.size(), zero_float3_rows);
-	h.b_p  = rd->storage_buffer_create(zero_float3_rows.size(), zero_float3_rows);
+	h.b_x = rd->storage_buffer_create(zero_float3_rows.size(), zero_float3_rows);
+	h.b_r = rd->storage_buffer_create(zero_float3_rows.size(), zero_float3_rows);
+	h.b_z = rd->storage_buffer_create(zero_float3_rows.size(), zero_float3_rows);
+	h.b_p = rd->storage_buffer_create(zero_float3_rows.size(), zero_float3_rows);
 	h.b_ap = rd->storage_buffer_create(zero_float3_rows.size(), zero_float3_rows);
 
 	Vector<uint8_t> zero_scalars;
@@ -839,32 +894,51 @@ CassieSlangGpu::CgPcg3Handle CassieSlangGpu::upload_cg3_state(int p_rows,
 	// cg_pcg3 bind masks match cg_pcg's exactly — the entry-name → binding
 	// reference mapping is identical between the scalar and float3
 	// variants. Only the underlying buffer SIZES differ.
-	static constexpr uint32_t bind_mask_init           = 0b0000'0011'1111'1111u;
-	static constexpr uint32_t bind_mask_spmv_p_to_ap   = 0b0000'0110'0000'1111u;
-	static constexpr uint32_t bind_mask_dot_p_ap       = 0b0000'1110'0000'0001u;
-	static constexpr uint32_t bind_mask_alpha_update   = 0b0000'1000'0000'0000u;
-	static constexpr uint32_t bind_mask_x_axpy_p       = 0b0000'1010'0100'0001u;
-	static constexpr uint32_t bind_mask_r_axpy_neg_ap  = 0b0000'1100'1000'0001u;
-	static constexpr uint32_t bind_mask_jacobi_z       = 0b0000'0001'1001'0001u;
-	static constexpr uint32_t bind_mask_dot_r_z        = 0b0000'1001'1000'0001u;
-	static constexpr uint32_t bind_mask_beta_update    = 0b0000'1000'0000'0000u;
-	static constexpr uint32_t bind_mask_p_update       = 0b0000'1011'0000'0001u;
+	static constexpr uint32_t bind_mask_init = 0b0000'0011'1111'1111u;
+	static constexpr uint32_t bind_mask_spmv_p_to_ap = 0b0000'0110'0000'1111u;
+	static constexpr uint32_t bind_mask_dot_p_ap = 0b0000'1110'0000'0001u;
+	static constexpr uint32_t bind_mask_alpha_update = 0b0000'1000'0000'0000u;
+	static constexpr uint32_t bind_mask_x_axpy_p = 0b0000'1010'0100'0001u;
+	static constexpr uint32_t bind_mask_r_axpy_neg_ap = 0b0000'1100'1000'0001u;
+	static constexpr uint32_t bind_mask_jacobi_z = 0b0000'0001'1001'0001u;
+	static constexpr uint32_t bind_mask_dot_r_z = 0b0000'1001'1000'0001u;
+	static constexpr uint32_t bind_mask_beta_update = 0b0000'1000'0000'0000u;
+	static constexpr uint32_t bind_mask_p_update = 0b0000'1011'0000'0001u;
 	static constexpr uint32_t bind_mask_check_residual = 0b0000'1000'1000'0001u;
 	const uint32_t bind_masks[11] = {
-		bind_mask_init, bind_mask_spmv_p_to_ap, bind_mask_dot_p_ap,
-		bind_mask_alpha_update, bind_mask_x_axpy_p,
-		bind_mask_r_axpy_neg_ap, bind_mask_jacobi_z, bind_mask_dot_r_z,
-		bind_mask_beta_update, bind_mask_p_update, bind_mask_check_residual,
+		bind_mask_init,
+		bind_mask_spmv_p_to_ap,
+		bind_mask_dot_p_ap,
+		bind_mask_alpha_update,
+		bind_mask_x_axpy_p,
+		bind_mask_r_axpy_neg_ap,
+		bind_mask_jacobi_z,
+		bind_mask_dot_r_z,
+		bind_mask_beta_update,
+		bind_mask_p_update,
+		bind_mask_check_residual,
 	};
 	const RID bind_rids[12] = {
-		h.b_params, h.b_row_ptr, h.b_col_idx, h.b_values, h.b_diag_inv,
-		h.b_rhs, h.b_x, h.b_r, h.b_z, h.b_p, h.b_ap, h.b_scalars,
+		h.b_params,
+		h.b_row_ptr,
+		h.b_col_idx,
+		h.b_values,
+		h.b_diag_inv,
+		h.b_rhs,
+		h.b_x,
+		h.b_r,
+		h.b_z,
+		h.b_p,
+		h.b_ap,
+		h.b_scalars,
 	};
 	for (int k = 0; k < 11; ++k) {
 		Vector<RenderingDevice::Uniform> uniforms;
 		const uint32_t mask = bind_masks[k];
 		for (int b = 0; b < 12; ++b) {
-			if (!(mask & (1u << b))) continue;
+			if (!(mask & (1u << b))) {
+				continue;
+			}
 			RenderingDevice::Uniform u;
 			u.uniform_type = (b == 0)
 					? RenderingDevice::UNIFORM_TYPE_UNIFORM_BUFFER
@@ -888,20 +962,32 @@ CassieSlangGpu::CgPcg3Handle CassieSlangGpu::upload_cg3_state(int p_rows,
 }
 
 void CassieSlangGpu::free_cg3_state(CgPcg3Handle &r_handle) {
-	if (rd == nullptr) return;
+	if (rd == nullptr) {
+		return;
+	}
 	for (int i = 0; i < 11; ++i) {
 		if (r_handle.uniform_sets[i].is_valid()) {
 			rd->free_rid(r_handle.uniform_sets[i]);
 		}
 	}
 	const RID rids[] = {
-		r_handle.b_scalars, r_handle.b_ap, r_handle.b_p,
-		r_handle.b_z, r_handle.b_r, r_handle.b_x, r_handle.b_rhs,
-		r_handle.b_diag_inv, r_handle.b_values, r_handle.b_col_idx,
-		r_handle.b_row_ptr, r_handle.b_params,
+		r_handle.b_scalars,
+		r_handle.b_ap,
+		r_handle.b_p,
+		r_handle.b_z,
+		r_handle.b_r,
+		r_handle.b_x,
+		r_handle.b_rhs,
+		r_handle.b_diag_inv,
+		r_handle.b_values,
+		r_handle.b_col_idx,
+		r_handle.b_row_ptr,
+		r_handle.b_params,
 	};
 	for (RID rid : rids) {
-		if (rid.is_valid()) rd->free_rid(rid);
+		if (rid.is_valid()) {
+			rd->free_rid(rid);
+		}
 	}
 	r_handle = CgPcg3Handle();
 }
@@ -941,7 +1027,9 @@ void _download_packed_float3(RenderingDevice *rd, RID buffer,
 
 void CassieSlangGpu::update_cg3_rhs(const CgPcg3Handle &p_handle,
 		const float *p_new_rhs_float3) {
-	if (rd == nullptr || !p_handle.is_valid()) return;
+	if (rd == nullptr || !p_handle.is_valid()) {
+		return;
+	}
 	_upload_packed_float3(rd, p_handle.b_rhs, p_new_rhs_float3, p_handle.rows);
 }
 
@@ -1058,7 +1146,9 @@ bool CassieSlangGpu::solve_sparse_gpu_mas3(const CgPcg3Handle &p_handle,
 		RenderingDevice::ComputeListID cl = rd->compute_list_begin();
 		bool first = true;
 		for (const auto &op : ops) {
-			if (!first) rd->compute_list_add_barrier(cl);
+			if (!first) {
+				rd->compute_list_add_barrier(cl);
+			}
 			first = false;
 			const int ub_idx = op.first - KERNEL_CG3_INIT;
 			rd->compute_list_bind_compute_pipeline(cl, pipeline[op.first]);
@@ -1107,11 +1197,11 @@ bool CassieSlangGpu::solve_sparse_gpu_mas3(const CgPcg3Handle &p_handle,
 
 	for (int iter = 0; iter < p_max_iter; ++iter) {
 		cg3_chunk({
-			{ KERNEL_CG3_SPMV_P_TO_AP, per_row_groups },
-			{ KERNEL_CG3_DOT_P_AP, dot_groups },
-			{ KERNEL_CG3_ALPHA_UPDATE, 1 },
-			{ KERNEL_CG3_X_AXPY_P, per_row_groups },
-			{ KERNEL_CG3_R_AXPY_NEG_AP, per_row_groups },
+				{ KERNEL_CG3_SPMV_P_TO_AP, per_row_groups },
+				{ KERNEL_CG3_DOT_P_AP, dot_groups },
+				{ KERNEL_CG3_ALPHA_UPDATE, 1 },
+				{ KERNEL_CG3_X_AXPY_P, per_row_groups },
+				{ KERNEL_CG3_R_AXPY_NEG_AP, per_row_groups },
 		});
 		// MAS apply: z = M_MAS⁻¹ r. CPU roundtrip per iter — see note
 		// above. The bench captures the real cost.
@@ -1122,9 +1212,9 @@ bool CassieSlangGpu::solve_sparse_gpu_mas3(const CgPcg3Handle &p_handle,
 		_upload_packed_float3(rd, p_handle.b_z, z_host.ptr(), rows);
 
 		cg3_chunk({
-			{ KERNEL_CG3_DOT_R_Z, dot_groups },
-			{ KERNEL_CG3_BETA_UPDATE, 1 },
-			{ KERNEL_CG3_P_UPDATE, per_row_groups },
+				{ KERNEL_CG3_DOT_R_Z, dot_groups },
+				{ KERNEL_CG3_BETA_UPDATE, 1 },
+				{ KERNEL_CG3_P_UPDATE, per_row_groups },
 		});
 	}
 	cg3_dispatch_one(KERNEL_CG3_CHECK_RESIDUAL, dot_groups);
@@ -1160,7 +1250,7 @@ bool CassieSlangGpu::solve_sparse_gpu_mas3_shared(
 	const uint32_t dot_groups = 1;
 
 	auto bind_cg3 = [&](RenderingDevice::ComputeListID cl, int kernel_id,
-			uint32_t groups) {
+							uint32_t groups) {
 		const int ub_idx = kernel_id - KERNEL_CG3_INIT;
 		rd->compute_list_bind_compute_pipeline(cl, pipeline[kernel_id]);
 		rd->compute_list_bind_uniform_set(cl, p_handle.uniform_sets[ub_idx], 0);

@@ -1,3 +1,33 @@
+/**************************************************************************/
+/*  cassie_polar.cpp                                                      */
+/**************************************************************************/
+/*                         This file is part of:                          */
+/*                             GODOT ENGINE                               */
+/*                        https://godotengine.org                         */
+/**************************************************************************/
+/* Copyright (c) 2014-present Godot Engine contributors (see AUTHORS.md). */
+/* Copyright (c) 2007-2014 Juan Linietsky, Ariel Manzur.                  */
+/*                                                                        */
+/* Permission is hereby granted, free of charge, to any person obtaining  */
+/* a copy of this software and associated documentation files (the        */
+/* "Software"), to deal in the Software without restriction, including    */
+/* without limitation the rights to use, copy, modify, merge, publish,    */
+/* distribute, sublicense, and/or sell copies of the Software, and to     */
+/* permit persons to whom the Software is furnished to do so, subject to  */
+/* the following conditions:                                              */
+/*                                                                        */
+/* The above copyright notice and this permission notice shall be         */
+/* included in all copies or substantial portions of the Software.        */
+/*                                                                        */
+/* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,        */
+/* EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF     */
+/* MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. */
+/* IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY   */
+/* CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,   */
+/* TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE      */
+/* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                 */
+/**************************************************************************/
+
 #include "cassie_polar.h"
 
 #include "core/math/math_funcs.h"
@@ -30,9 +60,7 @@ inline void mat3_mul(const double *p_A, const double *p_B, double *p_C) {
 }
 
 inline double mat3_det(const double *p_M) {
-	return get(p_M, 0, 0) * (get(p_M, 1, 1) * get(p_M, 2, 2) - get(p_M, 1, 2) * get(p_M, 2, 1))
-			- get(p_M, 0, 1) * (get(p_M, 1, 0) * get(p_M, 2, 2) - get(p_M, 1, 2) * get(p_M, 2, 0))
-			+ get(p_M, 0, 2) * (get(p_M, 1, 0) * get(p_M, 2, 1) - get(p_M, 1, 1) * get(p_M, 2, 0));
+	return get(p_M, 0, 0) * (get(p_M, 1, 1) * get(p_M, 2, 2) - get(p_M, 1, 2) * get(p_M, 2, 1)) - get(p_M, 0, 1) * (get(p_M, 1, 0) * get(p_M, 2, 2) - get(p_M, 1, 2) * get(p_M, 2, 0)) + get(p_M, 0, 2) * (get(p_M, 1, 0) * get(p_M, 2, 1) - get(p_M, 1, 1) * get(p_M, 2, 0));
 }
 
 // Eigenvector for a given eigenvalue λ of symmetric M, computed as
@@ -91,9 +119,7 @@ bool eigenvector_for(const double *p_M, double p_lambda, double *p_out) {
 	// and genuine rank-1 cases.
 	double max_row_norm2 = 0.0;
 	for (int a = 0; a < 3; ++a) {
-		const double n2 = A[a * 3 + 0] * A[a * 3 + 0]
-				+ A[a * 3 + 1] * A[a * 3 + 1]
-				+ A[a * 3 + 2] * A[a * 3 + 2];
+		const double n2 = A[a * 3 + 0] * A[a * 3 + 0] + A[a * 3 + 1] * A[a * 3 + 1] + A[a * 3 + 2] * A[a * 3 + 2];
 		if (n2 > max_row_norm2) {
 			max_row_norm2 = n2;
 		}
@@ -113,9 +139,7 @@ bool eigenvector_for(const double *p_M, double p_lambda, double *p_out) {
 	int best_row = 0;
 	double best_row_norm2 = 0.0;
 	for (int a = 0; a < 3; ++a) {
-		const double n2 = A[a * 3 + 0] * A[a * 3 + 0]
-				+ A[a * 3 + 1] * A[a * 3 + 1]
-				+ A[a * 3 + 2] * A[a * 3 + 2];
+		const double n2 = A[a * 3 + 0] * A[a * 3 + 0] + A[a * 3 + 1] * A[a * 3 + 1] + A[a * 3 + 2] * A[a * 3 + 2];
 		if (n2 > best_row_norm2) {
 			best_row_norm2 = n2;
 			best_row = a;
@@ -198,22 +222,27 @@ void eigendecompose_3x3_symmetric(const double *p_M, double *r_lambda,
 	}
 
 	const double q = (a + b + c) / 3.0;
-	const double p2 = (a - q) * (a - q) + (b - q) * (b - q) + (c - q) * (c - q)
-			+ 2.0 * p1;
+	const double p2 = (a - q) * (a - q) + (b - q) * (b - q) + (c - q) * (c - q) + 2.0 * p1;
 	const double p = std::sqrt(p2 / 6.0);
 	// B = (1/p) (M - q I)
 	double B[9];
 	for (int i = 0; i < 9; ++i) {
 		B[i] = p_M[i];
 	}
-	B[0] -= q; B[4] -= q; B[8] -= q;
+	B[0] -= q;
+	B[4] -= q;
+	B[8] -= q;
 	for (int i = 0; i < 9; ++i) {
 		B[i] /= p;
 	}
 	double r = 0.5 * mat3_det(B);
 	// Clamp r to [-1, 1] to guard against floating-point drift.
-	if (r < -1.0) r = -1.0;
-	if (r > 1.0) r = 1.0;
+	if (r < -1.0) {
+		r = -1.0;
+	}
+	if (r > 1.0) {
+		r = 1.0;
+	}
 	const double phi = std::acos(r) / 3.0;
 	const double two_pi_over_3 = 2.0943951023931953; // 2π/3 high-precision constant
 	// Descending order: eig1 is the largest.
@@ -273,9 +302,15 @@ Basis wahba_align(const PackedVector3Array &p_projection_tangents,
 		const Vector3 q = p_rest_tangents[i];
 		const double px = double(p.x), py = double(p.y), pz = double(p.z);
 		const double qx = double(q.x), qy = double(q.y), qz = double(q.z);
-		H[0] += qx * px; H[1] += qx * py; H[2] += qx * pz;
-		H[3] += qy * px; H[4] += qy * py; H[5] += qy * pz;
-		H[6] += qz * px; H[7] += qz * py; H[8] += qz * pz;
+		H[0] += qx * px;
+		H[1] += qx * py;
+		H[2] += qx * pz;
+		H[3] += qy * px;
+		H[4] += qy * py;
+		H[5] += qy * pz;
+		H[6] += qz * px;
+		H[7] += qz * py;
+		H[8] += qz * pz;
 	}
 
 	// Two Lean-pinned facts from modules/cassie/lean/CassieAvbd/PolarDecomp.lean

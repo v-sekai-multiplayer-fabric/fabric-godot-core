@@ -1,3 +1,33 @@
+/**************************************************************************/
+/*  cassie_mas_gpu.h                                                      */
+/**************************************************************************/
+/*                         This file is part of:                          */
+/*                             GODOT ENGINE                               */
+/*                        https://godotengine.org                         */
+/**************************************************************************/
+/* Copyright (c) 2014-present Godot Engine contributors (see AUTHORS.md). */
+/* Copyright (c) 2007-2014 Juan Linietsky, Ariel Manzur.                  */
+/*                                                                        */
+/* Permission is hereby granted, free of charge, to any person obtaining  */
+/* a copy of this software and associated documentation files (the        */
+/* "Software"), to deal in the Software without restriction, including    */
+/* without limitation the rights to use, copy, modify, merge, publish,    */
+/* distribute, sublicense, and/or sell copies of the Software, and to     */
+/* permit persons to whom the Software is furnished to do so, subject to  */
+/* the following conditions:                                              */
+/*                                                                        */
+/* The above copyright notice and this permission notice shall be         */
+/* included in all copies or substantial portions of the Software.        */
+/*                                                                        */
+/* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,        */
+/* EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF     */
+/* MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. */
+/* IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY   */
+/* CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,   */
+/* TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE      */
+/* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                 */
+/**************************************************************************/
+
 #pragma once
 
 // GPU dispatch for the MAS preconditioner (mas_precond ubershader).
@@ -16,6 +46,7 @@
 // Not thread-safe. One instance per worker thread.
 
 #include "../cassie_pcg.h"
+
 #include "core/object/ref_counted.h"
 #include "core/templates/local_vector.h"
 #include "core/templates/rid.h"
@@ -121,7 +152,7 @@ struct MasGpuHandle {
 	// level_domain_offset / level_ni), bound at slot 0. The kernel's
 	// bindings to r_per_level / z_per_level (slots 9/10) are constant
 	// across levels — only the in-kernel offset arithmetic changes.
-	LocalVector<RID> b_params_per_level;          // L entries
+	LocalVector<RID> b_params_per_level; // L entries
 	LocalVector<RID> uniform_sets_per_level_solve; // L entries
 	// mas_coarsen_residual needs total_coarse_supernodes set in its
 	// params UBO. b_params (the main UBO) leaves the field zero so
@@ -130,11 +161,11 @@ struct MasGpuHandle {
 	RID uniform_set_coarsen;
 
 	// Topology metadata for the dispatch shape.
-	int ni = 0;          // interior vert count
-	int nnz = 0;         // L_II non-zeros
-	int num_levels = 0;  // L
+	int ni = 0; // interior vert count
+	int nnz = 0; // L_II non-zeros
+	int num_levels = 0; // L
 	int domain_size = 32;
-	int total_domains = 0;  // Σ_l ceil(N_l / σ)
+	int total_domains = 0; // Σ_l ceil(N_l / σ)
 	// total_coarse_supernodes = Σ_{l>0} N_l (for the coarsen pass
 	// dispatch size; level 0 is handled by mas_identity_copy_l0)
 	int total_coarse_supernodes = 0;
