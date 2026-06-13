@@ -15,7 +15,7 @@
 			<return type="PackedByteArray" />
 			<param index="0" name="public_only" type="bool" default="false" />
 			<description>
-				Returns the key in raw DER encoding. With [param public_only] the public key alone is encoded. Certificate-hash flows (WebTransport) digest this DER form.
+				Returns the key encoded as DER bytes. If [param public_only] is [code]true[/code], only the public component is included; otherwise the full keypair is emitted. Returns an empty array on failure.
 			</description>
 		</method>
 		<method name="is_public_only" qualifiers="const">
