@@ -85,37 +85,16 @@
 
 #include "frame.h" // wtd_frame_encode/decode — persistent-stream WT framing
 
-// Temporary stream-level tracing for the welcome-delivery race. Gated on the
-// WT_DEBUG env so it never floods normal runs.
-#include <cstdlib>
-static bool _wt_dbg() {
-	static int v = -1;
-	if (v < 0) {
-		const char *e = getenv("WT_DEBUG");
-		v = (e && e[0] == '1') ? 1 : 0;
-	}
-	return v == 1;
-}
-#define WT_DBG(...)                       \
-	do {                                  \
-		if (_wt_dbg()) {                  \
-			fprintf(stderr, "[WT] ");     \
-			fprintf(stderr, __VA_ARGS__); \
-			fprintf(stderr, "\n");        \
-			fflush(stderr);               \
-		}                                 \
-	} while (0)
-
 #include <cstdio>
 #include <cstring>
 
 // Authority and interest are split (FabricMultiplayerPeer channels): one
 // single-threaded server is authoritative for the players, but interest fans out
-// across up to ~1400 entities, so the QUIC connection table is sized for the
-// ENTITY/interest workload, not the player count. It must comfortably exceed the
-// entity budget (we target ≥150 players and 1400 entities, and more where the
-// transport allows). Sizing it to 1 (the previous value) collapsed every
-// concurrent session onto one table slot, stalling the server under load.
+// across up to ~1400 entities, so the QUIC connection table sizes for the
+// ENTITY/interest workload, not the player count. It comfortably exceeds the
+// entity budget (the target is ≥150 players and 1400 entities, and more where the
+// transport allows). A table of one slot collapses every concurrent session onto
+// that slot and stalls the server under load.
 static constexpr uint32_t WT_SERVER_MAX_CONNECTIONS = 4096; // ≥ 1400 entities + players + headroom
 
 // picoquic_ptls_minicrypto.c is excluded (it needs picotls minicrypto/uecc
@@ -699,7 +678,6 @@ int _wt_app_callback(picoquic_cnx_t *p_cnx, uint8_t *p_bytes, size_t p_length,
 				if (cur == SS::SESSION_WT_CONNECTING) {
 					next = SS::SESSION_OPEN;
 				}
-				WT_DBG("client CONNECT_ACCEPTED cur=%d -> SESSION_OPEN", (int)cur);
 				break;
 			case picohttp_callback_post_datagram:
 				// {SESSION_OPEN, post_datagram} → SESSION_OPEN (data event, no transition)
@@ -711,7 +689,6 @@ int _wt_app_callback(picoquic_cnx_t *p_cnx, uint8_t *p_bytes, size_t p_length,
 			case picohttp_callback_post_fin:
 				// The server's persistent stream carries length-prefixed wtd frames:
 				// accumulate and decode each complete frame into a RELIABLE packet.
-				WT_DBG("client POST_DATA cur=%d bytes=%d (event=%d)", (int)cur, (int)p_length, (int)p_event);
 				if (cur == SS::SESSION_OPEN && peer && p_bytes && p_length > 0) {
 					_reliable_accumulate(wctx->reliable_rx, p_bytes, p_length);
 					_reliable_decode(wctx->reliable_rx, peer, 1);
@@ -744,11 +721,11 @@ void *_create_wt_session_backend(WebTransportPeer *p_peer, const char *p_host, i
 
 	// Per-process-shared quic_t that serves WT connections. picowt sets
 	// WT-friendly default transport parameters on it. The first argument is
-	// `max_nb_connections`: the server's QUIC connection-table size. It was 1, so
-	// concurrent sessions collided onto one slot and the server stalled under
+	// `max_nb_connections`: the server's QUIC connection-table size. A size of one
+	// collides concurrent sessions onto a single slot and stalls the server under
 	// multi-player load. This is the TRANSPORT budget (authority sessions +
-	// interest fanout), distinct from the 150-player AUTHORITY cap enforced by the
-	// application — see WT_SERVER_MAX_CONNECTIONS above.
+	// interest fanout), distinct from the 150-player AUTHORITY cap the application
+	// enforces — see WT_SERVER_MAX_CONNECTIONS above.
 	picoquic_quic_t *quic = picoquic_create(
 			WT_SERVER_MAX_CONNECTIONS, nullptr, nullptr, nullptr,
 			"h3", nullptr, nullptr,
@@ -852,7 +829,7 @@ void *_create_wt_session_backend(WebTransportPeer *p_peer, const char *p_host, i
 		return nullptr;
 	}
 
-	// wctx was already allocated before picowt_connect; just set remaining fields.
+	// wctx exists before picowt_connect; this sets the remaining fields.
 	wctx->loop_param.local_port = 0;
 	wctx->loop_param.local_af = peer_addr.ss_family;
 	int loop_start_ret = 0;
@@ -1112,9 +1089,9 @@ Error _start_echo_server(int p_port) {
 
 	// h3zero_callback expects a picohttp_server_parameters_t* as the
 	// default callback context — it creates the h3 context lazily on the
-	// first incoming connection (see h3zero_common.c line ~1870). Passing
-	// a pre-created h3_ctx was wrong: it was cast as server_params and
-	// the path table wouldn't register.
+	// first incoming connection (see h3zero_common.c line ~1870). A
+	// pre-created h3_ctx casts as server_params, so the path table does
+	// not register.
 	// Use picoquic's bundled ECDSA test certs (known compatible with mbedtls
 	// TLS 1.3). Write from embedded PEM constants to temp files for
 	// picoquic_create's file-based loading path.
@@ -1217,8 +1194,8 @@ struct WTServerSessionCtx {
 	h3zero_stream_ctx_t *control_stream_ctx = nullptr;
 	int peer_id = 0; // MultiplayerPeer id this session carries (2, 3, ...)
 	// ONE persistent bidi data stream per session carries all reliable messages as
-	// length-prefixed wtd frames (vs a fresh stream per message, which exhausted
-	// stream credit and starved the connect handshake). reliable_rx accumulates
+	// length-prefixed wtd frames (vs a fresh stream per message, which exhausts
+	// stream credit and starves the connect handshake). reliable_rx accumulates
 	// inbound bytes for incremental frame decoding.
 	int64_t reliable_stream_id = -1;
 	LocalVector<uint8_t> reliable_rx;
@@ -1268,8 +1245,6 @@ static int _server_path_callback(picoquic_cnx_t *p_cnx, uint8_t *p_bytes, size_t
 				if (_wt_server->peer) {
 					_wt_server->peer->server_session_active = true;
 				}
-				WT_DBG("server CONNECT peer_id=%d control_stream=%llu sessions=%d",
-						ctx->peer_id, (unsigned long long)ctx->session_stream_id, (int)_wt_server->sessions.size());
 			}
 			return 0;
 		}
@@ -1356,8 +1331,8 @@ static int _server_loop_cb(picoquic_quic_t *p_quic, picoquic_packet_loop_cb_enum
 				} break;
 				case WORK_OPEN_WT_STREAM: {
 					// Open the session's persistent reliable stream once, then append
-					// framed bytes to it (no FIN). A fresh stream per message used to
-					// exhaust stream credit and starve the connect handshake.
+					// framed bytes to it (no FIN). A fresh stream per message exhausts
+					// stream credit and starves the connect handshake.
 					if (target->reliable_stream_id < 0) {
 						if (!target->control_stream_ctx) {
 							break;
@@ -1374,12 +1349,7 @@ static int _server_loop_cb(picoquic_quic_t *p_quic, picoquic_packet_loop_cb_enum
 						stream->path_callback = _server_path_callback;
 						stream->path_callback_ctx = target;
 						target->reliable_stream_id = (int64_t)stream->stream_id;
-						WT_DBG("server OPEN reliable stream=%lld for peer_id=%d (ctrl=%llu)",
-								(long long)target->reliable_stream_id, target->peer_id,
-								(unsigned long long)target->control_stream_ctx->stream_id);
 					}
-					WT_DBG("server APPEND %d bytes to peer_id=%d stream=%lld",
-							(int)item.bytes.size(), target->peer_id, (long long)target->reliable_stream_id);
 					picoquic_add_to_stream(target->cnx, (uint64_t)target->reliable_stream_id,
 							item.bytes.ptr(), item.bytes.size(), 0);
 				} break;
@@ -1579,7 +1549,7 @@ void register_quic_picoquic_backend() {
 	// Initialize TLS ONCE at module registration — before any picoquic_create.
 	// Calling picoquic_tls_api_reset later (from per-connection code) would
 	// unload+reload mbedtls, invalidating cipher suite pointers held by
-	// earlier-created picoquic contexts. This was the root cause of
+	// earlier-created picoquic contexts. This is the root cause of
 	// PTLS_ERROR_INCOMPATIBLE_KEY (0x204) in the loopback test.
 	if (ptls_mbedtls_init() == 0) {
 		picoquic_tls_api_reset(

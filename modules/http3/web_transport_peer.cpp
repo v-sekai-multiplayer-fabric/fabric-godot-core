@@ -240,11 +240,10 @@ void WebTransportPeer::set_target_peer(int p_peer) {
 
 // get_packet_peer/mode/channel describe the NEXT packet (the MultiplayerPeer
 // contract: peek the front BEFORE get_packet pops it), matching ENetMultiplayerPeer.
-// Returning the last-popped `current_*` instead caused an off-by-one: when packets
-// from several WT sessions interleave, a peer's packet was attributed to the
-// PREVIOUS packet's session (e.g. a late client's join credited to another peer,
-// so it never received its welcome). Fall back to current_* only when the queue is
-// empty (no next packet to peek).
+// Returning the last-popped `current_*` mis-attributes interleaved WT sessions: a
+// peer's packet carries the PREVIOUS packet's session, so a late client's join
+// credits another peer and that client never receives its welcome. The fallback to
+// current_* applies only when the queue is empty (no next packet to peek).
 int WebTransportPeer::get_packet_peer() const {
 	MutexLock lock(incoming_mutex);
 	return incoming.is_empty() ? current_peer : incoming.front()->get().from;
