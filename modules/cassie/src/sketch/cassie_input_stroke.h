@@ -37,8 +37,11 @@
 #include "core/variant/typed_array.h"
 #include "core/variant/variant.h"
 
+// TypedArray<CassieSurfaceConstraint> below needs the complete type (GetTypeInfo),
+// so this must be a full include, not a forward declaration.
+#include "../constraints/cassie_surface_constraint.h"
+
 class CassieConstraint;
-class CassieSurfaceConstraint;
 
 // CassieInputStroke owns the raw sample buffer produced by a single
 // stroke (one trigger press in XR, one mouse drag on flatscreen).
