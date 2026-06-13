@@ -31,6 +31,7 @@
 #include "resonance_audio_room.h"
 
 #include "core/config/project_settings.h"
+#include "core/object/class_db.h"
 #include "servers/resonanceaudio/resonance_audio_wrapper.h"
 #ifndef PHYSICS_3D_DISABLED
 #include "scene/3d/physics/collision_shape_3d.h"

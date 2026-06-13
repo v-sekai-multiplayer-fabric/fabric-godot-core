@@ -112,10 +112,10 @@ public:
 		}
 	}
 
-	static PackedVector3Array generate_probes(const Vector<Vector3> &p_vertices, const Vector<int> &p_indices, const AABB &p_bounds, int p_subdiv) {
+	static Vector<Vector3> generate_probes(const Vector<Vector3> &p_vertices, const Vector<int> &p_indices, const AABB &p_bounds, int p_subdiv) {
 		float subdiv_cell_size = p_bounds.size[p_bounds.get_longest_axis_index()] / p_subdiv;
 		if (subdiv_cell_size < 0.001f) {
-			return PackedVector3Array();
+			return Vector<Vector3>();
 		}
 
 		Cell octree;
@@ -158,7 +158,7 @@ public:
 			probe_pos.push_back(corner);
 		}
 
-		PackedVector3Array result;
+		Vector<Vector3> result;
 		result.resize(probe_pos.size());
 		Vector3 *w = result.ptrw();
 		for (uint32_t i = 0; i < probe_pos.size(); i++) {

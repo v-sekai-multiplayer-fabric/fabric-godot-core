@@ -32,13 +32,7 @@
 
 #include "core/error/error_macros.h"
 #include "core/math/audio_frame.h"
-#include "core/object/class_db.h"
 #include "core/object/object.h"
-#include "core/os/memory.h"
-#include "core/os/mutex.h"
-#include "core/os/os.h"
-#include "core/os/thread.h"
-#include "core/templates/list.h"
 #include "core/templates/rid.h"
 #include "core/templates/rid_owner.h"
 #include "core/variant/variant.h"

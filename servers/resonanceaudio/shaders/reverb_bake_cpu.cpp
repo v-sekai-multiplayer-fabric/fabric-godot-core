@@ -28,7 +28,7 @@
 /* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                 */
 /**************************************************************************/
 
-#include "C:/Users/ernest.lee/scoop/apps/slang/current/include/slang-cpp-prelude.h"
+#include "slang-cpp-prelude.h"
 
 #ifdef SLANG_PRELUDE_NAMESPACE
 using namespace SLANG_PRELUDE_NAMESPACE;
