@@ -33,6 +33,7 @@
 #include "DMWT.h"
 #include "MingCurve.h"
 #include "Point3.h"
+#include "cassie_remesh.h" // CassieRefineProfile / cassie_refine_last_profile
 #include "polygon_triangulation.h"
 #include "refine.h"
 
