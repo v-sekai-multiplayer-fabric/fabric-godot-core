@@ -51,10 +51,6 @@ class JointLimitationKusudama3D : public JointLimitation3D {
 	mutable LocalVector<Vector3> _tangent_centers_2;
 	mutable LocalVector<real_t> _tangent_radii;
 	mutable bool _polygon_dirty = true;
-	// Quintic Hermite state: position + velocity, updated each frame.
-	mutable Vector3 _hermite_pos;
-	mutable Vector3 _hermite_vel;
-	mutable bool _has_previous = false;
 
 	void _invalidate_normalized_cache() const;
 	Vector3 _get_cone_center_normalized(int p_index) const;
@@ -63,7 +59,8 @@ class JointLimitationKusudama3D : public JointLimitation3D {
 	void _compute_hull_order() const;
 	bool _is_in_tangent_path(const Vector3 &p_point, uint32_t p_pair_index) const;
 	bool _polygon_contains(const Vector3 &p_point) const;
-	Vector3 _polygon_project(const Vector3 &p_point) const;
+	Vector3 _closest_on_small_circle(const Vector3 &p_point, const Vector3 &p_center, real_t p_radius) const;
+	Vector3 _continuous_project(const Vector3 &p_point) const;
 
 #ifdef TOOLS_ENABLED
 	typedef Pair<Vector3, Vector3> Segment;

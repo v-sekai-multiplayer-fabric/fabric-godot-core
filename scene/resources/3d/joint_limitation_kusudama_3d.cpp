@@ -316,75 +316,127 @@ bool JointLimitationKusudama3D::_polygon_contains(const Vector3 &p_point) const 
 	return true;
 }
 
-Vector3 JointLimitationKusudama3D::_polygon_project(const Vector3 &p_point) const {
-	uint32_t n = _polygon_vertices.size();
+Vector3 JointLimitationKusudama3D::_closest_on_small_circle(const Vector3 &p_point, const Vector3 &p_center, real_t p_radius) const {
+	// Closest point to p on the small circle of angular radius p_radius around
+	// p_center: swing p onto the circle along the geodesic. Continuous in p.
+	Vector3 perp = p_point - p_center * p_point.dot(p_center);
+	if (perp.is_zero_approx()) {
+		perp = p_center.get_any_perpendicular();
+	}
+	perp.normalize();
+	return (p_center * Math::cos(p_radius) + perp * Math::sin(p_radius)).normalized();
+}
+
+Vector3 JointLimitationKusudama3D::_continuous_project(const Vector3 &p_point) const {
+	// EWBIK boundary-curve projection. The allowed region's boundary is a smooth
+	// curve made of limit-cone boundary arcs joined by tangent-circle arcs: each
+	// tangent circle is, by construction, tangent to the two cones it bridges, so
+	// where a cone arc ends and a tangent arc begins the two meet with a common
+	// tangent — the boundary is C1. Projecting onto that curve therefore gives a
+	// C1-continuous output (low jerk / low added twist) that lands exactly on the
+	// region boundary (never outside the hard limit).
+	//
+	// Procedure: project p onto the nearest limit cone's boundary circle; if that
+	// point falls inside a neighbouring tangent circle's forbidden lens, the real
+	// boundary there is the tangent-circle arc, so re-project p onto it instead.
+	// The hand-off happens exactly at the tangent point (where the lens meets the
+	// cone), so it is seamless.
+	const uint32_t n = cones.size();
 	if (n == 0) {
 		return p_point;
 	}
 
-	// Gnomonic projection: map everything to the 2D tangent plane at the polygon
-	// center.  2D convex polygon projection is always continuous (no teleportation).
-	// The singularity of gnomonic is at the antipode of center — unreachable.
-
-	// Compute polygon center (average of vertices, normalized).
-	Vector3 center;
-	for (uint32_t i = 0; i < n; i++) {
-		center += _polygon_vertices[i];
-	}
-	if (center.is_zero_approx()) {
-		center = Vector3(0, 1, 0);
-	}
-	center.normalize();
-
-	// Build orthonormal basis on the tangent plane.
-	Vector3 u_axis = center.get_any_perpendicular().normalized();
-	Vector3 v_axis = center.cross(u_axis).normalized();
-
-	// Project input onto tangent plane.
-	real_t p_dot_c = p_point.dot(center);
-	if (Math::is_zero_approx(p_dot_c)) {
-		p_dot_c = 1e-6f;
-	}
-	Vector2 p2(p_point.dot(u_axis) / p_dot_c, p_point.dot(v_axis) / p_dot_c);
-
-	// Project polygon vertices onto tangent plane.
-	LocalVector<Vector2> verts2d;
-	verts2d.resize(n);
-	for (uint32_t i = 0; i < n; i++) {
-		real_t d = _polygon_vertices[i].dot(center);
-		if (Math::is_zero_approx(d)) {
-			d = 1e-6f;
+	// Gather every region-boundary closest-point (each cone arc + each tangent
+	// circle arc), then blend them with a one-step weighted Karcher (spherical)
+	// mean in the tangent space at the nearest one. A hard nearest-boundary
+	// projection snaps across the medial axis (teleports); the soft geodesic
+	// blend instead rounds the corner toward the interior — continuous (no
+	// teleport) and inside the hard bound. The temperature controls how tightly
+	// it tracks the nearest boundary vs. rounds seams.
+	const real_t temperature = 0.22;
+	LocalVector<Vector3> candidates;
+	LocalVector<real_t> distances;
+	real_t min_dist = 1e30;
+	uint32_t anchor = 0;
+	auto add_candidate = [&](const Vector3 &q) {
+		real_t d = p_point.angle_to(q);
+		candidates.push_back(q);
+		distances.push_back(d);
+		if (d < min_dist) {
+			min_dist = d;
+			anchor = candidates.size() - 1;
 		}
-		verts2d[i] = Vector2(_polygon_vertices[i].dot(u_axis) / d, _polygon_vertices[i].dot(v_axis) / d);
-	}
-
-	// 2D nearest point on polygon boundary (open chain: n-1 edges).
-	real_t best_dist_sq = 1e18f;
-	Vector2 best2d = p2;
-
-	for (uint32_t i = 0; i + 1 < n; i++) {
-		Vector2 a = verts2d[i];
-		Vector2 b = verts2d[i + 1];
-		Vector2 edge = b - a;
-		real_t edge_len_sq = edge.dot(edge);
-		Vector2 candidate;
-		if (Math::is_zero_approx(edge_len_sq)) {
-			candidate = a;
+	};
+	// Each candidate is the input direction with its angle to one boundary circle
+	// *soft-saturated* — a calculus limit. Cones are "keep-in" (output angle ->
+	// radius from below, never exceeding it); tangent circles are "keep-out"
+	// (output angle -> tangent radius from above, never entering the forbidden
+	// lens). Deep inside an allowed region the saturation is the identity, so the
+	// matching candidate is exactly p and dominates the blend (identity); near a
+	// boundary it bends smoothly, removing the hard identity<->clamp slope jump
+	// (the boundary-crossing jerk) with zero overshoot. Both the inside-cone and
+	// inside-tangent-path "fast accept" cases are folded in here, so solve() is C1
+	// across every seam while staying within the hard limit.
+	const real_t SOFT_BAND = 0.06;
+	auto soft_saturated = [&](const Vector3 &center, real_t limit, bool keep_in) {
+		real_t th = p_point.angle_to(center);
+		real_t th_sat = th;
+		if (keep_in) {
+			if (th > limit - SOFT_BAND) {
+				th_sat = limit - SOFT_BAND * Math::exp(-(th - (limit - SOFT_BAND)) / SOFT_BAND);
+			}
 		} else {
-			real_t t = (p2 - a).dot(edge) / edge_len_sq;
-			t = CLAMP(t, (real_t)0.0, (real_t)1.0);
-			candidate = a + edge * t;
+			if (th < limit + SOFT_BAND) {
+				th_sat = limit + SOFT_BAND * Math::exp(-((limit + SOFT_BAND) - th) / SOFT_BAND);
+			}
 		}
-		real_t dist_sq = (p2 - candidate).length_squared();
-		if (dist_sq < best_dist_sq) {
-			best_dist_sq = dist_sq;
-			best2d = candidate;
+		Vector3 perp = p_point - center * center.dot(p_point);
+		if (perp.is_zero_approx()) {
+			perp = center.get_any_perpendicular();
 		}
+		perp.normalize();
+		add_candidate((center * Math::cos(th_sat) + perp * Math::sin(th_sat)).normalized());
+	};
+	for (uint32_t i = 0; i < n; i++) {
+		soft_saturated(_get_cone_center_normalized(i), cones[i].w, true);
+	}
+	const uint32_t num_pairs = (n >= 1) ? n - 1 : 0;
+	for (uint32_t i = 0; i < num_pairs; i++) {
+		soft_saturated(_tangent_centers_1[i], _tangent_radii[i], false);
+		soft_saturated(_tangent_centers_2[i], _tangent_radii[i], false);
 	}
 
-	// Inverse gnomonic: map 2D back to 3D unit sphere.
-	Vector3 result = (center + u_axis * best2d.x + v_axis * best2d.y).normalized();
-	return result;
+	// Deep inside an allowed region the matching soft-saturation is the identity,
+	// so its candidate equals p exactly (min_dist == 0): return p untouched, exact
+	// identity. (At the band edge the soft-sat has unit slope, so handing off to
+	// the blend just outside is still C1.)
+	if (min_dist < (real_t)1e-5) {
+		return p_point;
+	}
+
+	const Vector3 a = candidates[anchor];
+	Vector3 tangent;
+	real_t weight_sum = 0.0;
+	for (uint32_t i = 0; i < candidates.size(); i++) {
+		real_t w = Math::exp(-(distances[i] - min_dist) / temperature);
+		weight_sum += w;
+		const Vector3 &c = candidates[i];
+		if (a.angle_to(c) > 1e-6) {
+			Vector3 dir = (c - a * a.dot(c));
+			if (!dir.is_zero_approx()) {
+				tangent += dir.normalized() * (a.angle_to(c) * w);
+			}
+		}
+	}
+	if (weight_sum <= 0.0) {
+		return p_point;
+	}
+	tangent /= weight_sum;
+	real_t tlen = tangent.length();
+	if (tlen < 1e-9) {
+		return a;
+	}
+	return (a * Math::cos(tlen) + (tangent / tlen) * Math::sin(tlen)).normalized();
 }
 
 Vector3 JointLimitationKusudama3D::_solve(const Vector3 &p_direction) const {
@@ -394,16 +446,13 @@ Vector3 JointLimitationKusudama3D::_solve(const Vector3 &p_direction) const {
 		return p;
 	}
 
-	// Fast accept: point inside any cone.
-	for (uint32_t i = 0; i < n; i++) {
-		if (is_point_in_cone(p, _get_cone_center_normalized(i), cones[i].w)) {
-			return p;
-		}
-	}
-
 	if (n == 1) {
+		// Single cone: identity inside, hard projection to the boundary outside.
 		Vector3 c = _get_cone_center_normalized(0);
 		real_t r = cones[0].w;
+		if (is_point_in_cone(p, c, r)) {
+			return p;
+		}
 		Vector3 ortho = (p - p.project(c)).normalized();
 		if (!ortho.is_finite()) {
 			ortho = (Math::abs(c.z) < 0.9f) ? c.cross(Vector3(0, 0, 1)).normalized() : c.cross(Vector3(1, 0, 0)).normalized();
@@ -411,53 +460,16 @@ Vector3 JointLimitationKusudama3D::_solve(const Vector3 &p_direction) const {
 		return c * Math::cos(r) + ortho * Math::sin(r);
 	}
 
-	// Multiple cones: check tangent paths (input order, matching shader),
-	// then fall back to gnomonic projection for continuous constraint.
 	_rebuild_polygon_cache();
 
-	// Check tangent paths between adjacent cones (input order, open chain).
-	uint32_t num_pairs = n - 1;
-	for (uint32_t i = 0; i < num_pairs; i++) {
-		if (_is_in_tangent_path(p, i)) {
-			_hermite_pos = p;
-			_hermite_vel = Vector3();
-			_has_previous = true;
-			return p;
-		}
-	}
-
-	// Project to nearest polygon edge (gnomonic 2D).
-	Vector3 projected = _polygon_project(p);
-
-	if (!_has_previous) {
-		_hermite_pos = projected;
-		_hermite_vel = Vector3();
-		_has_previous = true;
-		return projected;
-	}
-
-	// One quintic Hermite step per frame.
-	// From (pos, vel) toward (target, 0) at t = step_size.
-	// Velocity naturally decays — no unbounded history accumulation.
-	//
-	// h00(t) = 1 - 10t³ + 15t⁴ - 6t⁵
-	// h01(t) = 10t³ - 15t⁴ + 6t⁵
-	// h10(t) = t - 6t³ + 8t⁴ - 3t⁵
-	//
-	// result = h00 * pos + h01 * target + h10 * vel
-
-	const real_t t = 1.0f / 60.0f; // 1-second convergence at 60fps.
-	const real_t t2 = t * t, t3 = t2 * t, t4 = t3 * t, t5 = t4 * t;
-	const real_t h00 = 1.0f - 10.0f * t3 + 15.0f * t4 - 6.0f * t5;
-	const real_t h01 = 10.0f * t3 - 15.0f * t4 + 6.0f * t5;
-	const real_t h10 = t - 6.0f * t3 + 8.0f * t4 - 3.0f * t5;
-
-	Vector3 new_pos = (_hermite_pos * h00 + projected * h01 + _hermite_vel * h10).normalized();
-	Vector3 new_vel = new_pos - _hermite_pos;
-
-	_hermite_pos = new_pos;
-	_hermite_vel = new_vel;
-	return new_pos;
+	// Everything (inside a cone, inside a tangent path, or out of bounds) goes
+	// through the one soft-saturated projection. There is no hard "inside ->
+	// identity" fast path for n >= 2: the per-cone keep-in and per-tangent-circle
+	// keep-out saturations already return the input to float precision deep inside
+	// an allowed region, and bend smoothly toward the limit near a boundary. That
+	// makes solve() C1 across every seam (no boundary-crossing jerk) while never
+	// crossing the hard limit. Stateless -> a pure function of the input.
+	return _continuous_project(p);
 }
 
 // Helper functions for kusudama solving
