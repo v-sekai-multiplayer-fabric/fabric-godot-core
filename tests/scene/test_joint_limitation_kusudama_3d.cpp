@@ -3090,7 +3090,7 @@ TEST_CASE("[SceneTree][SwingTwistIK3D] deeper adversarial - reflection / twist c
 // per-step rotation. Without the rate limiter a kinematic fold snapped a joint ~175 deg in a
 // single step (measured on the live rig). One solve runs <= max_iterations passes, each capped at
 // adl, so the per-step joint rotation is bounded by max_iterations*adl. (Proven jerk-bound in
-// misc/humanoid_kusudama_rom/lean/IKJerk.lean.)
+// ../swing-twist-kusudama/IKJerk.lean.)
 TEST_CASE("[SceneTree][SwingTwistIK3D] solve has no jerk - per-step joint rotation bounded by the dampening cap") {
 	SceneTree *tree = SceneTree::get_singleton();
 	Skeleton3D *sk = memnew(Skeleton3D);

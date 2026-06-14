@@ -92,7 +92,7 @@ void IKKabsch6D::svd3(const double p_m[3][3], double r_u[3][3], double r_v[3][3]
 		// carrying V's free axes v1,v2 through the shortest arc v0 -> u0. Then U = [u0, R0 v1, R0 v2]
 		// and R = U V^T = R0, the swing-only (shortest-arc) rotation: deterministic and continuous,
 		// instead of get_any_perpendicular()'s arbitrary, flip-prone pick. (Verified in
-		// misc/humanoid_kusudama_rom/lean/KusKabsch.lean.)
+		// ../swing-twist-kusudama/KusKabsch.lean.)
 		const Vector3 u0(r_u[0][0], r_u[1][0], r_u[2][0]);
 		const Vector3 v0(r_v[0][0], r_v[1][0], r_v[2][0]);
 		const Vector3 v1(r_v[0][1], r_v[1][1], r_v[2][1]);

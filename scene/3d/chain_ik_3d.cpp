@@ -185,9 +185,11 @@ void ChainIK3D::set_root_bone(int p_index, int p_bone) {
 	chain_settings[p_index]->root_bone.bone = p_bone;
 	Skeleton3D *sk = get_skeleton();
 	if (sk) {
-		if (chain_settings[p_index]->root_bone.bone <= -1 || chain_settings[p_index]->root_bone.bone >= sk->get_bone_count()) {
+		if (chain_settings[p_index]->root_bone.bone >= sk->get_bone_count()) {
 			WARN_PRINT_ED("Setting: " + itos(p_index) + ": Root bone index '" + itos(p_bone) + "' is out of range!");
 			chain_settings[p_index]->root_bone.bone = -1;
+		} else if (chain_settings[p_index]->root_bone.bone <= -1) {
+			chain_settings[p_index]->root_bone.bone = -1; // unset / unresolved name -- valid, stay silent (no spam)
 		} else {
 			chain_settings[p_index]->root_bone.name = sk->get_bone_name(chain_settings[p_index]->root_bone.bone);
 		}
@@ -222,9 +224,11 @@ void ChainIK3D::set_end_bone(int p_index, int p_bone) {
 	chain_settings[p_index]->end_bone.bone = p_bone;
 	Skeleton3D *sk = get_skeleton();
 	if (sk) {
-		if (chain_settings[p_index]->end_bone.bone <= -1 || chain_settings[p_index]->end_bone.bone >= sk->get_bone_count()) {
+		if (chain_settings[p_index]->end_bone.bone >= sk->get_bone_count()) {
 			WARN_PRINT_ED("Setting: " + itos(p_index) + ": End bone index '" + itos(p_bone) + "' is out of range!");
 			chain_settings[p_index]->end_bone.bone = -1;
+		} else if (chain_settings[p_index]->end_bone.bone <= -1) {
+			chain_settings[p_index]->end_bone.bone = -1; // unset / unresolved name -- valid, stay silent (no spam)
 		} else {
 			chain_settings[p_index]->end_bone.name = sk->get_bone_name(chain_settings[p_index]->end_bone.bone);
 		}

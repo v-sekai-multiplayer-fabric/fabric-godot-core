@@ -326,7 +326,7 @@ void SwingTwistIK3D::solve() {
 	// CSR children adjacency (flat offset+index arrays): get_bone_children() returns a
 	// Vector<int> BY VALUE (a heap allocation per call), which the per-bone subtree refresh and
 	// the BFS below would hit in their loops. Built fresh each solve from the live skeleton, so
-	// it can never go stale. (childrenOf equivalence proven in misc/humanoid_kusudama_rom/lean/
+	// it can never go stale. (childrenOf equivalence proven in ../swing-twist-kusudama/
 	// IKFast.lean.)
 	LocalVector<int> child_offset;
 	child_offset.resize(bc + 1);
@@ -455,7 +455,7 @@ void SwingTwistIK3D::solve() {
 	// local pose only changes that bone's SUBTREE, so instead of recomputing the whole skeleton
 	// before every bone (the old O(iters*joints*bones) cost), we keep `gp` consistent with one
 	// full pass, then refresh only the edited bone's subtree after each edit -- provably the
-	// same globals as full recompute (misc/humanoid_kusudama_rom/lean/IKFold.lean).
+	// same globals as full recompute (../swing-twist-kusudama/IKFold.lean).
 	LocalVector<int> refresh_stack; // reused scratch for _refresh_subtree
 	_full_fk(sk, gp); // one consistent baseline; the invariant is then maintained incrementally
 

@@ -252,7 +252,7 @@ Quaternion JointLimitationKusudama3D::limit_twist(const Quaternion &p_rotation, 
 	// A 180deg swing about an axis PERPENDICULAR to `a` gives d ~ 0 and w ~ 0, so the twist part is a
 	// zero-length quaternion -- normalizing it would yield NaN and poison the result. There is no
 	// twist to clamp in that pose, so return the rotation unchanged. (Breakage shown in
-	// misc/humanoid_kusudama_rom/lean/KusGuards.lean.)
+	// ../swing-twist-kusudama/KusGuards.lean.)
 	if (d * d + p_rotation.w * p_rotation.w < (real_t)CMP_EPSILON) {
 		return p_rotation;
 	}
@@ -955,7 +955,7 @@ void JointLimitationKusudama3D::compute_tangent_circles(const Vector3 &p_center1
 	// Compute tangent circle radius. Cone radii are authored in [1deg, 180deg], so two large
 	// adjacent cones with r1 + r2 > pi would give a NEGATIVE radius (a bogus keep-out bridge). When
 	// the radii sum past pi the cones already overlap, so no real bridge is needed -- clamp to a
-	// point. (Breakage shown in misc/humanoid_kusudama_rom/lean/KusGuards.lean.)
+	// point. (Breakage shown in ../swing-twist-kusudama/KusGuards.lean.)
 	r_tangent_radius = (Math::PI - (p_radius1 + p_radius2)) / 2.0;
 	if (r_tangent_radius < (real_t)0.0) {
 		r_tangent_radius = (real_t)0.0;
