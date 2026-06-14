@@ -116,12 +116,15 @@ void SwingTwistIK3D::solve() {
 		const int tip = get_end_bone(s);
 		Node3D *tn = Object::cast_to<Node3D>(get_node_or_null(get_target_node(s)));
 		if (tip >= 0 && tip < bc && tn) {
-			Effector e;
-			e.tip_bone = tip;
-			e.target = sk_inv * tn->get_global_transform();
-			e.valid = true;
-			effectors.push_back(e);
-			controlled[tip] = true;
+			const Transform3D tgt = sk_inv * tn->get_global_transform();
+			if (tgt.origin.is_finite() && tgt.basis.determinant() != 0.0) { // reject NaN/degenerate targets
+				Effector e;
+				e.tip_bone = tip;
+				e.target = tgt;
+				e.valid = true;
+				effectors.push_back(e);
+				controlled[tip] = true;
+			}
 		}
 	}
 	// Pins: a 6D target on any bone (the chain ends above are the default pins; these add to
@@ -130,12 +133,15 @@ void SwingTwistIK3D::solve() {
 		const int tip = sk->find_bone(kv.key);
 		Node3D *tn = Object::cast_to<Node3D>(get_node_or_null(kv.value));
 		if (tip >= 0 && tip < bc && tn) {
-			Effector e;
-			e.tip_bone = tip;
-			e.target = sk_inv * tn->get_global_transform();
-			e.valid = true;
-			effectors.push_back(e);
-			controlled[tip] = true;
+			const Transform3D tgt = sk_inv * tn->get_global_transform();
+			if (tgt.origin.is_finite() && tgt.basis.determinant() != 0.0) { // reject NaN/degenerate
+				Effector e;
+				e.tip_bone = tip;
+				e.target = tgt;
+				e.valid = true;
+				effectors.push_back(e);
+				controlled[tip] = true;
+			}
 		}
 	}
 	// Locked bones are left at FK (excluded from the solve, so the chain routes around them).

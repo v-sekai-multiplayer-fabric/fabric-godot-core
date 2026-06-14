@@ -2689,6 +2689,154 @@ TEST_CASE("[SceneTree][SwingTwistIK3D] free root drags the body; disabled bone s
 	memdelete(sk);
 }
 
+// Adversarial: hostile inputs must never corrupt the skeleton (NaN/degenerate -> finite),
+// the solve must be deterministic and stable, locked bones immovable, and the kusudama clamp
+// must hold even when a target pulls hard against it.
+TEST_CASE("[SceneTree][SwingTwistIK3D] adversarial robustness / determinism / invariants") {
+	SceneTree *tree = SceneTree::get_singleton();
+
+	Skeleton3D *sk = nullptr;
+	SwingTwistIK3D *ik = nullptr;
+	Marker3D *tgt = nullptr;
+	auto build = [&](int n, real_t seg) {
+		sk = memnew(Skeleton3D);
+		tree->get_root()->add_child(sk);
+		for (int i = 0; i < n; i++) {
+			const int b = sk->add_bone(vformat("B%d", i));
+			if (i > 0) {
+				sk->set_bone_parent(b, i - 1);
+			}
+			sk->set_bone_rest(b, Transform3D(Basis(), Vector3(i == 0 ? (real_t)0.0 : seg, 0, 0)));
+		}
+		sk->notification(Skeleton3D::NOTIFICATION_UPDATE_SKELETON);
+		ik = memnew(SwingTwistIK3D);
+		sk->add_child(ik);
+		tgt = memnew(Marker3D);
+		ik->add_child(tgt);
+		tgt->set_name("Target");
+		sk->notification(Skeleton3D::NOTIFICATION_UPDATE_SKELETON);
+		ik->set_setting_count(1);
+		ik->set_root_bone_name(0, "B0");
+		ik->set_end_bone_name(0, vformat("B%d", n - 1));
+		ik->set_target_node(0, NodePath("Target"));
+		ik->set_max_iterations(20);
+	};
+	auto finite = [](Skeleton3D *s) -> bool {
+		for (int b = 0; b < s->get_bone_count(); b++) {
+			const Transform3D t = s->get_bone_pose(b);
+			if (!t.origin.is_finite() || !t.basis.get_column(0).is_finite() || !t.basis.get_column(1).is_finite() || !t.basis.get_column(2).is_finite()) {
+				return false;
+			}
+		}
+		return true;
+	};
+
+	// 1. NaN target must not propagate into the skeleton.
+	build(4, 0.3);
+	tgt->set_position(Vector3(NAN, NAN, NAN));
+	ik->solve();
+	CHECK(finite(sk));
+	memdelete(sk);
+
+	// 2. Target exactly at the chain root (zero direction).
+	build(4, 0.3);
+	tgt->set_position(Vector3(0, 0, 0));
+	ik->solve();
+	CHECK(finite(sk));
+	memdelete(sk);
+
+	// 3. Degenerate zero-length bones.
+	build(4, 0.0);
+	tgt->set_position(Vector3(0.5, 0.5, 0));
+	ik->solve();
+	CHECK(finite(sk));
+	memdelete(sk);
+
+	// 4. All bones locked -> no-op, poses stay at FK identity.
+	build(4, 0.3);
+	for (int i = 0; i < 4; i++) {
+		ik->set_bone_locked(vformat("B%d", i), true);
+	}
+	tgt->set_position(Vector3(10, 10, 10));
+	ik->solve();
+	CHECK(finite(sk));
+	for (int b = 0; b < 4; b++) {
+		CHECK(sk->get_bone_pose(b).basis.get_rotation_quaternion().is_equal_approx(Quaternion()));
+	}
+	memdelete(sk);
+
+	// 5. Deterministic: identical input -> identical output.
+	build(5, 0.3);
+	tgt->set_position(Vector3(0.6, 0.4, 0.2));
+	ik->solve();
+	PackedVector3Array a;
+	for (int b = 0; b < 5; b++) {
+		a.push_back(sk->get_bone_global_pose(b).origin);
+	}
+	for (int b = 0; b < 5; b++) {
+		sk->set_bone_pose_rotation(b, Quaternion());
+		sk->set_bone_pose_position(b, sk->get_bone_rest(b).origin);
+	}
+	ik->solve();
+	bool same = true;
+	for (int b = 0; b < 5; b++) {
+		same = same && a[b].is_equal_approx(sk->get_bone_global_pose(b).origin);
+	}
+	CHECK(same);
+	memdelete(sk);
+
+	// 6. Re-solve stability: solving again from the converged pose barely moves.
+	build(5, 0.3);
+	tgt->set_position(Vector3(0.5, 0.5, 0));
+	ik->solve();
+	const Vector3 t1 = sk->get_bone_global_pose(4).origin;
+	ik->solve();
+	const Vector3 t2 = sk->get_bone_global_pose(4).origin;
+	CHECK((t2 - t1).length() < 1e-3);
+	memdelete(sk);
+
+	// 7. Kusudama clamp holds even when the target pulls hard against the cone.
+	build(5, 0.3);
+	ik->resolve_chains();
+	Ref<JointLimitationKusudama3D> lim;
+	lim.instantiate();
+	lim->set_cone_count(1);
+	lim->set_cone_center(0, Vector3(0, 1, 0));
+	lim->set_cone_radius(0, Math::deg_to_rad(8.0));
+	int b1j = -1;
+	for (int j = 0; j < ik->get_joint_count(0); j++) {
+		if (ik->get_joint_bone(0, j) == 1) {
+			b1j = j;
+		}
+	}
+	REQUIRE(b1j >= 0);
+	ik->set_joint_limitation(0, b1j, lim);
+	tgt->set_position(Vector3(-0.5, 0.8, 0.3)); // hostile: pull the wrong way
+	ik->solve();
+	const Quaternion d = sk->get_bone_rest(1).basis.get_rotation_quaternion().inverse() *
+			sk->get_bone_pose(1).basis.get_rotation_quaternion();
+	const real_t sw = Math::acos(CLAMP((double)d.xform(Vector3(1, 0, 0)).dot(Vector3(1, 0, 0)), -1.0, 1.0));
+	CHECK(sw <= Math::deg_to_rad(12.0)); // cone 8 + soft-band slack
+	CHECK(finite(sk));
+	memdelete(sk);
+
+	// 8. Pin a nonexistent bone -> ignored, no crash.
+	build(4, 0.3);
+	ik->set_pin("DoesNotExist", NodePath("Target"));
+	tgt->set_position(Vector3(0.5, 0.3, 0));
+	ik->solve();
+	CHECK(finite(sk));
+	memdelete(sk);
+
+	// 9. Iteration extremes (0 clamps to 1).
+	build(4, 0.3);
+	ik->set_max_iterations(0);
+	tgt->set_position(Vector3(0.5, 0.5, 0));
+	ik->solve();
+	CHECK(finite(sk));
+	memdelete(sk);
+}
+
 } // namespace TestJointLimitationKusudama3D
 
 #endif // _3D_DISABLED
