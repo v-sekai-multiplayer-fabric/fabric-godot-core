@@ -48,15 +48,21 @@ void SwingTwistIK3D::_refresh_subtree(Skeleton3D *p_sk, LocalVector<Transform3D>
 	}
 }
 
-Quaternion SwingTwistIK3D::_clamp_swing_twist(Skeleton3D *p_sk, int p_bone, const Ref<JointLimitationKusudama3D> &p_lim, const Quaternion &p_candidate_local) const {
+Quaternion SwingTwistIK3D::_clamp_swing_twist(Skeleton3D *p_sk, int p_bone, const Ref<JointLimitationKusudama3D> &p_lim, const Quaternion &p_candidate_local, const Vector3 &p_forward_override) const {
 	if (p_lim.is_null()) {
 		return p_candidate_local;
 	}
-	const Vector<int> children = p_sk->get_bone_children(p_bone);
-	if (children.is_empty()) {
-		return p_candidate_local; // no forward (swing) reference
+	// Swing forward axis: the override (an extended end bone's extension dir) takes priority, since a
+	// leaf bone has no child to derive it from -- without this the extension is never clamped and the
+	// solve can leave the cones (the gizmo's forbidden region).
+	Vector3 fwd = p_forward_override;
+	if (fwd.is_zero_approx()) {
+		const Vector<int> children = p_sk->get_bone_children(p_bone);
+		if (children.is_empty()) {
+			return p_candidate_local; // no forward (swing) reference
+		}
+		fwd = p_sk->get_bone_rest(children[0]).origin.normalized();
 	}
-	Vector3 fwd = p_sk->get_bone_rest(children[0]).origin.normalized();
 	if (fwd.is_zero_approx()) {
 		return p_candidate_local;
 	}
@@ -558,7 +564,12 @@ void SwingTwistIK3D::solve() {
 			const Basis parent_basis = parent >= 0 ? gp[parent].basis : Basis();
 			const Quaternion cand_local = (parent_basis.inverse() * new_gbasis).get_rotation_quaternion();
 			const Ref<JointLimitationKusudama3D> *limp = limitations.getptr(b);
-			Quaternion target_local = _clamp_swing_twist(sk, b, limp ? *limp : Ref<JointLimitationKusudama3D>(), cand_local);
+			// For an extended end bone (a leaf) the swing forward is its extension, not a child.
+			Vector3 fwd_override;
+			if (tip_eff >= 0 && !effectors[tip_eff].ext_local.is_zero_approx()) {
+				fwd_override = effectors[tip_eff].ext_local.normalized();
+			}
+			Quaternion target_local = _clamp_swing_twist(sk, b, limp ? *limp : Ref<JointLimitationKusudama3D>(), cand_local, fwd_override);
 			const Quaternion prev_local = sk->get_bone_pose_rotation(b);
 			if (const JointWeight *pw = bone_weight.getptr(b)) {
 				// ENGAGE: ramp the bone in over the solve (0 = full from the start). Lets distal

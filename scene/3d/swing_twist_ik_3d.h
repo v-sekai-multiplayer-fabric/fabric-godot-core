@@ -69,7 +69,9 @@ class SwingTwistIK3D : public IterateIK3D {
 	// adjacency; see IKFold.lean / IKFast.lean for why this reproduces a full recompute.
 	// p_stack is reused scratch to avoid per-call allocation.
 	void _refresh_subtree(Skeleton3D *p_sk, LocalVector<Transform3D> &p_gp, LocalVector<int> &p_stack, const LocalVector<int> &p_child_offset, const LocalVector<int> &p_child_index, int p_root) const;
-	Quaternion _clamp_swing_twist(Skeleton3D *p_sk, int p_bone, const Ref<JointLimitationKusudama3D> &p_lim, const Quaternion &p_candidate_local) const;
+	// p_forward_override: the bone's swing forward axis (local). Zero = derive from the first child's
+	// rest dir; pass the extension direction for a leaf/extended end bone (which has no child).
+	Quaternion _clamp_swing_twist(Skeleton3D *p_sk, int p_bone, const Ref<JointLimitationKusudama3D> &p_lim, const Quaternion &p_candidate_local, const Vector3 &p_forward_override = Vector3()) const;
 
 protected:
 	static void _bind_methods();

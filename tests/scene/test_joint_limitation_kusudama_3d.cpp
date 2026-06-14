@@ -2792,6 +2792,53 @@ TEST_CASE("[SceneTree][SwingTwistIK3D] extended end bone aims its extension at t
 	memdelete(sk);
 }
 
+// An extended end bone is a LEAF (no child), so _clamp_swing_twist had no swing-forward reference
+// and silently skipped the kusudama -- letting the solve leave the cone (the gizmo's forbidden
+// region). The clamp must use the EXTENSION as forward. A far off-cone target must still be clamped
+// to within the cone of the rest forward.
+TEST_CASE("[SceneTree][SwingTwistIK3D] extended end bone is kusudama-clamped (stays out of the forbidden region)") {
+	SceneTree *tree = SceneTree::get_singleton();
+	Skeleton3D *sk = memnew(Skeleton3D);
+	tree->get_root()->add_child(sk);
+	const int root = sk->add_bone("Root");
+	const int tip = sk->add_bone("Tip");
+	sk->set_bone_parent(tip, root);
+	sk->set_bone_rest(root, Transform3D(Basis(), Vector3(0, 0, 0)));
+	sk->set_bone_rest(tip, Transform3D(Basis(), Vector3(0, 1, 0))); // extension forward = +Y
+	sk->notification(Skeleton3D::NOTIFICATION_UPDATE_SKELETON);
+
+	SwingTwistIK3D *ik = memnew(SwingTwistIK3D);
+	sk->add_child(ik);
+	Marker3D *target = memnew(Marker3D);
+	ik->add_child(target);
+	target->set_name("Target");
+	target->set_position(Vector3(5, 1, 0)); // far off to +X, well outside a +Y cone
+	sk->notification(Skeleton3D::NOTIFICATION_UPDATE_SKELETON);
+	ik->set_setting_count(1);
+	ik->set_root_bone_name(0, "Tip");
+	ik->set_end_bone_name(0, "Tip");
+	ik->set_extend_end_bone(0, true);
+	ik->set_end_bone_length(0, 2.0);
+	ik->set_end_bone_direction(0, SkeletonModifier3D::BONE_DIRECTION_FROM_PARENT);
+	ik->set_target_node(0, NodePath("Target"));
+	ik->set_max_iterations(40);
+	ik->set_angular_delta_limit(Math::PI);
+	Ref<JointLimitationKusudama3D> lim;
+	lim.instantiate();
+	lim->set_cone_count(1);
+	lim->set_cone_center(0, Vector3(0, 1, 0)); // allow only +/-10deg around the rest forward
+	lim->set_cone_radius(0, Math::deg_to_rad(10.0));
+	ik->set_joint_limitation(0, 0, lim);
+	ik->solve();
+
+	const Vector3 ext_dir = sk->get_bone_global_pose(tip).basis.xform(Vector3(0, 1, 0)).normalized();
+	CHECK(tjk_finite(sk));
+	CHECK(ext_dir.angle_to(Vector3(0, 1, 0)) <= Math::deg_to_rad(13.0)); // stayed inside the cone (+ soft band)
+	CHECK(ext_dir.x > 0.05); // but did rotate toward the target, up to the cone boundary
+
+	memdelete(sk);
+}
+
 // Adversarial: hostile inputs must never corrupt the skeleton (NaN/degenerate -> finite),
 // the solve must be deterministic and stable, locked bones immovable, and the kusudama clamp
 // must hold even when a target pulls hard against it.
