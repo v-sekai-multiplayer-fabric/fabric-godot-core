@@ -2839,7 +2839,6 @@ TEST_CASE("[SceneTree][SwingTwistIK3D] extended end bone is kusudama-clamped (st
 	memdelete(sk);
 }
 
-
 // Adversarial: hostile inputs must never corrupt the skeleton (NaN/degenerate -> finite),
 // the solve must be deterministic and stable, locked bones immovable, and the kusudama clamp
 // must hold even when a target pulls hard against it.
