@@ -33,6 +33,7 @@
 #include "core/object/class_db.h"
 #include "scene/3d/marker_3d.h"
 #include "scene/3d/skeleton_3d.h"
+#include "scene/3d/swing_twist_ik_3d.h"
 #include "scene/resources/3d/humanoid_kusudama_rom_data.h"
 
 // An ANNY phenotype axis in [0,1], neutral 0.5 when unset.
@@ -161,6 +162,38 @@ static float hk_end_bone_length(Skeleton3D *p_sk, int p_bone) {
 	return MAX(0.4f * (float)p_sk->get_bone_rest(p_bone).origin.length(), 0.02f);
 }
 
+// Sensible per-joint damp-family defaults so the generated humanoid rig feels natural out of the
+// box (the animator can still override each). priorities = (position, swing, twist); stiffness and
+// relax in [0..1]; cushion in radians on the kusudama. Conservative values keep reach intact.
+static void hk_joint_damp(const String &p_bone, Vector3 &r_priorities, real_t &r_stiffness, real_t &r_relax, real_t &r_cushion) {
+	r_priorities = Vector3(1, 1, 1);
+	r_stiffness = 0.0;
+	r_relax = 0.0;
+	r_cushion = 0.06;
+	const String b = p_bone.to_lower();
+	if (b.contains("hips") || b.contains("spine") || b.contains("chest")) {
+		// Torso resists a little so the limbs move first, and carries less free twist.
+		r_stiffness = 0.12;
+		r_relax = 0.08;
+		r_priorities = Vector3(1, 1, 0.6);
+	} else if (b.contains("neck")) {
+		r_stiffness = 0.06;
+		r_relax = 0.05;
+	} else if (b.contains("shoulder")) {
+		r_relax = 0.05;
+		r_cushion = 0.10; // shoulders approach their wide limit more gently
+	} else if (b.contains("thumb") || b.contains("index") || b.contains("middle") || b.contains("ring") || b.contains("little")) {
+		// Fingers curl back toward rest and barely care about roll.
+		r_relax = 0.25;
+		r_priorities = Vector3(1, 1, 0.3);
+	} else if (b.contains("lowerarm") || b.contains("lowerleg")) {
+		r_relax = 0.10; // keep a natural elbow/knee bend
+	} else if (b.contains("upperarm") || b.contains("upperleg")) {
+		r_relax = 0.05;
+	}
+	// Hand / Foot / Head fall through to full 6D, no damp (they are the goals).
+}
+
 int HumanoidKusudamaRom::apply_ik_limits(IterateIK3D *p_ik, const Dictionary &p_phenotype) const {
 	ERR_FAIL_NULL_V(p_ik, 0);
 	// Resolve the joint chains now (works even on a detached import scene) so the joints
@@ -176,6 +209,7 @@ int HumanoidKusudamaRom::apply_ik_limits(IterateIK3D *p_ik, const Dictionary &p_
 			}
 		}
 	}
+	SwingTwistIK3D *st = Object::cast_to<SwingTwistIK3D>(p_ik); // per-joint damp knobs are its own
 	int applied = 0;
 	for (int i = 0; i < p_ik->get_setting_count(); i++) {
 		const int joints = p_ik->get_joint_count(i);
@@ -184,6 +218,16 @@ int HumanoidKusudamaRom::apply_ik_limits(IterateIK3D *p_ik, const Dictionary &p_
 			Ref<JointLimitationKusudama3D> k = generate_bone(bone, p_phenotype);
 			if (!k.is_valid()) {
 				continue;
+			}
+			// Per-joint damp-family defaults for a natural rig.
+			Vector3 priorities;
+			real_t stiffness, relax, cushion;
+			hk_joint_damp(bone, priorities, stiffness, relax, cushion);
+			k->set_cushion(cushion);
+			if (st) {
+				st->set_joint_priorities(i, j, priorities.x, priorities.y, priorities.z);
+				st->set_joint_stiffness(i, j, stiffness);
+				st->set_joint_relax(i, j, relax);
 			}
 			p_ik->set_joint_limitation(i, j, k);
 			applied++;
