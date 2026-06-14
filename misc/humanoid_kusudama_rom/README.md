@@ -65,10 +65,11 @@ python gen_humanoid_rom_header.py [rom_limits.jsonl] [out.h]
 # default out: ../../scene/resources/3d/humanoid_kusudama_rom_data.h
 ```
 
-`rom_limits.jsonl` is the AddBiomechanics per-subject NORMAL-range extract (external, not
-committed — large). It supplies the 11 data-driven joints; the 44 clinical joints come from
-`humanoid_joint_fans.py`. If you only changed clinical fans, the committed data header is
-already current and this step is optional.
+`rom_limits.jsonl.zst` (committed, zstd-compressed ~90 KB) is the AddBiomechanics
+per-subject NORMAL-range extract; the generator reads it directly (`.zst` is decompressed
+via the `zstandard` module, falling back to the `zstd` CLI). It supplies the 11 data-driven
+joints; the 44 clinical joints come from `humanoid_joint_fans.py`. If you only changed
+clinical fans, the committed data header is already current and this step is optional.
 
 ## Requirements
 

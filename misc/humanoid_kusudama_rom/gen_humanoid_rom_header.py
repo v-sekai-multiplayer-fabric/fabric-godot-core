@@ -12,9 +12,22 @@ import json, numpy as np, sys, os
 _HERE = os.path.dirname(os.path.abspath(__file__))
 _REPO = os.path.normpath(os.path.join(_HERE, '..', '..'))  # misc/humanoid_kusudama_rom -> repo root
 sys.path.insert(0, _HERE)  # for `import humanoid_joint_fans`
-SRC = sys.argv[1] if len(sys.argv) > 1 else os.path.join(_HERE, 'rom_limits.jsonl')
+SRC = sys.argv[1] if len(sys.argv) > 1 else os.path.join(_HERE, 'rom_limits.jsonl.zst')
 OUT = sys.argv[2] if len(sys.argv) > 2 else \
     os.path.join(_REPO, 'scene', 'resources', '3d', 'humanoid_kusudama_rom_data.h')
+
+def _open_lines(path):
+    """Read a .jsonl or zstd-compressed .jsonl.zst into a list of lines."""
+    if path.endswith('.zst'):
+        try:
+            import zstandard
+            with open(path, 'rb') as fh:
+                return zstandard.ZstdDecompressor().stream_reader(fh).read().decode().splitlines()
+        except ImportError:
+            import subprocess  # fall back to the zstd CLI
+            return subprocess.run(['zstd', '-dc', path], capture_output=True, check=True).stdout.decode().splitlines()
+    with open(path) as fh:
+        return fh.readlines()
 # sinew bone -> Godot SkeletonProfileHumanoid bone slot
 BONE_MAP = {"LeftUpperLeg": "LeftUpperLeg", "RightUpperLeg": "RightUpperLeg",
     "LeftLowerLeg": "LeftLowerLeg", "RightLowerLeg": "RightLowerLeg",
@@ -74,7 +87,7 @@ def aggregate_bone(cand):
     return acc / max(cnt, 1), float(np.median([c["twist_range_deg"] for c in kcand])), cnt
 
 def main():
-    rows = [json.loads(l) for l in open(SRC)]
+    rows = [json.loads(l) for l in _open_lines(SRC) if l.strip()]
     rows = [r for r in rows if r.get("bones")]
     template = {}
     for sinew, godot in BONE_MAP.items():
