@@ -37,10 +37,16 @@ class SwingTwistIK3D : public IterateIK3D {
 	bool order_dirty = true;
 
 	bool _is_ancestor(Skeleton3D *p_sk, int p_anc, int p_bone) const;
+	// Forward kinematics maintained in skeleton-local space during the manual solve.
+	void _full_fk(Skeleton3D *p_sk, LocalVector<Transform3D> &p_gp) const;
+	// Refresh only p_root's subtree (parents-before-children); see IKFold.lean for why this
+	// reproduces a full recompute. p_stack is reused scratch to avoid per-call allocation.
+	void _refresh_subtree(Skeleton3D *p_sk, LocalVector<Transform3D> &p_gp, LocalVector<int> &p_stack, int p_root) const;
 	Quaternion _clamp_swing_twist(Skeleton3D *p_sk, int p_bone, const Ref<JointLimitationKusudama3D> &p_lim, const Quaternion &p_candidate_local) const;
 
 protected:
 	static void _bind_methods();
+	void _validate_property(PropertyInfo &p_property) const;
 	virtual void _process_modification(double p_delta) override;
 
 public:

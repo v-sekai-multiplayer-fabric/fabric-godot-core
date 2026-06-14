@@ -14,3 +14,6 @@ name = "WristRom"
 
 [[lean_lib]]
 name = "JointRom"
+
+[[lean_lib]]
+name = "IKFold"

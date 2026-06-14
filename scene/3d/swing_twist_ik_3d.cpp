@@ -36,6 +36,29 @@ bool SwingTwistIK3D::_is_ancestor(Skeleton3D *p_sk, int p_anc, int p_bone) const
 	return false;
 }
 
+void SwingTwistIK3D::_full_fk(Skeleton3D *p_sk, LocalVector<Transform3D> &p_gp) const {
+	const int bc = p_sk->get_bone_count();
+	for (int o = 0; o < bc; o++) {
+		const int p = p_sk->get_bone_parent(o); // bones are parent-before-child in index order
+		p_gp[o] = (p >= 0 ? p_gp[p] : Transform3D()) * p_sk->get_bone_pose(o);
+	}
+}
+
+void SwingTwistIK3D::_refresh_subtree(Skeleton3D *p_sk, LocalVector<Transform3D> &p_gp, LocalVector<int> &p_stack, int p_root) const {
+	p_stack.clear();
+	p_stack.push_back(p_root);
+	while (!p_stack.is_empty()) {
+		const int x = p_stack[p_stack.size() - 1];
+		p_stack.resize(p_stack.size() - 1);
+		const int p = p_sk->get_bone_parent(x);
+		p_gp[x] = (p >= 0 ? p_gp[p] : Transform3D()) * p_sk->get_bone_pose(x); // parent already current
+		const Vector<int> children = p_sk->get_bone_children(x);
+		for (int i = 0; i < children.size(); i++) {
+			p_stack.push_back(children[i]);
+		}
+	}
+}
+
 Quaternion SwingTwistIK3D::_clamp_swing_twist(Skeleton3D *p_sk, int p_bone, const Ref<JointLimitationKusudama3D> &p_lim, const Quaternion &p_candidate_local) const {
 	if (p_lim.is_null()) {
 		return p_candidate_local;
@@ -211,29 +234,29 @@ void SwingTwistIK3D::solve() {
 		}
 	}
 
+	// The skeleton does not refresh its global cache between set_bone_pose_*() calls during a
+	// manual solve, so we maintain `gp` (skeleton-local globals) ourselves. Editing one bone's
+	// local pose only changes that bone's SUBTREE, so instead of recomputing the whole skeleton
+	// before every bone (the old O(iters*joints*bones) cost), we keep `gp` consistent with one
+	// full pass, then refresh only the edited bone's subtree after each edit -- provably the
+	// same globals as full recompute (misc/humanoid_kusudama_rom/lean/IKFold.lean).
+	LocalVector<int> refresh_stack; // reused scratch for _refresh_subtree
+	_full_fk(sk, gp); // one consistent baseline; the invariant is then maintained incrementally
+
 	const int iters = MAX(1, get_max_iterations());
 	for (int it = 0; it < iters; it++) {
 		if (motion_root >= 0) {
 			// Translate the root by the mean residual (target - current tip) over all pins.
-			for (int o = 0; o < bc; o++) {
-				const int p = sk->get_bone_parent(o);
-				gp[o] = (p >= 0 ? gp[p] : Transform3D()) * sk->get_bone_pose(o);
-			}
 			Vector3 resid;
 			for (const Effector &e : effectors) {
 				resid += e.target.origin - gp[e.tip_bone].origin;
 			}
 			resid /= (real_t)effectors.size();
 			sk->set_bone_pose_position(motion_root, sk->get_bone_pose(motion_root).origin + resid);
+			_refresh_subtree(sk, gp, refresh_stack, motion_root); // root moved -> its subtree shifts
 		}
 		// Tip -> root: joints nearest the effector bend first (reach sub-extension targets).
 		for (int bi = (int)solve_order.size() - 1; bi >= 0; bi--) {
-			// Recompute globals from current local poses (the skeleton does not refresh its
-			// global cache between set_bone_pose_rotation() calls during a manual solve).
-			for (int o = 0; o < bc; o++) {
-				const int p = sk->get_bone_parent(o);
-				gp[o] = (p >= 0 ? gp[p] : Transform3D()) * sk->get_bone_pose(o);
-			}
 			const int b = solve_order[bi];
 			const Transform3D gb = gp[b];
 
@@ -280,9 +303,25 @@ void SwingTwistIK3D::solve() {
 			const Quaternion cand_local = (parent_basis.inverse() * new_gbasis).get_rotation_quaternion();
 			const Ref<JointLimitationKusudama3D> *limp = limitations.getptr(b);
 			sk->set_bone_pose_rotation(b, _clamp_swing_twist(sk, b, limp ? *limp : Ref<JointLimitationKusudama3D>(), cand_local));
+			_refresh_subtree(sk, gp, refresh_stack, b); // bone b rotated -> refresh its subtree, keep gp consistent
 		}
 	}
 	sk->force_update_all_bone_transforms();
+}
+
+void SwingTwistIK3D::_validate_property(PropertyInfo &p_property) const {
+	// Auto-fill the motion root from the skeleton's bone list (same picker as the other IK
+	// bone-name properties), so the animator selects it from a dropdown instead of typing.
+	if (p_property.name == "motion_root_bone") {
+		Skeleton3D *skeleton = get_skeleton();
+		if (skeleton) {
+			p_property.hint = PROPERTY_HINT_ENUM_SUGGESTION;
+			p_property.hint_string = skeleton->get_concatenated_bone_names();
+		} else {
+			p_property.hint = PROPERTY_HINT_NONE;
+			p_property.hint_string = "";
+		}
+	}
 }
 
 void SwingTwistIK3D::_process_modification(double p_delta) {
@@ -307,5 +346,5 @@ void SwingTwistIK3D::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("get_motion_root_bone"), &SwingTwistIK3D::get_motion_root_bone);
 
 	ADD_PROPERTY(PropertyInfo(Variant::BOOL, "free_root"), "set_free_root", "get_free_root");
-	ADD_PROPERTY(PropertyInfo(Variant::STRING_NAME, "motion_root_bone"), "set_motion_root_bone", "get_motion_root_bone");
+	ADD_PROPERTY(PropertyInfo(Variant::STRING_NAME, "motion_root_bone", PROPERTY_HINT_ENUM_SUGGESTION, ""), "set_motion_root_bone", "get_motion_root_bone");
 }
