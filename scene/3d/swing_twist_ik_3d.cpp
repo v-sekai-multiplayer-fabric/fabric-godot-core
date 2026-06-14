@@ -120,7 +120,18 @@ void SwingTwistIK3D::solve() {
 	if (!sk) {
 		return;
 	}
-	resolve_chains(); // map chain bone names -> indices (also works on detached scenes)
+	// Resolve chain bone names -> indices only when they are NOT already resolved (joints empty).
+	// resolve_chains() runs the base setters, which call notify_property_list_changed() and
+	// rebuild gizmos; doing that every solve thrashed the editor inspector (continuous rebuilds)
+	// on selection. In a loaded scene / the editor the chains are already resolved by the
+	// load/setter flow, so this fires at most once (e.g. to bootstrap a detached test rig).
+	int resolved_joints = 0;
+	for (int s = 0; s < get_setting_count(); s++) {
+		resolved_joints += get_joint_count(s);
+	}
+	if (resolved_joints == 0) {
+		resolve_chains();
+	}
 	const int bc = sk->get_bone_count();
 	const Transform3D sk_inv = sk->get_global_transform().affine_inverse();
 
