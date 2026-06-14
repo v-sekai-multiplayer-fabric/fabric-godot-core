@@ -20,16 +20,50 @@ static const ConeF TPL_RightUpperArm[] = { { 0.000000f, 1.000000f, -0.000000f, 2
 static const ConeF TPL_LeftLowerArm[] = { { -0.314013f, 0.948627f, 0.038756f, 0.132929f }, { 0.925648f, 0.375026f, -0.050312f, 0.127812f }, { -0.916023f, 0.397674f, -0.052516f, 0.116568f }, { 0.641037f, 0.767413f, 0.012208f, 0.141106f }, { 0.157292f, 0.986522f, 0.045105f, 0.124748f }, { -0.542239f, 0.840175f, 0.009103f, 0.115548f } };
 static const ConeF TPL_RightLowerArm[] = { { -0.664249f, 0.747468f, 0.008019f, 0.123729f }, { 0.659682f, 0.751512f, 0.007042f, 0.119340f }, { -0.213647f, 0.975889f, 0.044676f, 0.149993f }, { 0.909576f, 0.412691f, -0.048550f, 0.116060f }, { 0.221915f, 0.974218f, 0.040651f, 0.122624f }, { -0.917626f, 0.394091f, -0.051528f, 0.127011f } };
 static const ConeF TPL_Spine[] = { { 0.000000f, 1.000000f, 0.000000f, 1.570796f } };
-static const ConeF TPL_Neck[] = { { 0.0f, 1.0f, 0.0f, 0.785398f } };
-static const ConeF TPL_Head[] = { { 0.0f, 1.0f, 0.0f, 0.523599f } };
-static const ConeF TPL_Chest[] = { { 0.0f, 1.0f, 0.0f, 0.436332f } };
-static const ConeF TPL_UpperChest[] = { { 0.0f, 1.0f, 0.0f, 0.349066f } };
-static const ConeF TPL_LeftShoulder[] = { { 0.0f, 1.0f, 0.0f, 0.436332f } };
-static const ConeF TPL_RightShoulder[] = { { 0.0f, 1.0f, 0.0f, 0.436332f } };
-static const ConeF TPL_LeftHand[] = { { 0.0f, 1.0f, 0.0f, 1.047198f } };
-static const ConeF TPL_RightHand[] = { { 0.0f, 1.0f, 0.0f, 1.047198f } };
-static const ConeF TPL_LeftToes[] = { { 0.0f, 1.0f, 0.0f, 0.698132f } };
-static const ConeF TPL_RightToes[] = { { 0.0f, 1.0f, 0.0f, 0.698132f } };
+static const ConeF TPL_Hips[] = { { 0.000000f, 1.000000f, 0.000000f, 0.523599f } };
+static const ConeF TPL_Chest[] = { { 0.043619f, 0.999048f, 0.000000f, 0.392699f } };
+static const ConeF TPL_UpperChest[] = { { 0.043619f, 0.999048f, 0.000000f, 0.314159f } };
+static const ConeF TPL_Neck[] = { { -0.087156f, 0.996195f, 0.000000f, 0.785398f } };
+static const ConeF TPL_Head[] = { { -0.315649f, 0.948876f, 0.000000f, 0.095993f }, { -0.212462f, 0.977169f, 0.000000f, 0.137850f }, { -0.106843f, 0.994276f, 0.000000f, 0.166123f }, { 0.000000f, 1.000000f, 0.000000f, 0.174533f }, { 0.106843f, 0.994276f, 0.000000f, 0.166123f }, { 0.212462f, 0.977169f, 0.000000f, 0.137850f }, { 0.315649f, 0.948876f, 0.000000f, 0.095993f } };
+static const ConeF TPL_Jaw[] = { { 0.139173f, 0.990268f, 0.000000f, 0.174533f } };
+static const ConeF TPL_LeftShoulder[] = { { 0.000000f, 1.000000f, 0.000000f, 0.436332f } };
+static const ConeF TPL_RightShoulder[] = { { 0.000000f, 1.000000f, 0.000000f, 0.436332f } };
+static const ConeF TPL_LeftHand[] = { { -0.900579f, 0.429032f, -0.069921f, 0.171007f }, { -0.532186f, 0.842585f, -0.082638f, 0.387428f }, { 0.000000f, 0.996195f, -0.087156f, 0.436332f }, { 0.532186f, 0.842585f, -0.082638f, 0.387428f }, { 0.900579f, 0.429032f, -0.069921f, 0.171007f } };
+static const ConeF TPL_RightHand[] = { { -0.900579f, 0.429032f, -0.069921f, 0.171007f }, { -0.532186f, 0.842585f, -0.082638f, 0.387428f }, { 0.000000f, 0.996195f, -0.087156f, 0.436332f }, { 0.532186f, 0.842585f, -0.082638f, 0.387428f }, { 0.900579f, 0.429032f, -0.069921f, 0.171007f } };
+static const ConeF TPL_LeftToes[] = { { -0.457098f, 0.889416f, 0.000000f, 0.095993f }, { -0.247337f, 0.968930f, 0.000000f, 0.116427f }, { -0.025130f, 0.999684f, 0.000000f, 0.137242f }, { 0.198342f, 0.980133f, 0.000000f, 0.137242f }, { 0.411832f, 0.911260f, 0.000000f, 0.116427f }, { 0.604599f, 0.796530f, 0.000000f, 0.095993f } };
+static const ConeF TPL_RightToes[] = { { -0.457098f, 0.889416f, 0.000000f, 0.095993f }, { -0.247337f, 0.968930f, 0.000000f, 0.116427f }, { -0.025130f, 0.999684f, 0.000000f, 0.137242f }, { 0.198342f, 0.980133f, 0.000000f, 0.137242f }, { 0.411832f, 0.911260f, 0.000000f, 0.116427f }, { 0.604599f, 0.796530f, 0.000000f, 0.095993f } };
+static const ConeF TPL_LeftEye[] = { { 0.000000f, 1.000000f, 0.000000f, 0.488692f } };
+static const ConeF TPL_RightEye[] = { { 0.000000f, 1.000000f, 0.000000f, 0.488692f } };
+static const ConeF TPL_LeftThumbMetacarpal[] = { { 0.258819f, 0.965926f, 0.000000f, 0.698132f } };
+static const ConeF TPL_LeftThumbProximal[] = { { -0.045363f, 0.998971f, 0.000000f, 0.095993f }, { 0.272280f, 0.962218f, 0.000000f, 0.166123f }, { 0.562083f, 0.827081f, 0.000000f, 0.166123f }, { 0.794415f, 0.607375f, 0.000000f, 0.095993f } };
+static const ConeF TPL_LeftThumbDistal[] = { { -0.111469f, 0.993768f, 0.000000f, 0.095993f }, { 0.094605f, 0.995515f, 0.000000f, 0.105246f }, { 0.296661f, 0.954983f, 0.000000f, 0.128315f }, { 0.486118f, 0.873893f, 0.000000f, 0.138415f }, { 0.654929f, 0.755690f, 0.000000f, 0.138415f }, { 0.795927f, 0.605393f, 0.000000f, 0.128315f }, { 0.903121f, 0.429386f, 0.000000f, 0.105246f }, { 0.971961f, 0.235142f, 0.000000f, 0.095993f } };
+static const ConeF TPL_LeftIndexProximal[] = { { -0.425779f, 0.904827f, 0.000000f, 0.136805f }, { 0.041876f, 0.999123f, 0.000000f, 0.309942f }, { 0.500000f, 0.866025f, 0.000000f, 0.349066f }, { 0.844328f, 0.535827f, 0.000000f, 0.309942f }, { 0.996493f, 0.083676f, 0.000000f, 0.136805f } };
+static const ConeF TPL_LeftIndexIntermediate[] = { { -0.013962f, 0.999903f, 0.000000f, 0.095993f }, { 0.224951f, 0.974370f, 0.000000f, 0.105246f }, { 0.450878f, 0.892586f, 0.000000f, 0.128315f }, { 0.650774f, 0.759271f, 0.000000f, 0.138415f }, { 0.813101f, 0.582123f, 0.000000f, 0.138415f }, { 0.928486f, 0.371367f, 0.000000f, 0.128315f }, { 0.990268f, 0.139174f, 0.000000f, 0.105246f }, { 0.994881f, 0.101053f, 0.000000f, 0.095993f } };
+static const ConeF TPL_LeftIndexDistal[] = { { -0.027922f, 0.999610f, 0.000000f, 0.095993f }, { 0.608761f, 0.793354f, 0.000000f, 0.139626f }, { 0.972776f, 0.231747f, 0.000000f, 0.095993f } };
+static const ConeF TPL_LeftMiddleProximal[] = { { -0.425779f, 0.904827f, 0.000000f, 0.136805f }, { 0.041876f, 0.999123f, 0.000000f, 0.309942f }, { 0.500000f, 0.866025f, 0.000000f, 0.349066f }, { 0.844328f, 0.535827f, 0.000000f, 0.309942f }, { 0.996493f, 0.083676f, 0.000000f, 0.136805f } };
+static const ConeF TPL_LeftMiddleIntermediate[] = { { -0.013962f, 0.999903f, 0.000000f, 0.095993f }, { 0.224951f, 0.974370f, 0.000000f, 0.105246f }, { 0.450878f, 0.892586f, 0.000000f, 0.128315f }, { 0.650774f, 0.759271f, 0.000000f, 0.138415f }, { 0.813101f, 0.582123f, 0.000000f, 0.138415f }, { 0.928486f, 0.371367f, 0.000000f, 0.128315f }, { 0.990268f, 0.139174f, 0.000000f, 0.105246f }, { 0.994881f, 0.101053f, 0.000000f, 0.095993f } };
+static const ConeF TPL_LeftMiddleDistal[] = { { -0.027922f, 0.999610f, 0.000000f, 0.095993f }, { 0.608761f, 0.793354f, 0.000000f, 0.139626f }, { 0.972776f, 0.231747f, 0.000000f, 0.095993f } };
+static const ConeF TPL_LeftRingProximal[] = { { -0.425779f, 0.904827f, 0.000000f, 0.136805f }, { 0.041876f, 0.999123f, 0.000000f, 0.309942f }, { 0.500000f, 0.866025f, 0.000000f, 0.349066f }, { 0.844328f, 0.535827f, 0.000000f, 0.309942f }, { 0.996493f, 0.083676f, 0.000000f, 0.136805f } };
+static const ConeF TPL_LeftRingIntermediate[] = { { -0.013962f, 0.999903f, 0.000000f, 0.095993f }, { 0.224951f, 0.974370f, 0.000000f, 0.105246f }, { 0.450878f, 0.892586f, 0.000000f, 0.128315f }, { 0.650774f, 0.759271f, 0.000000f, 0.138415f }, { 0.813101f, 0.582123f, 0.000000f, 0.138415f }, { 0.928486f, 0.371367f, 0.000000f, 0.128315f }, { 0.990268f, 0.139174f, 0.000000f, 0.105246f }, { 0.994881f, 0.101053f, 0.000000f, 0.095993f } };
+static const ConeF TPL_LeftRingDistal[] = { { -0.027922f, 0.999610f, 0.000000f, 0.095993f }, { 0.608761f, 0.793354f, 0.000000f, 0.139626f }, { 0.972776f, 0.231747f, 0.000000f, 0.095993f } };
+static const ConeF TPL_LeftLittleProximal[] = { { -0.425779f, 0.904827f, 0.000000f, 0.136805f }, { 0.041876f, 0.999123f, 0.000000f, 0.309942f }, { 0.500000f, 0.866025f, 0.000000f, 0.349066f }, { 0.844328f, 0.535827f, 0.000000f, 0.309942f }, { 0.996493f, 0.083676f, 0.000000f, 0.136805f } };
+static const ConeF TPL_LeftLittleIntermediate[] = { { -0.013962f, 0.999903f, 0.000000f, 0.095993f }, { 0.224951f, 0.974370f, 0.000000f, 0.105246f }, { 0.450878f, 0.892586f, 0.000000f, 0.128315f }, { 0.650774f, 0.759271f, 0.000000f, 0.138415f }, { 0.813101f, 0.582123f, 0.000000f, 0.138415f }, { 0.928486f, 0.371367f, 0.000000f, 0.128315f }, { 0.990268f, 0.139174f, 0.000000f, 0.105246f }, { 0.994881f, 0.101053f, 0.000000f, 0.095993f } };
+static const ConeF TPL_LeftLittleDistal[] = { { -0.027922f, 0.999610f, 0.000000f, 0.095993f }, { 0.608761f, 0.793354f, 0.000000f, 0.139626f }, { 0.972776f, 0.231747f, 0.000000f, 0.095993f } };
+static const ConeF TPL_RightThumbMetacarpal[] = { { 0.258819f, 0.965926f, 0.000000f, 0.698132f } };
+static const ConeF TPL_RightThumbProximal[] = { { -0.045363f, 0.998971f, 0.000000f, 0.095993f }, { 0.272280f, 0.962218f, 0.000000f, 0.166123f }, { 0.562083f, 0.827081f, 0.000000f, 0.166123f }, { 0.794415f, 0.607375f, 0.000000f, 0.095993f } };
+static const ConeF TPL_RightThumbDistal[] = { { -0.111469f, 0.993768f, 0.000000f, 0.095993f }, { 0.094605f, 0.995515f, 0.000000f, 0.105246f }, { 0.296661f, 0.954983f, 0.000000f, 0.128315f }, { 0.486118f, 0.873893f, 0.000000f, 0.138415f }, { 0.654929f, 0.755690f, 0.000000f, 0.138415f }, { 0.795927f, 0.605393f, 0.000000f, 0.128315f }, { 0.903121f, 0.429386f, 0.000000f, 0.105246f }, { 0.971961f, 0.235142f, 0.000000f, 0.095993f } };
+static const ConeF TPL_RightIndexProximal[] = { { -0.425779f, 0.904827f, 0.000000f, 0.136805f }, { 0.041876f, 0.999123f, 0.000000f, 0.309942f }, { 0.500000f, 0.866025f, 0.000000f, 0.349066f }, { 0.844328f, 0.535827f, 0.000000f, 0.309942f }, { 0.996493f, 0.083676f, 0.000000f, 0.136805f } };
+static const ConeF TPL_RightIndexIntermediate[] = { { -0.013962f, 0.999903f, 0.000000f, 0.095993f }, { 0.224951f, 0.974370f, 0.000000f, 0.105246f }, { 0.450878f, 0.892586f, 0.000000f, 0.128315f }, { 0.650774f, 0.759271f, 0.000000f, 0.138415f }, { 0.813101f, 0.582123f, 0.000000f, 0.138415f }, { 0.928486f, 0.371367f, 0.000000f, 0.128315f }, { 0.990268f, 0.139174f, 0.000000f, 0.105246f }, { 0.994881f, 0.101053f, 0.000000f, 0.095993f } };
+static const ConeF TPL_RightIndexDistal[] = { { -0.027922f, 0.999610f, 0.000000f, 0.095993f }, { 0.608761f, 0.793354f, 0.000000f, 0.139626f }, { 0.972776f, 0.231747f, 0.000000f, 0.095993f } };
+static const ConeF TPL_RightMiddleProximal[] = { { -0.425779f, 0.904827f, 0.000000f, 0.136805f }, { 0.041876f, 0.999123f, 0.000000f, 0.309942f }, { 0.500000f, 0.866025f, 0.000000f, 0.349066f }, { 0.844328f, 0.535827f, 0.000000f, 0.309942f }, { 0.996493f, 0.083676f, 0.000000f, 0.136805f } };
+static const ConeF TPL_RightMiddleIntermediate[] = { { -0.013962f, 0.999903f, 0.000000f, 0.095993f }, { 0.224951f, 0.974370f, 0.000000f, 0.105246f }, { 0.450878f, 0.892586f, 0.000000f, 0.128315f }, { 0.650774f, 0.759271f, 0.000000f, 0.138415f }, { 0.813101f, 0.582123f, 0.000000f, 0.138415f }, { 0.928486f, 0.371367f, 0.000000f, 0.128315f }, { 0.990268f, 0.139174f, 0.000000f, 0.105246f }, { 0.994881f, 0.101053f, 0.000000f, 0.095993f } };
+static const ConeF TPL_RightMiddleDistal[] = { { -0.027922f, 0.999610f, 0.000000f, 0.095993f }, { 0.608761f, 0.793354f, 0.000000f, 0.139626f }, { 0.972776f, 0.231747f, 0.000000f, 0.095993f } };
+static const ConeF TPL_RightRingProximal[] = { { -0.425779f, 0.904827f, 0.000000f, 0.136805f }, { 0.041876f, 0.999123f, 0.000000f, 0.309942f }, { 0.500000f, 0.866025f, 0.000000f, 0.349066f }, { 0.844328f, 0.535827f, 0.000000f, 0.309942f }, { 0.996493f, 0.083676f, 0.000000f, 0.136805f } };
+static const ConeF TPL_RightRingIntermediate[] = { { -0.013962f, 0.999903f, 0.000000f, 0.095993f }, { 0.224951f, 0.974370f, 0.000000f, 0.105246f }, { 0.450878f, 0.892586f, 0.000000f, 0.128315f }, { 0.650774f, 0.759271f, 0.000000f, 0.138415f }, { 0.813101f, 0.582123f, 0.000000f, 0.138415f }, { 0.928486f, 0.371367f, 0.000000f, 0.128315f }, { 0.990268f, 0.139174f, 0.000000f, 0.105246f }, { 0.994881f, 0.101053f, 0.000000f, 0.095993f } };
+static const ConeF TPL_RightRingDistal[] = { { -0.027922f, 0.999610f, 0.000000f, 0.095993f }, { 0.608761f, 0.793354f, 0.000000f, 0.139626f }, { 0.972776f, 0.231747f, 0.000000f, 0.095993f } };
+static const ConeF TPL_RightLittleProximal[] = { { -0.425779f, 0.904827f, 0.000000f, 0.136805f }, { 0.041876f, 0.999123f, 0.000000f, 0.309942f }, { 0.500000f, 0.866025f, 0.000000f, 0.349066f }, { 0.844328f, 0.535827f, 0.000000f, 0.309942f }, { 0.996493f, 0.083676f, 0.000000f, 0.136805f } };
+static const ConeF TPL_RightLittleIntermediate[] = { { -0.013962f, 0.999903f, 0.000000f, 0.095993f }, { 0.224951f, 0.974370f, 0.000000f, 0.105246f }, { 0.450878f, 0.892586f, 0.000000f, 0.128315f }, { 0.650774f, 0.759271f, 0.000000f, 0.138415f }, { 0.813101f, 0.582123f, 0.000000f, 0.138415f }, { 0.928486f, 0.371367f, 0.000000f, 0.128315f }, { 0.990268f, 0.139174f, 0.000000f, 0.105246f }, { 0.994881f, 0.101053f, 0.000000f, 0.095993f } };
+static const ConeF TPL_RightLittleDistal[] = { { -0.027922f, 0.999610f, 0.000000f, 0.095993f }, { 0.608761f, 0.793354f, 0.000000f, 0.139626f }, { 0.972776f, 0.231747f, 0.000000f, 0.095993f } };
 
 static const BoneRom TEMPLATE[] = {
 	{ "LeftUpperLeg", TPL_LeftUpperLeg, 2, 1.396263f, false },
@@ -43,18 +77,52 @@ static const BoneRom TEMPLATE[] = {
 	{ "LeftLowerArm", TPL_LeftLowerArm, 6, 1.570796f, false },
 	{ "RightLowerArm", TPL_RightLowerArm, 6, 1.570796f, false },
 	{ "Spine", TPL_Spine, 1, 3.141593f, false },
-	{ "Neck", TPL_Neck, 1, 2.443461f, true },
-	{ "Head", TPL_Head, 1, 1.570796f, true },
-	{ "Chest", TPL_Chest, 1, 1.047198f, true },
-	{ "UpperChest", TPL_UpperChest, 1, 1.047198f, true },
-	{ "LeftShoulder", TPL_LeftShoulder, 1, 0.523599f, true },
-	{ "RightShoulder", TPL_RightShoulder, 1, 0.523599f, true },
-	{ "LeftHand", TPL_LeftHand, 1, 0.523599f, true },
-	{ "RightHand", TPL_RightHand, 1, 0.523599f, true },
-	{ "LeftToes", TPL_LeftToes, 1, 0.000000f, true },
-	{ "RightToes", TPL_RightToes, 1, 0.000000f, true },
+	{ "Hips", TPL_Hips, 1, 0.785398f, true },
+	{ "Chest", TPL_Chest, 1, 0.523599f, true },
+	{ "UpperChest", TPL_UpperChest, 1, 0.523599f, true },
+	{ "Neck", TPL_Neck, 1, 0.785398f, true },
+	{ "Head", TPL_Head, 7, 0.698132f, true },
+	{ "Jaw", TPL_Jaw, 1, 0.034907f, true },
+	{ "LeftShoulder", TPL_LeftShoulder, 1, 0.174533f, true },
+	{ "RightShoulder", TPL_RightShoulder, 1, 0.174533f, true },
+	{ "LeftHand", TPL_LeftHand, 5, 0.261799f, true },
+	{ "RightHand", TPL_RightHand, 5, 0.261799f, true },
+	{ "LeftToes", TPL_LeftToes, 6, 0.000000f, true },
+	{ "RightToes", TPL_RightToes, 6, 0.000000f, true },
+	{ "LeftEye", TPL_LeftEye, 1, 0.000000f, true },
+	{ "RightEye", TPL_RightEye, 1, 0.000000f, true },
+	{ "LeftThumbMetacarpal", TPL_LeftThumbMetacarpal, 1, 0.209440f, true },
+	{ "LeftThumbProximal", TPL_LeftThumbProximal, 4, 0.104720f, true },
+	{ "LeftThumbDistal", TPL_LeftThumbDistal, 8, 0.000000f, true },
+	{ "LeftIndexProximal", TPL_LeftIndexProximal, 5, 0.104720f, true },
+	{ "LeftIndexIntermediate", TPL_LeftIndexIntermediate, 8, 0.000000f, true },
+	{ "LeftIndexDistal", TPL_LeftIndexDistal, 3, 0.000000f, true },
+	{ "LeftMiddleProximal", TPL_LeftMiddleProximal, 5, 0.104720f, true },
+	{ "LeftMiddleIntermediate", TPL_LeftMiddleIntermediate, 8, 0.000000f, true },
+	{ "LeftMiddleDistal", TPL_LeftMiddleDistal, 3, 0.000000f, true },
+	{ "LeftRingProximal", TPL_LeftRingProximal, 5, 0.104720f, true },
+	{ "LeftRingIntermediate", TPL_LeftRingIntermediate, 8, 0.000000f, true },
+	{ "LeftRingDistal", TPL_LeftRingDistal, 3, 0.000000f, true },
+	{ "LeftLittleProximal", TPL_LeftLittleProximal, 5, 0.104720f, true },
+	{ "LeftLittleIntermediate", TPL_LeftLittleIntermediate, 8, 0.000000f, true },
+	{ "LeftLittleDistal", TPL_LeftLittleDistal, 3, 0.000000f, true },
+	{ "RightThumbMetacarpal", TPL_RightThumbMetacarpal, 1, 0.209440f, true },
+	{ "RightThumbProximal", TPL_RightThumbProximal, 4, 0.104720f, true },
+	{ "RightThumbDistal", TPL_RightThumbDistal, 8, 0.000000f, true },
+	{ "RightIndexProximal", TPL_RightIndexProximal, 5, 0.104720f, true },
+	{ "RightIndexIntermediate", TPL_RightIndexIntermediate, 8, 0.000000f, true },
+	{ "RightIndexDistal", TPL_RightIndexDistal, 3, 0.000000f, true },
+	{ "RightMiddleProximal", TPL_RightMiddleProximal, 5, 0.104720f, true },
+	{ "RightMiddleIntermediate", TPL_RightMiddleIntermediate, 8, 0.000000f, true },
+	{ "RightMiddleDistal", TPL_RightMiddleDistal, 3, 0.000000f, true },
+	{ "RightRingProximal", TPL_RightRingProximal, 5, 0.104720f, true },
+	{ "RightRingIntermediate", TPL_RightRingIntermediate, 8, 0.000000f, true },
+	{ "RightRingDistal", TPL_RightRingDistal, 3, 0.000000f, true },
+	{ "RightLittleProximal", TPL_RightLittleProximal, 5, 0.104720f, true },
+	{ "RightLittleIntermediate", TPL_RightLittleIntermediate, 8, 0.000000f, true },
+	{ "RightLittleDistal", TPL_RightLittleDistal, 3, 0.000000f, true },
 };
-static const int TEMPLATE_COUNT = 21;
+static const int TEMPLATE_COUNT = 55;
 
 // ROM is INTERPOLATED over the ANNY phenotype axes (each 0..1, neutral 0.5):
 //   scale = clamp(1 + sum ANNY_*_COEF*(axis-0.5), SCALE_MIN, SCALE_MAX).
@@ -69,7 +137,7 @@ static const float ANNY_HEIGHT_COEF = 0.0f;
 static const float ANNY_PROPORTIONS_COEF = 0.0f;
 static const float SCALE_MIN = 0.6f;
 static const float SCALE_MAX = 1.15f;
-static const float MIN_CONE_RADIUS = 0.139626f; // 8 deg floor: never zero-ROM
+static const float MIN_CONE_RADIUS = 0.095993f; // 5.5 deg floor (~1.6x SOFT_BAND): tighter hinges, never zero-ROM
 } // namespace HumanoidKusudamaRomData
 
 #endif // HUMANOID_KUSUDAMA_ROM_DATA_H

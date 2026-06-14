@@ -42,6 +42,7 @@ TEST_FORCE_LINK(test_joint_limitation_kusudama_3d)
 #include "scene/main/window.h"
 #include "scene/resources/3d/humanoid_kusudama_rom.h"
 #include "scene/resources/3d/joint_limitation_kusudama_3d.h"
+#include "tests/scene/humanoid_kusudama_rom_gold.h"
 #include "tests/test_macros.h"
 
 namespace TestJointLimitationKusudama3D {
@@ -2161,7 +2162,11 @@ TEST_CASE("[Scene][HumanoidKusudamaRom] Generate full-body ROM (animation-safe, 
 	// Every supported humanoid bone slot yields a valid, NON-zero-ROM Kusudama (so a
 	// transferred animation can never be crushed to the rest pose at any joint).
 	PackedStringArray bones = gen->get_supported_bones();
-	CHECK(bones.size() >= 20); // 11 data joints + clinical gap-fills (neck/head/hands/toes/...)
+	CHECK(bones.size() >= 55); // every SkeletonProfileHumanoid bone (incl. all fingers, eyes, jaw)
+	CHECK(bones.has("LeftIndexProximal")); // fingers are covered
+	CHECK(bones.has("RightLittleDistal"));
+	CHECK(bones.has("Jaw"));
+	CHECK(bones.has("Hips"));
 	Dictionary full = gen->generate_humanoid(pheno);
 	for (int i = 0; i < bones.size(); i++) {
 		Ref<JointLimitationKusudama3D> k = full[bones[i]];
@@ -2423,6 +2428,62 @@ TEST_CASE("[Scene][JointLimitationKusudama3D] Cone center as two basis axes [-1,
 	limitation->set("cones/0/swing_z", 0.1);
 	CHECK(Math::abs((double)limitation->get("cones/0/swing_x") - 0.4) < 0.002);
 	CHECK(Math::abs((double)limitation->get("cones/0/swing_z") - 0.1) < 0.002);
+}
+
+// Per-joint isolation test against the Lean/Plausible-generated IK-target gold table
+// (humanoid_kusudama_rom_gold.h): for every clinical humanoid joint, drive the swing
+// constraint with each gold target direction and check the constrained result matches the
+// expected `solved` direction (target if inside the anatomical ROM, else its boundary).
+//
+// Frame: the gold dirs are in the canonical resource frame (forward +Y, swing_x +X, swing_z
+// +Z). Calling solve(forward=+Y, right=+X, offset=identity, target) makes make_space the
+// identity, so the stored cones are used directly and the result is comparable to gold.
+//
+// Tolerances are deliberately conservative: `solved` is the IDEAL hard projection onto the
+// fan boundary, while the kusudama uses a continuous (soft) projection with a ~3.4 deg
+// SOFT_BAND, so inside dirs may be nudged a little and outside dirs may land a few degrees
+// off the hard boundary. Tighten once validated on a rebuild.
+TEST_CASE("[Scene][HumanoidKusudamaRom] Per-joint IK-target gold table (Lean/Plausible)") {
+	using namespace HumanoidKusudamaRomGold;
+	Ref<HumanoidKusudamaRom> gen;
+	gen.instantiate();
+	Dictionary pheno; // neutral ANNY reference phenotype (unset axes default to 0.5)
+
+	const Vector3 FWD(0, 1, 0), RIGHT(1, 0, 0); // -> make_space == identity (canonical cones)
+	const Quaternion OFF;
+	const real_t TOL_INSIDE = Math::deg_to_rad(6.0);  // soft-band nudge near the boundary
+	const real_t TOL_OUTSIDE = Math::deg_to_rad(15.0); // hard (gold) vs continuous (solve) gap
+
+	String cur_bone;
+	Ref<JointLimitationKusudama3D> k;
+	int checked = 0, inside_cases = 0, outside_cases = 0;
+	real_t worst = 0.0;
+	for (int i = 0; i < ROM_GOLD_COUNT; i++) {
+		const GoldCase &g = ROM_GOLD[i];
+		if (cur_bone != String(g.bone)) {
+			cur_bone = String(g.bone);
+			k = gen->generate_bone(cur_bone, pheno);
+			REQUIRE_MESSAGE(k.is_valid(), vformat("no ROM generated for %s", cur_bone));
+		}
+		const Vector3 target(g.target[0], g.target[1], g.target[2]);
+		const Vector3 gold(g.solved[0], g.solved[1], g.solved[2]);
+		const Vector3 result = k->solve(FWD, RIGHT, OFF, target).normalized();
+
+		const bool inside = target.distance_to(gold) < 1e-4; // solved == target => inside ROM
+		const real_t err = Math::acos(CLAMP((double)result.dot(gold), -1.0, 1.0));
+		const real_t tol = inside ? TOL_INSIDE : TOL_OUTSIDE;
+		inside ? inside_cases++ : outside_cases++;
+		worst = MAX(worst, err);
+		CHECK_MESSAGE(err <= tol,
+				vformat("%s gold case %d: result %.1f deg from expected (tol %.1f deg)",
+						cur_bone, i, Math::rad_to_deg(err), Math::rad_to_deg(tol)));
+		checked++;
+	}
+	CHECK(checked == ROM_GOLD_COUNT);
+	CHECK(inside_cases > 0);
+	CHECK(outside_cases > 0);
+	print_line(vformat("[gold] %d cases (%d inside, %d outside), worst error %.2f deg",
+			checked, inside_cases, outside_cases, Math::rad_to_deg(worst)));
 }
 
 } // namespace TestJointLimitationKusudama3D

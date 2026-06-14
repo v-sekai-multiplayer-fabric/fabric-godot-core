@@ -172,6 +172,13 @@ public:
 				Vector3 from = solver_info->forward_vector;
 				Vector3 to = solver_info->current_grest.xform_inv(solver_info->current_vector).normalized();
 				Quaternion prev = solver_info->current_lpose;
+				// A zero-length child bone (coincident bones, common in humanoid spine
+				// chains) leaves forward_vector at (0,0,0); a null target leaves `to` zero.
+				// Quaternion's shortest-arc ctor rejects zero vectors, so skip the swing for
+				// this joint (it simply isn't rotated) instead of spamming the error.
+				if (from.is_zero_approx() || to.is_zero_approx()) {
+					continue;
+				}
 				if (joint_settings[HEAD]->rotation_axis == ROTATION_AXIS_ALL) {
 					solver_info->current_lpose = solver_info->current_lrest * get_swing(Quaternion(from, to), from);
 				} else {
