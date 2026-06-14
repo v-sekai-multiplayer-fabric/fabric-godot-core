@@ -2697,7 +2697,7 @@ TEST_CASE("[SceneTree][SwingTwistIK3D] Whole-body swing-twist solve reaches the 
 
 // Arbitrary-bone control: a free root lets the pins drag the whole body (reach a target beyond
 // arm length), and a disabled bone is left at FK.
-TEST_CASE("[SceneTree][SwingTwistIK3D] free root drags the body; disabled bone stays FK") {
+TEST_CASE("[SceneTree][SwingTwistIK3D] pinned root translates to its target; stiffness=1 freezes a bone") {
 	SceneTree *tree = SceneTree::get_singleton();
 	Skeleton3D *sk = memnew(Skeleton3D);
 	tree->get_root()->add_child(sk);
@@ -2719,28 +2719,28 @@ TEST_CASE("[SceneTree][SwingTwistIK3D] free root drags the body; disabled bone s
 	Marker3D *target = memnew(Marker3D);
 	ik->add_child(target);
 	target->set_name("Target");
-	target->set_position(Vector3(2.0, 0.0, 0.0)); // beyond the 0.9 reach
 	sk->notification(Skeleton3D::NOTIFICATION_UPDATE_SKELETON);
 	ik->set_setting_count(1);
-	ik->set_root_bone_name(0, "Root");
-	ik->set_end_bone_name(0, "Tip");
-	ik->set_target_node(0, NodePath("Target"));
 	ik->set_max_iterations(40);
 
-	// Pinned root (default): the tip cannot reach a target beyond arm length.
-	ik->solve();
-	CHECK((sk->get_bone_global_pose(tip).origin - Vector3(2, 0, 0)).length() > 0.5);
-
-	// Free root: the root translates so the pinned tip drags the body to the target.
-	ik->set_free_root(true);
+	// Pinned root: a chain whose END bone is the PARENTLESS root, given a target, translates the
+	// root to that target -- rotating ancestors can't aim a parentless bone, so it is the auto
+	// motion root (no free_root flag, no separate pin API: a target on the root IS the pin).
+	target->set_position(Vector3(1.0, 0.5, -0.4));
+	ik->set_root_bone_name(0, "Root");
+	ik->set_end_bone_name(0, "Root");
+	ik->set_target_node(0, NodePath("Target"));
 	tjk_reset(sk);
 	ik->solve();
-	CHECK((sk->get_bone_global_pose(tip).origin - Vector3(2, 0, 0)).length() < 0.05);
+	CHECK((sk->get_bone_global_pose(root).origin - Vector3(1.0, 0.5, -0.4)).length() < 0.05);
 
-	// Locked bone stays at FK (identity) while the rest still solves.
-	ik->set_free_root(false);
-	ik->set_bone_locked("B1", true);
-	CHECK(ik->is_bone_locked("B1"));
+	// stiffness = 1 freezes a bone at FK (identity) while the rest of the chain still solves
+	// (the replacement for a separate locked-bones list).
+	ik->set_end_bone_name(0, "Tip");
+	ik->set_target_node(0, NodePath("Target"));
+	ik->resolve_chains();
+	ik->set_joint_stiffness(0, 1, 1.0); // freeze B1 (joint index 1 in Root->B1->B2->Tip)
+	CHECK(ik->get_joint_stiffness(0, 1) > 0.99);
 	target->set_position(Vector3(0.5, 0.5, 0.0));
 	tjk_reset(sk);
 	ik->solve();
@@ -2780,10 +2780,11 @@ TEST_CASE("[SceneTree][SwingTwistIK3D] adversarial robustness / determinism / in
 	CHECK(tjk_finite(sk));
 	memdelete(sk);
 
-	// 4. All bones locked -> no-op, poses stay at FK identity.
+	// 4. All joints frozen (stiffness 1) -> no-op, poses stay at FK identity.
 	tjk_build_chain(tree, 4, 0.3, (real_t)0.0, 20, Math::PI, sk, ik, tgt);
-	for (int i = 0; i < 4; i++) {
-		ik->set_bone_locked(vformat("B%d", i), true);
+	ik->resolve_chains();
+	for (int j = 0; j < ik->get_joint_count(0); j++) {
+		ik->set_joint_stiffness(0, j, 1.0);
 	}
 	tgt->set_position(Vector3(10, 10, 10));
 	ik->solve();
@@ -2848,9 +2849,9 @@ TEST_CASE("[SceneTree][SwingTwistIK3D] adversarial robustness / determinism / in
 	CHECK(tjk_finite(sk));
 	memdelete(sk);
 
-	// 8. Pin a nonexistent bone -> ignored, no crash.
+	// 8. A target node that does not resolve -> the effector is skipped, no crash.
 	tjk_build_chain(tree, 4, 0.3, (real_t)0.0, 20, Math::PI, sk, ik, tgt);
-	ik->set_pin("DoesNotExist", NodePath("Target"));
+	ik->set_target_node(0, NodePath("DoesNotExist"));
 	tgt->set_position(Vector3(0.5, 0.3, 0));
 	ik->solve();
 	CHECK(tjk_finite(sk));
@@ -2926,11 +2927,10 @@ TEST_CASE("[SceneTree][SwingTwistIK3D] deeper adversarial - reflection / twist c
 	}
 	memdelete(sk);
 
-	// 3. Free root, unreachable pin: an unpinned root translating toward a far target must stay
-	// bounded (no runaway) over many iterations.
+	// 3. Pinned root, far target: a parentless root effector translates toward a wildly unreachable
+	// target -- it must stay bounded (no runaway), never farther than the target it is set to.
 	tjk_build_chain(tree, 4, 0.3, (real_t)0.0, 20, (real_t)-1.0, sk, ik, tgt);
-	ik->set_free_root(true);
-	ik->set_motion_root_bone("B0");
+	ik->set_end_bone_name(0, "B0"); // the parentless root is the effector -> auto motion root
 	ik->set_max_iterations(64);
 	tgt->set_position(Vector3(1000.0, -500.0, 250.0)); // wildly unreachable
 	ik->solve();
@@ -2980,12 +2980,12 @@ TEST_CASE("[SceneTree][SwingTwistIK3D] deeper adversarial - reflection / twist c
 		memdelete(sk);
 	}
 
-	// 5. Pin whose ancestors are ALL locked -> nothing can move it; must stay finite & unchanged.
+	// 5. Every joint frozen (stiffness 1) -> nothing can move; must stay finite & unchanged.
 	tjk_build_chain(tree, 4, 0.3, (real_t)0.0, 20, (real_t)-1.0, sk, ik, tgt);
-	ik->set_bone_locked("B0", true);
-	ik->set_bone_locked("B1", true);
-	ik->set_bone_locked("B2", true);
-	ik->set_bone_locked("B3", true);
+	ik->resolve_chains();
+	for (int j = 0; j < ik->get_joint_count(0); j++) {
+		ik->set_joint_stiffness(0, j, 1.0);
+	}
 	tgt->set_position(Vector3(5, 5, 5));
 	ik->solve();
 	CHECK(tjk_finite(sk));

@@ -4,17 +4,11 @@
 		Whole-body swing-twist inverse kinematics solver with per-joint controls.
 	</brief_description>
 	<description>
-		A concrete [IterateIK3D] solver that poses a whole [Skeleton3D] to reach its targets. It runs over all chains at once: each bone is rotated by a multi-limb best fit toward its downstream targets (swing), then twisted about the resulting axis. Per-joint [Vector3] priorities weight position, swing, and twist; [member free_root] lets the pins drag the body; and the per-joint [code]stiffness[/code], [code]engage[/code], [code]isolation[/code] and [code]relax[/code] controls shape how the chain settles. A pole is set up as a low-position, zero-orientation weight on a mid joint, so it needs no dedicated control.
+		A concrete [IterateIK3D] solver that poses a whole [Skeleton3D] to reach its targets. It runs over all chains at once: each bone is rotated by a multi-limb best fit toward its downstream targets (swing), then twisted about the resulting axis. Everything maps onto the controls [IterateIK3D] already provides: a bone with a target (a chain's [code]target_node[/code]) is a pin, and a parentless pinned root translates to its target (the motion root, no flag needed). Per-joint [Vector3] priorities weight position, swing, and twist; the per-joint [code]stiffness[/code] ([code]1[/code] freezes the bone at its forward-kinematics pose), [code]engage[/code], [code]isolation[/code] and [code]relax[/code] controls shape how the chain settles. A pole is set up as a low-position, zero-orientation weight on a mid joint, so it needs no dedicated control.
 	</description>
 	<tutorials>
 	</tutorials>
 	<methods>
-		<method name="clear_pins">
-			<return type="void" />
-			<description>
-				Removes every pin.
-			</description>
-		</method>
 		<method name="get_joint_engage" qualifiers="const">
 			<return type="float" />
 			<param index="0" name="setting" type="int" />
@@ -28,7 +22,7 @@
 			<param index="0" name="setting" type="int" />
 			<param index="1" name="joint" type="int" />
 			<description>
-				Returns the joint's isolation (0 to 1): how strongly its pin blocks descendant pins from pulling on bones above it. 0 lets the pull through.
+				Returns the joint's isolation (0 to 1): how strongly its target blocks descendant targets from pulling on bones above it. 0 lets the pull through.
 			</description>
 		</method>
 		<method name="get_joint_priorities" qualifiers="const">
@@ -55,41 +49,6 @@
 				Returns the joint's stiffness (0 to 1): how much it resists rotating. 0 is free, 1 is rigid.
 			</description>
 		</method>
-		<method name="get_pin_count" qualifiers="const">
-			<return type="int" />
-			<description>
-				Returns the number of pins.
-			</description>
-		</method>
-		<method name="has_pin" qualifiers="const">
-			<return type="bool" />
-			<param index="0" name="bone" type="StringName" />
-			<description>
-				Returns [code]true[/code] if [param bone] has a pin.
-			</description>
-		</method>
-		<method name="is_bone_locked" qualifiers="const">
-			<return type="bool" />
-			<param index="0" name="bone" type="StringName" />
-			<description>
-				Returns [code]true[/code] if [param bone] is locked to its forward-kinematics pose.
-			</description>
-		</method>
-		<method name="remove_pin">
-			<return type="void" />
-			<param index="0" name="bone" type="StringName" />
-			<description>
-				Removes the pin on [param bone].
-			</description>
-		</method>
-		<method name="set_bone_locked">
-			<return type="void" />
-			<param index="0" name="bone" type="StringName" />
-			<param index="1" name="locked" type="bool" />
-			<description>
-				Locks or unlocks [param bone]. A locked bone keeps its forward-kinematics pose and the solver routes around it.
-			</description>
-		</method>
 		<method name="set_joint_engage">
 			<return type="void" />
 			<param index="0" name="setting" type="int" />
@@ -105,7 +64,7 @@
 			<param index="1" name="joint" type="int" />
 			<param index="2" name="isolation" type="float" />
 			<description>
-				Sets the joint's isolation (0 to 1): how strongly its pin blocks descendant pins from pulling on bones above it. 0 lets the pull through.
+				Sets the joint's isolation (0 to 1): how strongly its target blocks descendant targets from pulling on bones above it. 0 lets the pull through.
 			</description>
 		</method>
 		<method name="set_joint_priorities">
@@ -137,14 +96,6 @@
 				Sets the joint's stiffness (0 to 1): how much it resists rotating. 0 is free, 1 is rigid.
 			</description>
 		</method>
-		<method name="set_pin">
-			<return type="void" />
-			<param index="0" name="bone" type="StringName" />
-			<param index="1" name="target" type="NodePath" />
-			<description>
-				Pins [param bone] to [param target]'s transform; the solver drags the bone to it. One pin per bone.
-			</description>
-		</method>
 		<method name="solve">
 			<return type="void" />
 			<description>
@@ -152,14 +103,4 @@
 			</description>
 		</method>
 	</methods>
-	<members>
-		<member name="free_root" type="bool" setter="set_free_root" getter="get_free_root" default="false">
-		</member>
-		<member name="locked_bones" type="PackedStringArray" setter="set_locked_bones" getter="get_locked_bones" default="PackedStringArray()">
-		</member>
-		<member name="motion_root_bone" type="StringName" setter="set_motion_root_bone" getter="get_motion_root_bone" default="&amp;&quot;&quot;">
-		</member>
-		<member name="pins" type="Dictionary" setter="set_pins" getter="get_pins" default="{}">
-		</member>
-	</members>
 </class>
