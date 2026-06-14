@@ -50,6 +50,25 @@ TEST_FORCE_LINK(test_joint_limitation_kusudama_3d)
 
 namespace TestJointLimitationKusudama3D {
 
+// Shared test helpers (file-static, not lambdas).
+static bool tjk_finite(Skeleton3D *s) {
+	for (int b = 0; b < s->get_bone_count(); b++) {
+		const Transform3D t = s->get_bone_pose(b);
+		if (!t.origin.is_finite() || !t.basis.get_column(0).is_finite() || !t.basis.get_column(1).is_finite() || !t.basis.get_column(2).is_finite()) {
+			return false;
+		}
+	}
+	return true;
+}
+static bool tjk_proper(Skeleton3D *s) {
+	for (int b = 0; b < s->get_bone_count(); b++) {
+		if (Math::abs(s->get_bone_pose(b).basis.determinant() - 1.0) > 1e-3) {
+			return false;
+		}
+	}
+	return true;
+}
+
 // Helper function to set cones from Vector<Vector4> using the individual cone API
 static void set_cones_from_vector4(Ref<JointLimitationKusudama3D> limitation, const Vector<Vector4> &cones) {
 	limitation->set_cone_count(cones.size());
@@ -2723,35 +2742,26 @@ TEST_CASE("[SceneTree][SwingTwistIK3D] adversarial robustness / determinism / in
 		ik->set_max_iterations(20);
 		ik->set_angular_delta_limit(Math::PI); // robustness/clamp/stability scenarios use full steps
 	};
-	auto finite = [](Skeleton3D *s) -> bool {
-		for (int b = 0; b < s->get_bone_count(); b++) {
-			const Transform3D t = s->get_bone_pose(b);
-			if (!t.origin.is_finite() || !t.basis.get_column(0).is_finite() || !t.basis.get_column(1).is_finite() || !t.basis.get_column(2).is_finite()) {
-				return false;
-			}
-		}
-		return true;
-	};
 
 	// 1. NaN target must not propagate into the skeleton.
 	build(4, 0.3);
 	tgt->set_position(Vector3(NAN, NAN, NAN));
 	ik->solve();
-	CHECK(finite(sk));
+	CHECK(tjk_finite(sk));
 	memdelete(sk);
 
 	// 2. Target exactly at the chain root (zero direction).
 	build(4, 0.3);
 	tgt->set_position(Vector3(0, 0, 0));
 	ik->solve();
-	CHECK(finite(sk));
+	CHECK(tjk_finite(sk));
 	memdelete(sk);
 
 	// 3. Degenerate zero-length bones.
 	build(4, 0.0);
 	tgt->set_position(Vector3(0.5, 0.5, 0));
 	ik->solve();
-	CHECK(finite(sk));
+	CHECK(tjk_finite(sk));
 	memdelete(sk);
 
 	// 4. All bones locked -> no-op, poses stay at FK identity.
@@ -2761,7 +2771,7 @@ TEST_CASE("[SceneTree][SwingTwistIK3D] adversarial robustness / determinism / in
 	}
 	tgt->set_position(Vector3(10, 10, 10));
 	ik->solve();
-	CHECK(finite(sk));
+	CHECK(tjk_finite(sk));
 	for (int b = 0; b < 4; b++) {
 		CHECK(sk->get_bone_pose(b).basis.get_rotation_quaternion().is_equal_approx(Quaternion()));
 	}
@@ -2819,7 +2829,7 @@ TEST_CASE("[SceneTree][SwingTwistIK3D] adversarial robustness / determinism / in
 			sk->get_bone_pose(1).basis.get_rotation_quaternion();
 	const real_t sw = Math::acos(CLAMP((double)d.xform(Vector3(1, 0, 0)).dot(Vector3(1, 0, 0)), -1.0, 1.0));
 	CHECK(sw <= Math::deg_to_rad(12.0)); // cone 8 + soft-band slack
-	CHECK(finite(sk));
+	CHECK(tjk_finite(sk));
 	memdelete(sk);
 
 	// 8. Pin a nonexistent bone -> ignored, no crash.
@@ -2827,7 +2837,7 @@ TEST_CASE("[SceneTree][SwingTwistIK3D] adversarial robustness / determinism / in
 	ik->set_pin("DoesNotExist", NodePath("Target"));
 	tgt->set_position(Vector3(0.5, 0.3, 0));
 	ik->solve();
-	CHECK(finite(sk));
+	CHECK(tjk_finite(sk));
 	memdelete(sk);
 
 	// 9. Iteration extremes (0 clamps to 1).
@@ -2835,7 +2845,7 @@ TEST_CASE("[SceneTree][SwingTwistIK3D] adversarial robustness / determinism / in
 	ik->set_max_iterations(0);
 	tgt->set_position(Vector3(0.5, 0.5, 0));
 	ik->solve();
-	CHECK(finite(sk));
+	CHECK(tjk_finite(sk));
 	memdelete(sk);
 }
 
@@ -2846,25 +2856,6 @@ TEST_CASE("[SceneTree][SwingTwistIK3D] adversarial robustness / determinism / in
 TEST_CASE("[SceneTree][SwingTwistIK3D] deeper adversarial - reflection / twist clamp / free root / branching") {
 	SceneTree *tree = SceneTree::get_singleton();
 
-	auto finite = [](Skeleton3D *s) -> bool {
-		for (int b = 0; b < s->get_bone_count(); b++) {
-			const Transform3D t = s->get_bone_pose(b);
-			if (!t.origin.is_finite() || !t.basis.get_column(0).is_finite() || !t.basis.get_column(1).is_finite() || !t.basis.get_column(2).is_finite()) {
-				return false;
-			}
-		}
-		return true;
-	};
-	// A pose basis is a proper rotation (det ~ +1, orthonormal) -- never a reflection.
-	auto proper = [](Skeleton3D *s) -> bool {
-		for (int b = 0; b < s->get_bone_count(); b++) {
-			const Basis bs = s->get_bone_pose(b).basis;
-			if (Math::abs(bs.determinant() - 1.0) > 1e-3) {
-				return false;
-			}
-		}
-		return true;
-	};
 
 	auto chain = [&](int n, real_t seg, Skeleton3D *&sk, SwingTwistIK3D *&ik, Marker3D *&tgt) {
 		sk = memnew(Skeleton3D);
@@ -2903,8 +2894,8 @@ TEST_CASE("[SceneTree][SwingTwistIK3D] deeper adversarial - reflection / twist c
 		tgt->set_transform(t);
 	}
 	ik->solve();
-	CHECK(finite(sk));
-	CHECK(proper(sk));
+	CHECK(tjk_finite(sk));
+	CHECK(tjk_proper(sk));
 	memdelete(sk);
 
 	// 2. Hostile twist: drive the tip frame twisted hard about its forward axis; the limited
@@ -2933,7 +2924,7 @@ TEST_CASE("[SceneTree][SwingTwistIK3D] deeper adversarial - reflection / twist c
 		t.basis = Basis(Vector3(1, 0, 0), Math::deg_to_rad(80.0));
 		tgt->set_transform(t);
 		ik->solve();
-		CHECK(finite(sk));
+		CHECK(tjk_finite(sk));
 		// Decompose bone 1's local delta twist about its forward (child rest dir = +X here,
 		// since B2 sits at +X of B1 in rest).
 		const Vector3 fwd = sk->get_bone_rest(2).origin.normalized();
@@ -2952,7 +2943,7 @@ TEST_CASE("[SceneTree][SwingTwistIK3D] deeper adversarial - reflection / twist c
 	ik->set_max_iterations(64);
 	tgt->set_position(Vector3(1000.0, -500.0, 250.0)); // wildly unreachable
 	ik->solve();
-	CHECK(finite(sk));
+	CHECK(tjk_finite(sk));
 	// The root cannot move farther than the target it chases.
 	CHECK(sk->get_bone_pose(0).origin.length() <= 2000.0);
 	memdelete(sk);
@@ -2993,8 +2984,8 @@ TEST_CASE("[SceneTree][SwingTwistIK3D] deeper adversarial - reflection / twist c
 		ik->set_target_node(1, NodePath("T3"));
 		ik->set_max_iterations(20);
 		ik->solve();
-		CHECK(finite(sk));
-		CHECK(proper(sk));
+		CHECK(tjk_finite(sk));
+		CHECK(tjk_proper(sk));
 		memdelete(sk);
 	}
 
@@ -3006,7 +2997,7 @@ TEST_CASE("[SceneTree][SwingTwistIK3D] deeper adversarial - reflection / twist c
 	ik->set_bone_locked("B3", true);
 	tgt->set_position(Vector3(5, 5, 5));
 	ik->solve();
-	CHECK(finite(sk));
+	CHECK(tjk_finite(sk));
 	for (int b = 0; b < 4; b++) {
 		CHECK(sk->get_bone_pose(b).basis.get_rotation_quaternion().is_equal_approx(Quaternion()));
 	}
@@ -3110,15 +3101,6 @@ TEST_CASE("[SceneTree][SwingTwistIK3D] relax (returnfulness) - adversarial invar
 		ik->set_max_iterations(40);
 		ik->set_angular_delta_limit(Math::PI); // about reach/rest, not the jerk cap
 	};
-	auto finite = [](Skeleton3D *s) -> bool {
-		for (int b = 0; b < s->get_bone_count(); b++) {
-			const Quaternion q = s->get_bone_pose(b).basis.get_rotation_quaternion();
-			if (!Math::is_finite(q.x) || !Math::is_finite(q.y) || !Math::is_finite(q.z) || !Math::is_finite(q.w)) {
-				return false;
-			}
-		}
-		return true;
-	};
 
 	// 1. relax = 0 is a no-op: identical pose to never setting relax.
 	build(5, 0.3);
@@ -3167,7 +3149,7 @@ TEST_CASE("[SceneTree][SwingTwistIK3D] relax (returnfulness) - adversarial invar
 	const real_t energy_relax = rest_energy();
 	CHECK_MESSAGE(energy_relax <= energy_norelax + 1e-4,
 			vformat("relax must not raise total rest-deviation (%.3f vs %.3f)", (double)energy_relax, (double)energy_norelax));
-	CHECK(finite(sk));
+	CHECK(tjk_finite(sk));
 	memdelete(sk);
 
 	// 3. relax = 1 on every joint -> the chain abandons reach and sits at its REST pose.
@@ -3184,7 +3166,7 @@ TEST_CASE("[SceneTree][SwingTwistIK3D] relax (returnfulness) - adversarial invar
 		at_rest = at_rest && sk->get_bone_pose(b).basis.get_rotation_quaternion().angle_to(rq) < Math::deg_to_rad(2.0);
 	}
 	CHECK_MESSAGE(at_rest, "relax=1 must settle the bones at their rest pose");
-	CHECK(finite(sk));
+	CHECK(tjk_finite(sk));
 	memdelete(sk);
 
 	// 4. Determinism with relax active.
@@ -3220,7 +3202,7 @@ TEST_CASE("[SceneTree][SwingTwistIK3D] relax (returnfulness) - adversarial invar
 	const Vector3 tip = sk->get_bone_global_pose(sk->find_bone("B5")).origin;
 	CHECK_MESSAGE((tip - goal).length() < 0.12,
 			vformat("moderate relax should still essentially reach (residual %.3f)", (double)(tip - goal).length()));
-	CHECK(finite(sk));
+	CHECK(tjk_finite(sk));
 	memdelete(sk);
 }
 

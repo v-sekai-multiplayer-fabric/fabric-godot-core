@@ -111,6 +111,10 @@ void SwingTwistIK3D::set_motion_root_bone(const StringName &p_name) {
 	root_bone_name = p_name;
 }
 
+void SwingTwistIK3D::set_steadiness(real_t p_steadiness) {
+	steadiness = CLAMP(p_steadiness, (real_t)0.0, (real_t)1.0);
+}
+
 void SwingTwistIK3D::set_pins(const Dictionary &p_pins) {
 	pins.clear();
 	const Array keys = p_pins.keys();
@@ -543,7 +547,9 @@ void SwingTwistIK3D::solve() {
 	LocalVector<int> refresh_stack; // reused scratch for _refresh_subtree
 	_full_fk(sk, gp); // one consistent baseline; the invariant is then maintained incrementally
 
-	const int iters = MAX(1, get_max_iterations());
+	// Steadiness adds settling passes past the reach early-out (up to 12 at full steadiness).
+	const int settle_passes = (int)Math::round(steadiness * 12.0);
+	const int iters = MAX(1, get_max_iterations()) + settle_passes;
 	for (int it = 0; it < iters; it++) {
 		if (motion_root >= 0) {
 			// Translate the root by the mean residual (target - current tip) over all pins.
@@ -679,12 +685,15 @@ void SwingTwistIK3D::solve() {
 			_refresh_subtree(sk, gp, refresh_stack, child_offset, child_index, b); // refresh b's subtree, keep gp consistent
 		}
 		// Early-out (min_distance): stop once every effector is within min_distance of its target.
-		double worst_sq = 0.0;
-		for (const Effector &e : effectors) {
-			worst_sq = MAX(worst_sq, (double)(e.target.origin - gp[e.tip_bone].origin).length_squared());
-		}
-		if (worst_sq <= min_d_sq) {
-			break;
+		// Skipped when steadiness asks for settling passes, so the secondary objectives finish.
+		if (settle_passes == 0) {
+			double worst_sq = 0.0;
+			for (const Effector &e : effectors) {
+				worst_sq = MAX(worst_sq, (double)(e.target.origin - gp[e.tip_bone].origin).length_squared());
+			}
+			if (worst_sq <= min_d_sq) {
+				break;
+			}
 		}
 	}
 	// Influence: blend each rotated bone from its pre-solve pose toward the solved pose. 1.0 (the
@@ -734,6 +743,8 @@ void SwingTwistIK3D::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("get_free_root"), &SwingTwistIK3D::get_free_root);
 	ClassDB::bind_method(D_METHOD("set_motion_root_bone", "name"), &SwingTwistIK3D::set_motion_root_bone);
 	ClassDB::bind_method(D_METHOD("get_motion_root_bone"), &SwingTwistIK3D::get_motion_root_bone);
+	ClassDB::bind_method(D_METHOD("set_steadiness", "steadiness"), &SwingTwistIK3D::set_steadiness);
+	ClassDB::bind_method(D_METHOD("get_steadiness"), &SwingTwistIK3D::get_steadiness);
 	ClassDB::bind_method(D_METHOD("set_pins", "pins"), &SwingTwistIK3D::set_pins);
 	ClassDB::bind_method(D_METHOD("get_pins"), &SwingTwistIK3D::get_pins);
 	ClassDB::bind_method(D_METHOD("set_locked_bones", "locked_bones"), &SwingTwistIK3D::set_locked_bones);
@@ -754,6 +765,7 @@ void SwingTwistIK3D::_bind_methods() {
 	// (settings/i/joints/j/pin_weight) via _set/_get/_get_property_list, like the limitation.
 	ADD_PROPERTY(PropertyInfo(Variant::BOOL, "free_root"), "set_free_root", "get_free_root");
 	ADD_PROPERTY(PropertyInfo(Variant::STRING_NAME, "motion_root_bone", PROPERTY_HINT_ENUM_SUGGESTION, ""), "set_motion_root_bone", "get_motion_root_bone");
+	ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "steadiness", PROPERTY_HINT_RANGE, "0,1,0.01"), "set_steadiness", "get_steadiness");
 	ADD_PROPERTY(PropertyInfo(Variant::DICTIONARY, "pins"), "set_pins", "get_pins");
 	ADD_PROPERTY(PropertyInfo(Variant::PACKED_STRING_ARRAY, "locked_bones"), "set_locked_bones", "get_locked_bones");
 }

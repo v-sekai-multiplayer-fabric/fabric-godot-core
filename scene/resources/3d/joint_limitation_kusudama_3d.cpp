@@ -56,6 +56,8 @@ void JointLimitationKusudama3D::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("get_twist_to"), &JointLimitationKusudama3D::get_twist_to);
 	ClassDB::bind_method(D_METHOD("set_cushion", "radians"), &JointLimitationKusudama3D::set_cushion);
 	ClassDB::bind_method(D_METHOD("get_cushion"), &JointLimitationKusudama3D::get_cushion);
+	ClassDB::bind_method(D_METHOD("set_strength", "strength"), &JointLimitationKusudama3D::set_strength);
+	ClassDB::bind_method(D_METHOD("get_strength"), &JointLimitationKusudama3D::get_strength);
 	ClassDB::bind_method(D_METHOD("has_twist_limit"), &JointLimitationKusudama3D::has_twist_limit);
 	ClassDB::bind_method(D_METHOD("clamp_twist_angle", "angle"), &JointLimitationKusudama3D::clamp_twist_angle);
 	ClassDB::bind_method(D_METHOD("limit_twist", "rotation", "axis"), &JointLimitationKusudama3D::limit_twist);
@@ -69,6 +71,7 @@ void JointLimitationKusudama3D::_bind_methods() {
 	ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "twist_from", PROPERTY_HINT_RANGE, "-360,360,0.1,radians_as_degrees"), "set_twist_from", "get_twist_from");
 	ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "twist_to", PROPERTY_HINT_RANGE, "-360,360,0.1,radians_as_degrees"), "set_twist_to", "get_twist_to");
 	ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "cushion", PROPERTY_HINT_RANGE, "0.5,30,0.1,radians_as_degrees"), "set_cushion", "get_cushion");
+	ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "strength", PROPERTY_HINT_RANGE, "0,1,0.01"), "set_strength", "get_strength");
 }
 
 void JointLimitationKusudama3D::set_cones(const Vector<Vector4> &p_cones) {
@@ -203,6 +206,12 @@ void JointLimitationKusudama3D::set_cushion(real_t p_radians) {
 real_t JointLimitationKusudama3D::get_cushion() const {
 	return cushion;
 }
+void JointLimitationKusudama3D::set_strength(real_t p_strength) {
+	strength = CLAMP(p_strength, (real_t)0.0, (real_t)1.0);
+}
+real_t JointLimitationKusudama3D::get_strength() const {
+	return strength;
+}
 bool JointLimitationKusudama3D::has_twist_limit() const {
 	// The twist range IS the constraint: twist_to > twist_from is a window; twist_to ==
 	// twist_from is LOCKED (a zero-width limit, e.g. a hinge knee/finger that must not spin);
@@ -214,7 +223,15 @@ real_t JointLimitationKusudama3D::clamp_twist_angle(real_t p_angle) const {
 	if (!has_twist_limit()) {
 		return p_angle;
 	}
-	return CLAMP(p_angle, twist_from, twist_to);
+	const real_t clamped = CLAMP(p_angle, twist_from, twist_to);
+	// Strength softens the twist limit the same way it softens the swing cones.
+	if (strength >= (real_t)1.0) {
+		return clamped;
+	}
+	if (strength <= (real_t)0.0) {
+		return p_angle;
+	}
+	return Math::lerp(p_angle, clamped, strength);
 }
 
 Quaternion JointLimitationKusudama3D::limit_twist(const Quaternion &p_rotation, const Vector3 &p_axis) const {
@@ -657,36 +674,45 @@ Vector3 JointLimitationKusudama3D::_continuous_project(const Vector3 &p_point) c
 }
 
 Vector3 JointLimitationKusudama3D::_solve(const Vector3 &p_direction) const {
-	Vector3 p = p_direction.normalized();
-	uint32_t n = cones.size();
+	const Vector3 p = p_direction.normalized();
+	const uint32_t n = cones.size();
 	if (n == 0) {
 		return p;
 	}
 
+	Vector3 result;
 	if (n == 1) {
 		// Single cone: identity inside, hard projection to the boundary outside.
-		Vector3 c = _get_cone_center_normalized(0);
-		real_t r = cones[0].w;
+		const Vector3 c = _get_cone_center_normalized(0);
+		const real_t r = cones[0].w;
 		if (is_point_in_cone(p, c, r)) {
-			return p;
+			result = p;
+		} else {
+			Vector3 ortho = (p - p.project(c)).normalized();
+			if (!ortho.is_finite()) {
+				ortho = (Math::abs(c.z) < 0.9f) ? c.cross(Vector3(0, 0, 1)).normalized() : c.cross(Vector3(1, 0, 0)).normalized();
+			}
+			result = c * Math::cos(r) + ortho * Math::sin(r);
 		}
-		Vector3 ortho = (p - p.project(c)).normalized();
-		if (!ortho.is_finite()) {
-			ortho = (Math::abs(c.z) < 0.9f) ? c.cross(Vector3(0, 0, 1)).normalized() : c.cross(Vector3(1, 0, 0)).normalized();
-		}
-		return c * Math::cos(r) + ortho * Math::sin(r);
+	} else {
+		_rebuild_polygon_cache();
+		// Everything (inside a cone, inside a tangent path, or out of bounds) goes through the one
+		// soft-saturated projection. The per-cone keep-in and per-tangent-circle keep-out
+		// saturations return the input to float precision deep inside an allowed region, and bend
+		// smoothly toward the limit near a boundary. solve() is C1 across every seam (no
+		// boundary-crossing jerk) while never crossing the hard limit. Stateless: a pure function.
+		result = _continuous_project(p);
 	}
 
-	_rebuild_polygon_cache();
-
-	// Everything (inside a cone, inside a tangent path, or out of bounds) goes
-	// through the one soft-saturated projection. There is no hard "inside ->
-	// identity" fast path for n >= 2: the per-cone keep-in and per-tangent-circle
-	// keep-out saturations already return the input to float precision deep inside
-	// an allowed region, and bend smoothly toward the limit near a boundary. That
-	// makes solve() C1 across every seam (no boundary-crossing jerk) while never
-	// crossing the hard limit. Stateless -> a pure function of the input.
-	return _continuous_project(p);
+	// Strength: blend the input toward the constrained result. 1 fully enforces the limit; 0
+	// passes the direction through; in between softens it. slerp keeps the output on the sphere.
+	if (strength >= (real_t)1.0) {
+		return result;
+	}
+	if (strength <= (real_t)0.0) {
+		return p;
+	}
+	return p.slerp(result, strength).normalized();
 }
 
 // Helper functions for kusudama solving
