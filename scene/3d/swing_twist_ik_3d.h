@@ -74,8 +74,9 @@ class SwingTwistIK3D : public IterateIK3D {
 protected:
 	static void _bind_methods();
 	void _validate_property(PropertyInfo &p_property) const;
-	// Store per-joint pin weights the IterateIK3D way (settings/i/joints/j/pin_weight).
-	void _get_property_list(List<PropertyInfo> *p_list) const;
+	// Per-joint params stored/emitted the IterateIK3D way (settings/i/joints/j/...), interleaved
+	// into the base joint loop via the _get_joint_extra_properties hook (no duplicate settings).
+	virtual void _get_joint_extra_properties(int p_setting, int p_joint, const String &p_path, LocalVector<PropertyInfo> &p_props) const override;
 	bool _set(const StringName &p_name, const Variant &p_value);
 	bool _get(const StringName &p_name, Variant &r_ret) const;
 	virtual void _process_modification(double p_delta) override;
@@ -98,8 +99,8 @@ public:
 	// via the inspector's built-in EditorUndoRedoManager (no custom gizmo needed).
 	void set_pins(const Dictionary &p_pins);
 	Dictionary get_pins() const;
-	void set_locked_bones(const PackedStringArray &p_locked);
-	PackedStringArray get_locked_bones() const;
+	void set_locked_bones(const Array &p_locked);
+	Array get_locked_bones() const;
 
 	// Per-JOINT weights (also the mechanism for poles, soft IK, position-only goals). x = position
 	// weight (pull to the target point); y = orientation weight (match the target basis, the

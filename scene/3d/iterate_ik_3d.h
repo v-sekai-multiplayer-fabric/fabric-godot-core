@@ -268,6 +268,10 @@ protected:
 	bool _set(const StringName &p_path, const Variant &p_value);
 	void _get_property_list(List<PropertyInfo> *p_list) const;
 	void _validate_dynamic_prop(PropertyInfo &p_property) const;
+	// Hook for subclasses to add their own per-joint inspector properties, emitted INSIDE the
+	// base joint loop so they interleave with the joint (no duplicate "settings" block). p_path is
+	// "settings/<i>/joints/<j>/". Default adds nothing.
+	virtual void _get_joint_extra_properties(int p_setting, int p_joint, const String &p_path, LocalVector<PropertyInfo> &p_props) const {}
 
 	static void _bind_methods();
 

@@ -127,15 +127,15 @@ Dictionary SwingTwistIK3D::get_pins() const {
 	return d;
 }
 
-void SwingTwistIK3D::set_locked_bones(const PackedStringArray &p_locked) {
+void SwingTwistIK3D::set_locked_bones(const Array &p_locked) {
 	locked_bones.clear();
 	for (int i = 0; i < p_locked.size(); i++) {
 		locked_bones[StringName(p_locked[i])] = true;
 	}
 }
 
-PackedStringArray SwingTwistIK3D::get_locked_bones() const {
-	PackedStringArray a;
+Array SwingTwistIK3D::get_locked_bones() const {
+	Array a;
 	for (const KeyValue<StringName, bool> &kv : locked_bones) {
 		a.push_back(String(kv.key));
 	}
@@ -236,21 +236,17 @@ real_t SwingTwistIK3D::get_joint_relax(int p_index, int p_joint) const {
 	return joint_weights[p_index][p_joint].relax;
 }
 
-void SwingTwistIK3D::_get_property_list(List<PropertyInfo> *p_list) const {
-	IterateIK3D::_get_property_list(p_list);
+void SwingTwistIK3D::_get_joint_extra_properties(int p_setting, int p_joint, const String &p_path, LocalVector<PropertyInfo> &p_props) const {
+	// Emitted inside the base joint loop (the FABRIK/CCD pattern), so these interleave with the
+	// joint's other properties instead of forming a second "settings" block. PST priorities
+	// (x = position, y = swing, z = twist) + the damp-family knobs. A pole = low position, swing =
+	// twist = 0 on a mid joint.
 	_sync_joint_weights();
-	for (int i = 0; i < get_setting_count(); i++) {
-		for (int j = 0; j < get_joint_count(i); j++) {
-			// Stored with the joint (like the per-joint limitation): PST priorities
-			// (x = position, y = swing, z = twist) + stiffness. A pole = low position, swing =
-			// twist = 0 on a mid joint.
-			p_list->push_back(PropertyInfo(Variant::VECTOR3, vformat("settings/%d/joints/%d/priorities", i, j)));
-			p_list->push_back(PropertyInfo(Variant::FLOAT, vformat("settings/%d/joints/%d/stiffness", i, j), PROPERTY_HINT_RANGE, "0,1,0.01"));
-			p_list->push_back(PropertyInfo(Variant::FLOAT, vformat("settings/%d/joints/%d/engage", i, j), PROPERTY_HINT_RANGE, "0,1,0.01"));
-			p_list->push_back(PropertyInfo(Variant::FLOAT, vformat("settings/%d/joints/%d/isolation", i, j), PROPERTY_HINT_RANGE, "0,1,0.01"));
-			p_list->push_back(PropertyInfo(Variant::FLOAT, vformat("settings/%d/joints/%d/relax", i, j), PROPERTY_HINT_RANGE, "0,1,0.01"));
-		}
-	}
+	p_props.push_back(PropertyInfo(Variant::VECTOR3, p_path + "priorities"));
+	p_props.push_back(PropertyInfo(Variant::FLOAT, p_path + "stiffness", PROPERTY_HINT_RANGE, "0,1,0.01"));
+	p_props.push_back(PropertyInfo(Variant::FLOAT, p_path + "engage", PROPERTY_HINT_RANGE, "0,1,0.01"));
+	p_props.push_back(PropertyInfo(Variant::FLOAT, p_path + "isolation", PROPERTY_HINT_RANGE, "0,1,0.01"));
+	p_props.push_back(PropertyInfo(Variant::FLOAT, p_path + "relax", PROPERTY_HINT_RANGE, "0,1,0.01"));
 }
 
 bool SwingTwistIK3D::_set(const StringName &p_name, const Variant &p_value) {
@@ -702,15 +698,22 @@ void SwingTwistIK3D::_validate_property(PropertyInfo &p_property) const {
 	// Auto-fill the motion root from the skeleton's bone list (same picker as the other IK
 	// bone-name properties), so the animator selects it from a dropdown instead of typing.
 	// Editor-only: outside the editor the hint is unused, so skip the lookup entirely.
-	if (Engine::get_singleton()->is_editor_hint() && p_property.name == "motion_root_bone") {
-		Skeleton3D *skeleton = get_skeleton();
-		if (skeleton) {
-			p_property.hint = PROPERTY_HINT_ENUM_SUGGESTION;
-			p_property.hint_string = skeleton->get_concatenated_bone_names();
-		} else {
-			p_property.hint = PROPERTY_HINT_NONE;
-			p_property.hint_string = "";
-		}
+	if (!Engine::get_singleton()->is_editor_hint()) {
+		return;
+	}
+	Skeleton3D *skeleton = get_skeleton();
+	const String bones = skeleton ? String(skeleton->get_concatenated_bone_names()) : String();
+	if (p_property.name == "motion_root_bone") {
+		p_property.hint = skeleton ? PROPERTY_HINT_ENUM_SUGGESTION : PROPERTY_HINT_NONE;
+		p_property.hint_string = bones;
+	} else if (p_property.name == "locked_bones") {
+		// Typed array of bone-name dropdowns: each element is a String with an enum suggestion.
+		p_property.hint = PROPERTY_HINT_TYPE_STRING;
+		p_property.hint_string = vformat("%d/%d:%s", Variant::STRING, PROPERTY_HINT_ENUM_SUGGESTION, bones);
+	} else if (p_property.name == "pins") {
+		// Typed dictionary: key = bone name (enum suggestion), value = target NodePath.
+		p_property.hint = PROPERTY_HINT_DICTIONARY_TYPE;
+		p_property.hint_string = vformat("%d/%d:%s;%d/%d:", Variant::STRING_NAME, PROPERTY_HINT_ENUM_SUGGESTION, bones, Variant::NODE_PATH, PROPERTY_HINT_NONE);
 	}
 }
 
@@ -757,6 +760,8 @@ void SwingTwistIK3D::_bind_methods() {
 	ADD_PROPERTY(PropertyInfo(Variant::BOOL, "free_root"), "set_free_root", "get_free_root");
 	ADD_PROPERTY(PropertyInfo(Variant::STRING_NAME, "motion_root_bone", PROPERTY_HINT_ENUM_SUGGESTION, ""), "set_motion_root_bone", "get_motion_root_bone");
 	ADD_GROUP("Controls", "");
+	// pins (bone name -> target NodePath) and locked_bones (bone names) are given their element
+	// types/bone-name dropdowns dynamically in _validate_property (the hint needs the live skeleton).
 	ADD_PROPERTY(PropertyInfo(Variant::DICTIONARY, "pins"), "set_pins", "get_pins");
-	ADD_PROPERTY(PropertyInfo(Variant::PACKED_STRING_ARRAY, "locked_bones"), "set_locked_bones", "get_locked_bones");
+	ADD_PROPERTY(PropertyInfo(Variant::ARRAY, "locked_bones"), "set_locked_bones", "get_locked_bones");
 }
