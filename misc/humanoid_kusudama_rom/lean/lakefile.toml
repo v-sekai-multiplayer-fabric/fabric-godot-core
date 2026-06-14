@@ -1,0 +1,16 @@
+name = "kusudama"
+defaultTargets = ["Kusudama"]
+
+[[require]]
+name = "plausible"
+git = "https://github.com/leanprover-community/plausible"
+rev = "main"
+
+[[lean_lib]]
+name = "Kusudama"
+
+[[lean_lib]]
+name = "WristRom"
+
+[[lean_lib]]
+name = "JointRom"
