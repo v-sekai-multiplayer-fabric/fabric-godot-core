@@ -8,6 +8,23 @@
 #include "scene/3d/ik_kabsch_6d.h"
 #include "scene/3d/skeleton_3d.h"
 
+// A usable target frame: finite, non-degenerate. (Reflections are allowed here and fixed to a
+// proper rotation where the orientation is consumed.)
+static bool st_target_valid(const Transform3D &p_t) {
+	return p_t.origin.is_finite() &&
+			p_t.basis.get_column(0).is_finite() && p_t.basis.get_column(1).is_finite() && p_t.basis.get_column(2).is_finite() &&
+			Math::abs(p_t.basis.determinant()) > (real_t)1e-9;
+}
+
+// Proper (right-handed, det +1) rotation from a possibly-mirrored target basis.
+static Basis st_proper_rotation(const Basis &p_b) {
+	Basis o = p_b.orthonormalized();
+	if (o.determinant() < 0.0) {
+		o.set_column(2, -o.get_column(2)); // flip a column to remove the reflection
+	}
+	return o;
+}
+
 bool SwingTwistIK3D::_is_ancestor(Skeleton3D *p_sk, int p_anc, int p_bone) const {
 	int b = p_bone;
 	while (b >= 0) {
@@ -117,7 +134,7 @@ void SwingTwistIK3D::solve() {
 		Node3D *tn = Object::cast_to<Node3D>(get_node_or_null(get_target_node(s)));
 		if (tip >= 0 && tip < bc && tn) {
 			const Transform3D tgt = sk_inv * tn->get_global_transform();
-			if (tgt.origin.is_finite() && tgt.basis.determinant() != 0.0) { // reject NaN/degenerate targets
+			if (st_target_valid(tgt)) {
 				Effector e;
 				e.tip_bone = tip;
 				e.target = tgt;
@@ -134,7 +151,7 @@ void SwingTwistIK3D::solve() {
 		Node3D *tn = Object::cast_to<Node3D>(get_node_or_null(kv.value));
 		if (tip >= 0 && tip < bc && tn) {
 			const Transform3D tgt = sk_inv * tn->get_global_transform();
-			if (tgt.origin.is_finite() && tgt.basis.determinant() != 0.0) { // reject NaN/degenerate
+			if (st_target_valid(tgt)) {
 				Effector e;
 				e.tip_bone = tip;
 				e.target = tgt;
@@ -232,7 +249,7 @@ void SwingTwistIK3D::solve() {
 			Basis new_gbasis;
 			if (tip_eff >= 0) {
 				// Effector tip: its full target frame (6D axes) sets the orientation.
-				new_gbasis = effectors[tip_eff].target.basis.orthonormalized();
+				new_gbasis = st_proper_rotation(effectors[tip_eff].target.basis);
 			} else {
 				LocalVector<Vector3> rest_pts;
 				LocalVector<Vector3> tgt_pts;

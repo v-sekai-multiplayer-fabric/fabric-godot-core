@@ -2837,6 +2837,180 @@ TEST_CASE("[SceneTree][SwingTwistIK3D] adversarial robustness / determinism / in
 	memdelete(sk);
 }
 
+// Deeper adversarial pass: a mirrored (reflection, det<0) target frame must not inject an
+// improper basis; a hostile twist about the forward axis must stay inside the twist limit;
+// an unreachable free-root pull must stay bounded; conflicting pins on a branching skeleton
+// and a pin whose ancestors are all locked must both stay finite.
+TEST_CASE("[SceneTree][SwingTwistIK3D] deeper adversarial - reflection / twist clamp / free root / branching") {
+	SceneTree *tree = SceneTree::get_singleton();
+
+	auto finite = [](Skeleton3D *s) -> bool {
+		for (int b = 0; b < s->get_bone_count(); b++) {
+			const Transform3D t = s->get_bone_pose(b);
+			if (!t.origin.is_finite() || !t.basis.get_column(0).is_finite() || !t.basis.get_column(1).is_finite() || !t.basis.get_column(2).is_finite()) {
+				return false;
+			}
+		}
+		return true;
+	};
+	// A pose basis is a proper rotation (det ~ +1, orthonormal) -- never a reflection.
+	auto proper = [](Skeleton3D *s) -> bool {
+		for (int b = 0; b < s->get_bone_count(); b++) {
+			const Basis bs = s->get_bone_pose(b).basis;
+			if (Math::abs(bs.determinant() - 1.0) > 1e-3) {
+				return false;
+			}
+		}
+		return true;
+	};
+
+	auto chain = [&](int n, real_t seg, Skeleton3D *&sk, SwingTwistIK3D *&ik, Marker3D *&tgt) {
+		sk = memnew(Skeleton3D);
+		tree->get_root()->add_child(sk);
+		for (int i = 0; i < n; i++) {
+			const int b = sk->add_bone(vformat("B%d", i));
+			if (i > 0) {
+				sk->set_bone_parent(b, i - 1);
+			}
+			sk->set_bone_rest(b, Transform3D(Basis(), Vector3(i == 0 ? (real_t)0.0 : seg, 0, 0)));
+		}
+		sk->notification(Skeleton3D::NOTIFICATION_UPDATE_SKELETON);
+		ik = memnew(SwingTwistIK3D);
+		sk->add_child(ik);
+		tgt = memnew(Marker3D);
+		ik->add_child(tgt);
+		tgt->set_name("Target");
+		sk->notification(Skeleton3D::NOTIFICATION_UPDATE_SKELETON);
+		ik->set_setting_count(1);
+		ik->set_root_bone_name(0, "B0");
+		ik->set_end_bone_name(0, vformat("B%d", n - 1));
+		ik->set_target_node(0, NodePath("Target"));
+		ik->set_max_iterations(20);
+	};
+
+	Skeleton3D *sk = nullptr;
+	SwingTwistIK3D *ik = nullptr;
+	Marker3D *tgt = nullptr;
+
+	// 1. Reflection target: a mirrored basis (det = -1) must not produce an improper pose basis.
+	chain(5, 0.3, sk, ik, tgt);
+	{
+		Transform3D t;
+		t.origin = Vector3(0.8, 0.3, 0.1);
+		t.basis = Basis(Vector3(-1, 0, 0), Vector3(0, 1, 0), Vector3(0, 0, 1)); // det = -1
+		tgt->set_transform(t);
+	}
+	ik->solve();
+	CHECK(finite(sk));
+	CHECK(proper(sk));
+	memdelete(sk);
+
+	// 2. Hostile twist: drive the tip frame twisted hard about its forward axis; the limited
+	// joint's resulting twist must stay within [twist_from, twist_to] (+ soft slack).
+	chain(4, 0.3, sk, ik, tgt);
+	ik->resolve_chains();
+	{
+		Ref<JointLimitationKusudama3D> lim;
+		lim.instantiate();
+		lim->set_cone_count(1);
+		lim->set_cone_center(0, Vector3(0, 1, 0)); // forward = bone rest +Y child dir
+		lim->set_cone_radius(0, Math::deg_to_rad(40.0));
+		lim->set_twist_from(Math::deg_to_rad(-15.0));
+		lim->set_twist_to(Math::deg_to_rad(15.0));
+		int b1j = -1;
+		for (int j = 0; j < ik->get_joint_count(0); j++) {
+			if (ik->get_joint_bone(0, j) == 1) {
+				b1j = j;
+			}
+		}
+		REQUIRE(b1j >= 0);
+		ik->set_joint_limitation(0, b1j, lim);
+		// Target twisted ~80 deg about the chain forward (X), well beyond the 15 deg limit.
+		Transform3D t;
+		t.origin = Vector3(0.7, 0.0, 0.0);
+		t.basis = Basis(Vector3(1, 0, 0), Math::deg_to_rad(80.0));
+		tgt->set_transform(t);
+		ik->solve();
+		CHECK(finite(sk));
+		// Decompose bone 1's local delta twist about its forward (child rest dir = +X here,
+		// since B2 sits at +X of B1 in rest).
+		const Vector3 fwd = sk->get_bone_rest(2).origin.normalized();
+		const Quaternion rest_local = sk->get_bone_rest(1).basis.get_rotation_quaternion();
+		const Quaternion delta = rest_local.inverse() * sk->get_bone_pose(1).basis.get_rotation_quaternion();
+		const real_t twist = 2.0 * Math::atan2((double)(delta.x * fwd.x + delta.y * fwd.y + delta.z * fwd.z), (double)delta.w);
+		CHECK(Math::abs(twist) <= Math::deg_to_rad(15.0 + 5.0)); // limit + soft-band slack
+	}
+	memdelete(sk);
+
+	// 3. Free root, unreachable pin: an unpinned root translating toward a far target must stay
+	// bounded (no runaway) over many iterations.
+	chain(4, 0.3, sk, ik, tgt);
+	ik->set_free_root(true);
+	ik->set_motion_root_bone("B0");
+	ik->set_max_iterations(64);
+	tgt->set_position(Vector3(1000.0, -500.0, 250.0)); // wildly unreachable
+	ik->solve();
+	CHECK(finite(sk));
+	// The root cannot move farther than the target it chases.
+	CHECK(sk->get_bone_pose(0).origin.length() <= 2000.0);
+	memdelete(sk);
+
+	// 4. Branching skeleton with two conflicting pins pulling opposite directions.
+	{
+		sk = memnew(Skeleton3D);
+		tree->get_root()->add_child(sk);
+		// B0 -> B1 -> {B2, B3} (a fork at B1).
+		for (int i = 0; i < 4; i++) {
+			sk->add_bone(vformat("B%d", i));
+		}
+		sk->set_bone_parent(1, 0);
+		sk->set_bone_parent(2, 1);
+		sk->set_bone_parent(3, 1);
+		sk->set_bone_rest(0, Transform3D(Basis(), Vector3(0, 0, 0)));
+		sk->set_bone_rest(1, Transform3D(Basis(), Vector3(0.3, 0, 0)));
+		sk->set_bone_rest(2, Transform3D(Basis(), Vector3(0.3, 0.1, 0)));
+		sk->set_bone_rest(3, Transform3D(Basis(), Vector3(0.3, -0.1, 0)));
+		sk->notification(Skeleton3D::NOTIFICATION_UPDATE_SKELETON);
+		ik = memnew(SwingTwistIK3D);
+		sk->add_child(ik);
+		Marker3D *t2 = memnew(Marker3D);
+		ik->add_child(t2);
+		t2->set_name("T2");
+		t2->set_position(Vector3(0.6, 5.0, 0));
+		Marker3D *t3 = memnew(Marker3D);
+		ik->add_child(t3);
+		t3->set_name("T3");
+		t3->set_position(Vector3(0.6, -5.0, 0));
+		sk->notification(Skeleton3D::NOTIFICATION_UPDATE_SKELETON);
+		ik->set_setting_count(2);
+		ik->set_root_bone_name(0, "B0");
+		ik->set_end_bone_name(0, "B2");
+		ik->set_target_node(0, NodePath("T2"));
+		ik->set_root_bone_name(1, "B0");
+		ik->set_end_bone_name(1, "B3");
+		ik->set_target_node(1, NodePath("T3"));
+		ik->set_max_iterations(20);
+		ik->solve();
+		CHECK(finite(sk));
+		CHECK(proper(sk));
+		memdelete(sk);
+	}
+
+	// 5. Pin whose ancestors are ALL locked -> nothing can move it; must stay finite & unchanged.
+	chain(4, 0.3, sk, ik, tgt);
+	ik->set_bone_locked("B0", true);
+	ik->set_bone_locked("B1", true);
+	ik->set_bone_locked("B2", true);
+	ik->set_bone_locked("B3", true);
+	tgt->set_position(Vector3(5, 5, 5));
+	ik->solve();
+	CHECK(finite(sk));
+	for (int b = 0; b < 4; b++) {
+		CHECK(sk->get_bone_pose(b).basis.get_rotation_quaternion().is_equal_approx(Quaternion()));
+	}
+	memdelete(sk);
+}
+
 } // namespace TestJointLimitationKusudama3D
 
 #endif // _3D_DISABLED
