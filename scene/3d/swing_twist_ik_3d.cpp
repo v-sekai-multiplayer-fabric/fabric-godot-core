@@ -4,6 +4,7 @@
 
 #include "swing_twist_ik_3d.h"
 
+#include "core/config/engine.h"
 #include "core/object/class_db.h"
 #include "scene/3d/ik_kabsch_6d.h"
 #include "scene/3d/skeleton_3d.h"
@@ -352,7 +353,8 @@ void SwingTwistIK3D::solve() {
 void SwingTwistIK3D::_validate_property(PropertyInfo &p_property) const {
 	// Auto-fill the motion root from the skeleton's bone list (same picker as the other IK
 	// bone-name properties), so the animator selects it from a dropdown instead of typing.
-	if (p_property.name == "motion_root_bone") {
+	// Editor-only: outside the editor the hint is unused, so skip the lookup entirely.
+	if (Engine::get_singleton()->is_editor_hint() && p_property.name == "motion_root_bone") {
 		Skeleton3D *skeleton = get_skeleton();
 		if (skeleton) {
 			p_property.hint = PROPERTY_HINT_ENUM_SUGGESTION;
