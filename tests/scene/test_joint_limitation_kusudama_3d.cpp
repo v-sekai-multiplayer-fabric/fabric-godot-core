@@ -2628,6 +2628,67 @@ TEST_CASE("[SceneTree][SwingTwistIK3D] Whole-body swing-twist solve reaches the 
 	memdelete(sk); // frees ik + target
 }
 
+// Arbitrary-bone control: a free root lets the pins drag the whole body (reach a target beyond
+// arm length), and a disabled bone is left at FK.
+TEST_CASE("[SceneTree][SwingTwistIK3D] free root drags the body; disabled bone stays FK") {
+	SceneTree *tree = SceneTree::get_singleton();
+	Skeleton3D *sk = memnew(Skeleton3D);
+	tree->get_root()->add_child(sk);
+	const int root = sk->add_bone("Root");
+	const int b1 = sk->add_bone("B1");
+	sk->set_bone_parent(b1, root);
+	const int b2 = sk->add_bone("B2");
+	sk->set_bone_parent(b2, b1);
+	const int tip = sk->add_bone("Tip");
+	sk->set_bone_parent(tip, b2);
+	sk->set_bone_rest(root, Transform3D(Basis(), Vector3(0, 0, 0)));
+	sk->set_bone_rest(b1, Transform3D(Basis(), Vector3(0.3, 0, 0)));
+	sk->set_bone_rest(b2, Transform3D(Basis(), Vector3(0.3, 0, 0)));
+	sk->set_bone_rest(tip, Transform3D(Basis(), Vector3(0.3, 0, 0)));
+	sk->notification(Skeleton3D::NOTIFICATION_UPDATE_SKELETON);
+
+	SwingTwistIK3D *ik = memnew(SwingTwistIK3D);
+	sk->add_child(ik);
+	Marker3D *target = memnew(Marker3D);
+	ik->add_child(target);
+	target->set_name("Target");
+	target->set_position(Vector3(2.0, 0.0, 0.0)); // beyond the 0.9 reach
+	sk->notification(Skeleton3D::NOTIFICATION_UPDATE_SKELETON);
+	ik->set_setting_count(1);
+	ik->set_root_bone_name(0, "Root");
+	ik->set_end_bone_name(0, "Tip");
+	ik->set_target_node(0, NodePath("Target"));
+	ik->set_max_iterations(40);
+
+	auto reset = [&]() {
+		for (int b = 0; b < sk->get_bone_count(); b++) {
+			sk->set_bone_pose_rotation(b, Quaternion());
+			sk->set_bone_pose_position(b, sk->get_bone_rest(b).origin);
+		}
+	};
+
+	// Pinned root (default): the tip cannot reach a target beyond arm length.
+	ik->solve();
+	CHECK((sk->get_bone_global_pose(tip).origin - Vector3(2, 0, 0)).length() > 0.5);
+
+	// Free root: the root translates so the pinned tip drags the body to the target.
+	ik->set_free_root(true);
+	reset();
+	ik->solve();
+	CHECK((sk->get_bone_global_pose(tip).origin - Vector3(2, 0, 0)).length() < 0.05);
+
+	// Locked bone stays at FK (identity) while the rest still solves.
+	ik->set_free_root(false);
+	ik->set_bone_locked("B1", true);
+	CHECK(ik->is_bone_locked("B1"));
+	target->set_position(Vector3(0.5, 0.5, 0.0));
+	reset();
+	ik->solve();
+	CHECK(sk->get_bone_pose(b1).basis.get_rotation_quaternion().is_equal_approx(Quaternion()));
+
+	memdelete(sk);
+}
+
 } // namespace TestJointLimitationKusudama3D
 
 #endif // _3D_DISABLED

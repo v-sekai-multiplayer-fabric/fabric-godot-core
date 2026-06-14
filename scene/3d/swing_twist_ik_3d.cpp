@@ -46,6 +46,46 @@ Quaternion SwingTwistIK3D::_clamp_swing_twist(Skeleton3D *p_sk, int p_bone, cons
 	return rest_local * (swing * twist_clamped).normalized();
 }
 
+void SwingTwistIK3D::set_pin(const StringName &p_bone, const NodePath &p_target) {
+	pins[p_bone] = p_target;
+	order_dirty = true;
+}
+
+void SwingTwistIK3D::remove_pin(const StringName &p_bone) {
+	pins.erase(p_bone);
+	order_dirty = true;
+}
+
+bool SwingTwistIK3D::has_pin(const StringName &p_bone) const {
+	return pins.has(p_bone);
+}
+
+void SwingTwistIK3D::clear_pins() {
+	pins.clear();
+	order_dirty = true;
+}
+
+void SwingTwistIK3D::set_bone_locked(const StringName &p_bone, bool p_locked) {
+	if (p_locked) {
+		locked_bones[p_bone] = true;
+	} else {
+		locked_bones.erase(p_bone);
+	}
+	order_dirty = true;
+}
+
+bool SwingTwistIK3D::is_bone_locked(const StringName &p_bone) const {
+	return locked_bones.has(p_bone);
+}
+
+void SwingTwistIK3D::set_free_root(bool p_enabled) {
+	free_root = p_enabled;
+}
+
+void SwingTwistIK3D::set_motion_root_bone(const StringName &p_name) {
+	root_bone_name = p_name;
+}
+
 void SwingTwistIK3D::solve() {
 	Skeleton3D *sk = get_skeleton();
 	if (!sk) {
@@ -84,6 +124,27 @@ void SwingTwistIK3D::solve() {
 			controlled[tip] = true;
 		}
 	}
+	// Pins: a 6D target on any bone (the chain ends above are the default pins; these add to
+	// or override them). Pinning a bone makes it a dragged effector.
+	for (const KeyValue<StringName, NodePath> &kv : pins) {
+		const int tip = sk->find_bone(kv.key);
+		Node3D *tn = Object::cast_to<Node3D>(get_node_or_null(kv.value));
+		if (tip >= 0 && tip < bc && tn) {
+			Effector e;
+			e.tip_bone = tip;
+			e.target = sk_inv * tn->get_global_transform();
+			e.valid = true;
+			effectors.push_back(e);
+			controlled[tip] = true;
+		}
+	}
+	// Locked bones are left at FK (excluded from the solve, so the chain routes around them).
+	for (const KeyValue<StringName, bool> &kv : locked_bones) {
+		const int b = sk->find_bone(kv.key);
+		if (b >= 0) {
+			controlled.erase(b);
+		}
+	}
 	if (effectors.is_empty()) {
 		return;
 	}
@@ -115,8 +176,35 @@ void SwingTwistIK3D::solve() {
 	for (int b = 0; b < bc; b++) {
 		sk->set_bone_pose_position(b, sk->get_bone_rest(b).origin);
 	}
+	// Free-root motion bone: translate it so the pins drag the body. Skipped if the root is
+	// itself pinned (then it stays where its target puts it).
+	int motion_root = -1;
+	if (free_root) {
+		const PackedInt32Array pl = sk->get_parentless_bones();
+		motion_root = root_bone_name == StringName() ? (pl.is_empty() ? -1 : pl[0]) : sk->find_bone(root_bone_name);
+		for (const Effector &e : effectors) {
+			if (e.tip_bone == motion_root) {
+				motion_root = -1; // root is pinned
+				break;
+			}
+		}
+	}
+
 	const int iters = MAX(1, get_max_iterations());
 	for (int it = 0; it < iters; it++) {
+		if (motion_root >= 0) {
+			// Translate the root by the mean residual (target - current tip) over all pins.
+			for (int o = 0; o < bc; o++) {
+				const int p = sk->get_bone_parent(o);
+				gp[o] = (p >= 0 ? gp[p] : Transform3D()) * sk->get_bone_pose(o);
+			}
+			Vector3 resid;
+			for (const Effector &e : effectors) {
+				resid += e.target.origin - gp[e.tip_bone].origin;
+			}
+			resid /= (real_t)effectors.size();
+			sk->set_bone_pose_position(motion_root, sk->get_bone_pose(motion_root).origin + resid);
+		}
 		// Tip -> root: joints nearest the effector bend first (reach sub-extension targets).
 		for (int bi = (int)solve_order.size() - 1; bi >= 0; bi--) {
 			// Recompute globals from current local poses (the skeleton does not refresh its
@@ -185,4 +273,18 @@ void SwingTwistIK3D::_process_modification(double p_delta) {
 
 void SwingTwistIK3D::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("solve"), &SwingTwistIK3D::solve);
+	ClassDB::bind_method(D_METHOD("set_pin", "bone", "target"), &SwingTwistIK3D::set_pin);
+	ClassDB::bind_method(D_METHOD("remove_pin", "bone"), &SwingTwistIK3D::remove_pin);
+	ClassDB::bind_method(D_METHOD("has_pin", "bone"), &SwingTwistIK3D::has_pin);
+	ClassDB::bind_method(D_METHOD("clear_pins"), &SwingTwistIK3D::clear_pins);
+	ClassDB::bind_method(D_METHOD("get_pin_count"), &SwingTwistIK3D::get_pin_count);
+	ClassDB::bind_method(D_METHOD("set_bone_locked", "bone", "locked"), &SwingTwistIK3D::set_bone_locked);
+	ClassDB::bind_method(D_METHOD("is_bone_locked", "bone"), &SwingTwistIK3D::is_bone_locked);
+	ClassDB::bind_method(D_METHOD("set_free_root", "enabled"), &SwingTwistIK3D::set_free_root);
+	ClassDB::bind_method(D_METHOD("get_free_root"), &SwingTwistIK3D::get_free_root);
+	ClassDB::bind_method(D_METHOD("set_motion_root_bone", "name"), &SwingTwistIK3D::set_motion_root_bone);
+	ClassDB::bind_method(D_METHOD("get_motion_root_bone"), &SwingTwistIK3D::get_motion_root_bone);
+
+	ADD_PROPERTY(PropertyInfo(Variant::BOOL, "free_root"), "set_free_root", "get_free_root");
+	ADD_PROPERTY(PropertyInfo(Variant::STRING_NAME, "motion_root_bone"), "set_motion_root_bone", "get_motion_root_bone");
 }

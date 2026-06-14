@@ -26,6 +26,14 @@ class SwingTwistIK3D : public IterateIK3D {
 		bool valid = false;
 	};
 
+	// One unified animator concept: a bone is PINNED (has a target -> dragged), FREE (no pin
+	// -> solved by IK, the default), or LOCKED (frozen at FK). The chain end-effectors are
+	// just default pins; set_pin() pins any bone.
+	HashMap<StringName, NodePath> pins; // bone -> target node (overrides/adds to chain ends)
+	HashMap<StringName, bool> locked_bones; // bones frozen at FK (excluded from the solve)
+	bool free_root = false; // an UNPINNED motion root translates so pins (e.g. hands) drag the body
+	StringName root_bone_name; // the motion root; empty -> first parentless bone
+
 	LocalVector<int> solve_order; // parents before children (whole skeleton)
 	bool order_dirty = true;
 
@@ -38,6 +46,25 @@ protected:
 	virtual void _process_modification(double p_delta) override;
 
 public:
+	// PIN any bone: give it a 6D target and the solver drags the bone to it. One pin per bone;
+	// the chain hands/feet/head are pinned by default. Removing a pin leaves the bone FREE.
+	void set_pin(const StringName &p_bone, const NodePath &p_target);
+	void remove_pin(const StringName &p_bone);
+	bool has_pin(const StringName &p_bone) const;
+	void clear_pins();
+	int get_pin_count() const { return (int)pins.size(); }
+
+	// LOCK a bone: freeze it at FK (the solver leaves it alone and routes around it).
+	void set_bone_locked(const StringName &p_bone, bool p_locked);
+	bool is_bone_locked(const StringName &p_bone) const;
+
+	// Free root: an UNPINNED motion root translates so the pins (e.g. the hands) drag the whole
+	// body; pin the root (set_pin on it) to ground/drag it directly instead.
+	void set_free_root(bool p_enabled);
+	bool get_free_root() const { return free_root; }
+	void set_motion_root_bone(const StringName &p_name);
+	StringName get_motion_root_bone() const { return root_bone_name; }
+
 	// Run a full solve immediately (also used by tests / manual use).
 	void solve();
 
