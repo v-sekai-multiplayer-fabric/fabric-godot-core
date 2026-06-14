@@ -35,10 +35,6 @@ class SwingTwistIK3D : public IterateIK3D {
 	HashMap<StringName, bool> locked_bones; // bones frozen at FK (excluded from the solve)
 	bool free_root = false; // an UNPINNED motion root translates so pins (e.g. hands) drag the body
 	StringName root_bone_name; // the motion root; empty -> first parentless bone
-	// Steadiness [0..1]: extra settling passes run AFTER the reach is met (where max_iterations
-	// would early-out), letting the secondary objectives (relax, stiffness, poles) finish settling
-	// and damping frame-to-frame jitter. 0 keeps the early-out. EWBIK stabilizing passes.
-	real_t steadiness = 0.0;
 
 	// Per-JOINT weights, stored the IterateIK3D way: in the chain settings, exposed as
 	// settings/i/joints/j/pin_weight via _get_property_list/_set/_get (so they persist + undo
@@ -133,8 +129,6 @@ public:
 	bool get_free_root() const { return free_root; }
 	void set_motion_root_bone(const StringName &p_name);
 	StringName get_motion_root_bone() const { return root_bone_name; }
-	void set_steadiness(real_t p_steadiness);
-	real_t get_steadiness() const { return steadiness; }
 
 	// Run a full solve immediately (also used by tests / manual use).
 	void solve();

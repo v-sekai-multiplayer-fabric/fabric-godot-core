@@ -66,10 +66,16 @@ void JointLimitationKusudama3D::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("twist_to_normalized", "angle"), &JointLimitationKusudama3D::twist_to_normalized);
 	ClassDB::bind_method(D_METHOD("twist_from_normalized", "normalized"), &JointLimitationKusudama3D::twist_from_normalized);
 
+	// Swing limit: the cones are stored data, edited through the gizmo / set_cone_* API.
+	ADD_GROUP("Swing", "");
 	ADD_PROPERTY(PropertyInfo(Variant::ARRAY, "cones", PROPERTY_HINT_NONE, "", PROPERTY_USAGE_STORAGE), "set_cones", "get_cones");
-	// Stored/scripted in radians; the inspector shows and edits degrees (range is in degrees).
+	// Twist limit: a window about the forward axis. Stored/scripted in radians; the inspector
+	// shows and edits degrees (range is in degrees).
+	ADD_GROUP("Twist", "twist_");
 	ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "twist_from", PROPERTY_HINT_RANGE, "-360,360,0.1,radians_as_degrees"), "set_twist_from", "get_twist_from");
 	ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "twist_to", PROPERTY_HINT_RANGE, "-360,360,0.1,radians_as_degrees"), "set_twist_to", "get_twist_to");
+	// Softness: how the limit behaves at its edge (cushion) and how strongly it applies (strength).
+	ADD_GROUP("Softness", "");
 	ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "cushion", PROPERTY_HINT_RANGE, "0.5,30,0.1,radians_as_degrees"), "set_cushion", "get_cushion");
 	ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "strength", PROPERTY_HINT_RANGE, "0,1,0.01"), "set_strength", "get_strength");
 }

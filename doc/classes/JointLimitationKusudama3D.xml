@@ -135,6 +135,9 @@
 		<member name="cushion" type="float" setter="set_cushion" getter="get_cushion" default="0.06">
 			Soft-limit margin in radians. Near a cone or twist boundary the projection eases the direction back over this band, giving a smooth approach to the limit. Wider values make the joint resist the limit earlier and more gently.
 		</member>
+		<member name="strength" type="float" setter="set_strength" getter="get_strength" default="1.0">
+			How strongly the limit is enforced, from 0 to 1. 1 clamps the direction fully into the allowed region; 0 passes it through unconstrained; values between blend the two. Lets a constraint be softened or disabled in place without removing it.
+		</member>
 		<member name="twist_from" type="float" setter="set_twist_from" getter="get_twist_from" default="0.0">
 			Lower bound of the twist limit, in radians, about the bone forward axis. The twist limit is active only when [member twist_to] is greater than [member twist_from]. See [method limit_twist].
 		</member>
