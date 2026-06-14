@@ -77,12 +77,10 @@ Quaternion SwingTwistIK3D::_clamp_swing_twist(Skeleton3D *p_sk, int p_bone, cons
 
 void SwingTwistIK3D::set_pin(const StringName &p_bone, const NodePath &p_target) {
 	pins[p_bone] = p_target;
-	order_dirty = true;
 }
 
 void SwingTwistIK3D::remove_pin(const StringName &p_bone) {
 	pins.erase(p_bone);
-	order_dirty = true;
 }
 
 bool SwingTwistIK3D::has_pin(const StringName &p_bone) const {
@@ -91,7 +89,6 @@ bool SwingTwistIK3D::has_pin(const StringName &p_bone) const {
 
 void SwingTwistIK3D::clear_pins() {
 	pins.clear();
-	order_dirty = true;
 }
 
 void SwingTwistIK3D::set_bone_locked(const StringName &p_bone, bool p_locked) {
@@ -100,7 +97,6 @@ void SwingTwistIK3D::set_bone_locked(const StringName &p_bone, bool p_locked) {
 	} else {
 		locked_bones.erase(p_bone);
 	}
-	order_dirty = true;
 }
 
 bool SwingTwistIK3D::is_bone_locked(const StringName &p_bone) const {
@@ -193,30 +189,11 @@ void SwingTwistIK3D::solve() {
 		return;
 	}
 
-	// Process order: whole-skeleton BFS, restricted to controlled bones (parents first).
-	if (order_dirty || solve_order.is_empty()) {
-		solve_order.clear();
-		LocalVector<int> queue;
-		for (int pb : sk->get_parentless_bones()) {
-			queue.push_back(pb);
-		}
-		uint32_t head = 0;
-		while (head < queue.size()) {
-			const int b = queue[head++];
-			if (controlled.has(b)) {
-				solve_order.push_back(b);
-			}
-			for (int c : sk->get_bone_children(b)) {
-				queue.push_back(c);
-			}
-		}
-		order_dirty = false;
-	}
-
-	// CSR children adjacency, built once: get_bone_children() returns a Vector<int> BY VALUE
-	// (a heap allocation per call), which the per-bone subtree refresh would hit in its hot
-	// loop. A flat offset+index array gives the same children with no allocation. (childrenOf
-	// equivalence is proven in misc/humanoid_kusudama_rom/lean/IKFast.lean.)
+	// CSR children adjacency (flat offset+index arrays): get_bone_children() returns a
+	// Vector<int> BY VALUE (a heap allocation per call), which the per-bone subtree refresh and
+	// the BFS below would hit in their loops. Built fresh each solve from the live skeleton, so
+	// it can never go stale. (childrenOf equivalence proven in misc/humanoid_kusudama_rom/lean/
+	// IKFast.lean.)
 	LocalVector<int> child_offset;
 	child_offset.resize(bc + 1);
 	for (int b = 0; b <= bc; b++) {
@@ -242,6 +219,29 @@ void SwingTwistIK3D::solve() {
 		const int p = sk->get_bone_parent(b);
 		if (p >= 0) {
 			child_index[child_cursor[p]++] = b;
+		}
+	}
+
+	// Process order: whole-skeleton BFS over the CSR adjacency, restricted to controlled bones
+	// (parents first). Rebuilt every solve -- it depends on the live skeleton structure AND the
+	// controlled set (chains/pins/locks), neither of which has a reliable single dirty signal, so
+	// caching it risked stale bone indices (out-of-bounds into gp) after a skeleton/chain change.
+	// The BFS is O(bones) over a no-alloc adjacency, so rebuilding is cheap.
+	solve_order.clear();
+	{
+		LocalVector<int> queue;
+		for (int pb : sk->get_parentless_bones()) {
+			queue.push_back(pb);
+		}
+		uint32_t head = 0;
+		while (head < queue.size()) {
+			const int b = queue[head++];
+			if (controlled.has(b)) {
+				solve_order.push_back(b);
+			}
+			for (int k = child_offset[b]; k < child_offset[b + 1]; k++) {
+				queue.push_back(child_index[k]);
+			}
 		}
 	}
 

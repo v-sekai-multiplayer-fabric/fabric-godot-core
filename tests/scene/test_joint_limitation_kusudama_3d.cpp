@@ -3013,6 +3013,67 @@ TEST_CASE("[SceneTree][SwingTwistIK3D] deeper adversarial - reflection / twist c
 	memdelete(sk);
 }
 
+// Jerk regression: as the target sweeps smoothly the angular_delta_limit must cap EACH joint's
+// per-step rotation. Without the rate limiter a kinematic fold snapped a joint ~175 deg in a
+// single step (measured on the live rig). One solve runs <= max_iterations passes, each capped at
+// adl, so the per-step joint rotation is bounded by max_iterations*adl. (Proven jerk-bound in
+// misc/humanoid_kusudama_rom/lean/IKJerk.lean.)
+TEST_CASE("[SceneTree][SwingTwistIK3D] solve has no jerk - per-step joint rotation bounded by the dampening cap") {
+	SceneTree *tree = SceneTree::get_singleton();
+	Skeleton3D *sk = memnew(Skeleton3D);
+	tree->get_root()->add_child(sk);
+	const int n = 5;
+	for (int i = 0; i < n; i++) {
+		const int b = sk->add_bone(vformat("B%d", i));
+		if (i > 0) {
+			sk->set_bone_parent(b, i - 1);
+		}
+		sk->set_bone_rest(b, Transform3D(Basis(), Vector3(i == 0 ? (real_t)0.0 : (real_t)0.25, 0, 0)));
+	}
+	sk->notification(Skeleton3D::NOTIFICATION_UPDATE_SKELETON);
+	SwingTwistIK3D *ik = memnew(SwingTwistIK3D);
+	sk->add_child(ik);
+	Marker3D *t = memnew(Marker3D);
+	ik->add_child(t);
+	t->set_name("Target");
+	sk->notification(Skeleton3D::NOTIFICATION_UPDATE_SKELETON);
+	ik->set_setting_count(1);
+	ik->set_root_bone_name(0, "B0");
+	ik->set_end_bone_name(0, "B4");
+	ik->set_target_node(0, NodePath("Target"));
+	const int max_iter = 4;
+	const double adl = Math::deg_to_rad(2.0);
+	ik->set_max_iterations(max_iter);
+	ik->set_angular_delta_limit(adl);
+
+	t->set_position(Vector3(0.8, 0.2, 0.0));
+	ik->solve(); // settle
+
+	const int steps = 360;
+	LocalVector<Quaternion> prev;
+	prev.resize(n);
+	for (int i = 0; i < n; i++) {
+		prev[i] = sk->get_bone_pose_rotation(i);
+	}
+	double max_step = 0.0;
+	for (int s = 0; s <= steps; s++) {
+		const double a = (double)s / steps * Math::TAU;
+		// A fold-crossing loop: the target circles a point near the chain, forcing reconfigurations
+		// that would flip a joint ~180 deg in one step without the cap.
+		t->set_position(Vector3(0.2 + 0.45 * Math::cos(a), 0.45 * Math::sin(a), 0.1 * Math::sin(2.0 * a)));
+		ik->solve(); // one solve per step = realtime cadence
+		for (int i = 0; i < n; i++) {
+			const Quaternion q = sk->get_bone_pose_rotation(i);
+			max_step = MAX(max_step, (double)prev[i].angle_to(q));
+			prev[i] = q;
+		}
+	}
+	CHECK_MESSAGE(max_step <= max_iter * adl + Math::deg_to_rad(0.5),
+			vformat("max per-step joint rotation %.2f deg exceeds the %.1f deg cap (jerk!)",
+					Math::rad_to_deg(max_step), Math::rad_to_deg(max_iter * adl)));
+	memdelete(sk);
+}
+
 } // namespace TestJointLimitationKusudama3D
 
 #endif // _3D_DISABLED

@@ -33,8 +33,7 @@ class SwingTwistIK3D : public IterateIK3D {
 	bool free_root = false; // an UNPINNED motion root translates so pins (e.g. hands) drag the body
 	StringName root_bone_name; // the motion root; empty -> first parentless bone
 
-	LocalVector<int> solve_order; // parents before children (whole skeleton)
-	bool order_dirty = true;
+	LocalVector<int> solve_order; // parents before children; rebuilt each solve from the live skeleton
 
 	// Forward kinematics maintained in skeleton-local space during the manual solve.
 	void _full_fk(Skeleton3D *p_sk, LocalVector<Transform3D> &p_gp) const;
