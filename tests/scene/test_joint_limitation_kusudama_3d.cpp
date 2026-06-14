@@ -125,6 +125,37 @@ static void set_cones_from_vector4(Ref<JointLimitationKusudama3D> limitation, co
 	}
 }
 
+// Per-path jerk-amplification result (file-static, not a local struct, so the helpers below can
+// be file-static functions instead of capturing lambdas).
+struct TjkPathResult {
+	const char *name;
+	real_t max_jerk;
+};
+static void tjk_run_path(const Ref<JointLimitationKusudama3D> &p_lim, const Vector3 &p_forward, const Vector3 &p_right, const Quaternion &p_rot, Vector<TjkPathResult> &p_per_path, const char *p_name, const Vector<Vector3> &p_inputs) {
+	real_t path_max = 0.0f;
+	Vector3 prev_in = p_inputs[0];
+	Vector3 prev_out = p_lim->solve(p_forward, p_right, p_rot, p_inputs[0]);
+	for (int i = 1; i < p_inputs.size(); i++) {
+		Vector3 out = p_lim->solve(p_forward, p_right, p_rot, p_inputs[i]);
+		CHECK(out.is_finite());
+		real_t amplification = prev_out.angle_to(out) - prev_in.angle_to(p_inputs[i]);
+		path_max = MAX(path_max, amplification);
+		prev_in = p_inputs[i];
+		prev_out = out;
+	}
+	p_per_path.push_back(TjkPathResult{ p_name, path_max });
+}
+static void tjk_set_radii(const Ref<JointLimitationKusudama3D> &p_lim, const Vector3 &p_cp1, const Vector3 &p_cp2, const Vector3 &p_cp3, real_t p_r1, real_t p_r2, real_t p_r3, real_t &r_radius1, real_t &r_radius2, real_t &r_radius3) {
+	r_radius1 = p_r1;
+	r_radius2 = p_r2;
+	r_radius3 = p_r3;
+	Vector<Vector4> cones;
+	cones.push_back(Vector4(p_cp1.x, p_cp1.y, p_cp1.z, p_r1));
+	cones.push_back(Vector4(p_cp2.x, p_cp2.y, p_cp2.z, p_r2));
+	cones.push_back(Vector4(p_cp3.x, p_cp3.y, p_cp3.z, p_r3));
+	set_cones_from_vector4(p_lim, cones);
+}
+
 TEST_CASE("[Scene][JointLimitationKusudama3D] Test point inside single cone") {
 	Ref<JointLimitationKusudama3D> limitation;
 	limitation.instantiate();
@@ -548,11 +579,7 @@ TEST_CASE("[Scene][JointLimitationKusudama3D] Test three cones - pose path no hi
 	// passing a non-smooth input through unchanged amplifies ~0.
 	const real_t jerk_anomaly_rad = (real_t)0.18; // ~10.3 deg of added jerk
 	real_t radius1, radius2, radius3;
-	struct PathResult {
-		const char *name;
-		real_t max_jerk;
-	};
-	Vector<PathResult> per_path;
+	Vector<TjkPathResult> per_path;
 
 	// max_jerk here is the constraint's *amplification* of the input's own motion:
 	// max(output_step - input_step). A retraction onto the limit region must not
@@ -560,34 +587,9 @@ TEST_CASE("[Scene][JointLimitationKusudama3D] Test three cones - pose path no hi
 	// through unchanged (identity inside the region) amplifies by ~0. Measuring the
 	// absolute output step instead would wrongly flag the test paths' own
 	// piecewise-linear corners as constraint defects.
-	auto run_path = [&](const char *name, const Vector<Vector3> &inputs) {
-		real_t path_max = 0.0f;
-		Vector3 prev_in = inputs[0];
-		Vector3 prev_out = limitation->solve(forward, right, rot, inputs[0]);
-		for (int i = 1; i < inputs.size(); i++) {
-			Vector3 out = limitation->solve(forward, right, rot, inputs[i]);
-			CHECK(out.is_finite());
-			real_t amplification = prev_out.angle_to(out) - prev_in.angle_to(inputs[i]);
-			path_max = MAX(path_max, amplification);
-			prev_in = inputs[i];
-			prev_out = out;
-		}
-		per_path.push_back(PathResult{ name, path_max });
-	};
-
-	auto set_radii_and_cones = [&](real_t r1, real_t r2, real_t r3) {
-		radius1 = r1;
-		radius2 = r2;
-		radius3 = r3;
-		Vector<Vector4> cones;
-		cones.push_back(Vector4(cp1.x, cp1.y, cp1.z, radius1));
-		cones.push_back(Vector4(cp2.x, cp2.y, cp2.z, radius2));
-		cones.push_back(Vector4(cp3.x, cp3.y, cp3.z, radius3));
-		set_cones_from_vector4(limitation, cones);
-	};
 
 	// Setup 1: symmetric non-overlapping (25°, 35°, 30°)
-	set_radii_and_cones(Math::deg_to_rad(25.0), Math::deg_to_rad(35.0), Math::deg_to_rad(30.0));
+	tjk_set_radii(limitation, cp1, cp2, cp3, Math::deg_to_rad(25.0), Math::deg_to_rad(35.0), Math::deg_to_rad(30.0), radius1, radius2, radius3);
 
 	// Through gap (+X -> diagonal -> +Z)
 	{
@@ -599,7 +601,7 @@ TEST_CASE("[Scene][JointLimitationKusudama3D] Test three cones - pose path no hi
 			Vector3 input_dir = (t <= 0.5f) ? slerp_unit(cp1, gap, t * 2.0f) : slerp_unit(gap, cp3, (t - 0.5f) * 2.0f);
 			path.push_back(input_dir);
 		}
-		run_path("through_gap", path);
+		tjk_run_path(limitation, forward, right, rot, per_path, "through_gap", path);
 	}
 
 	// Sweep cones (+X -> +Y -> +Z)
@@ -613,7 +615,7 @@ TEST_CASE("[Scene][JointLimitationKusudama3D] Test three cones - pose path no hi
 			real_t z = Math::sin(t * Math::PI * 0.5) * 0.3 * t + (1.0 - t) * 0.1;
 			path.push_back(Vector3(x, y, z).normalized());
 		}
-		run_path("sweep_cones", path);
+		tjk_run_path(limitation, forward, right, rot, per_path, "sweep_cones", path);
 	}
 
 	// Near boundary (XY circle, sensitive to tie-break)
@@ -624,7 +626,7 @@ TEST_CASE("[Scene][JointLimitationKusudama3D] Test three cones - pose path no hi
 			real_t theta = ((real_t)i / (real_t)steps) * Math::PI;
 			path.push_back(Vector3(Math::cos(theta) * 0.9f, Math::sin(theta) * 0.9f, 0.1f).normalized());
 		}
-		run_path("near_boundary", path);
+		tjk_run_path(limitation, forward, right, rot, per_path, "near_boundary", path);
 	}
 
 	// Cross cone boundary (+X cone 25° in/out)
@@ -647,7 +649,7 @@ TEST_CASE("[Scene][JointLimitationKusudama3D] Test three cones - pose path no hi
 			}
 			path.push_back(Vector3(x, y, z).normalized());
 		}
-		run_path("cross_cone_boundary", path);
+		tjk_run_path(limitation, forward, right, rot, per_path, "cross_cone_boundary", path);
 	}
 
 	// Along +X cone boundary (25° circle)
@@ -664,7 +666,7 @@ TEST_CASE("[Scene][JointLimitationKusudama3D] Test three cones - pose path no hi
 			Vector3 pt = cp1 * Math::cos(radius1) + (perp0 * Math::cos(theta) + perp1 * Math::sin(theta)) * Math::sin(radius1);
 			path.push_back(pt.normalized());
 		}
-		run_path("along_cone_boundary", path);
+		tjk_run_path(limitation, forward, right, rot, per_path, "along_cone_boundary", path);
 	}
 
 	// Along tangent arc (X–Y path boundary)
@@ -677,7 +679,7 @@ TEST_CASE("[Scene][JointLimitationKusudama3D] Test three cones - pose path no hi
 			real_t t = (real_t)i / (real_t)steps;
 			path.push_back(slerp_unit(tan0, tan1, t));
 		}
-		run_path("along_tangent_arc", path);
+		tjk_run_path(limitation, forward, right, rot, per_path, "along_tangent_arc", path);
 	}
 
 	// Cone to tangent junction
@@ -693,7 +695,7 @@ TEST_CASE("[Scene][JointLimitationKusudama3D] Test three cones - pose path no hi
 			real_t t = (real_t)i / (real_t)steps;
 			path.push_back(slerp_unit(on_cone, on_tangent, t));
 		}
-		run_path("cone_to_tangent_junction", path);
+		tjk_run_path(limitation, forward, right, rot, per_path, "cone_to_tangent_junction", path);
 	}
 
 	// Near triple gap (small circle around diagonal)
@@ -711,7 +713,7 @@ TEST_CASE("[Scene][JointLimitationKusudama3D] Test three cones - pose path no hi
 			real_t theta = ((real_t)i / (real_t)steps) * Math::TAU;
 			path.push_back((gap + (u * Math::cos(theta) + v * Math::sin(theta)) * r).normalized());
 		}
-		run_path("near_triple_gap", path);
+		tjk_run_path(limitation, forward, right, rot, per_path, "near_triple_gap", path);
 	}
 
 	// Just inside/outside +X cone boundary (25°)
@@ -728,7 +730,7 @@ TEST_CASE("[Scene][JointLimitationKusudama3D] Test three cones - pose path no hi
 			real_t r = CLAMP(radius1 + sign * eps, (real_t)0.01, (real_t)(Math::PI - 0.01));
 			path.push_back((cp1 * Math::cos(r) + perp * Math::sin(r)).normalized());
 		}
-		run_path("just_inside_outside_boundary", path);
+		tjk_run_path(limitation, forward, right, rot, per_path, "just_inside_outside_boundary", path);
 	}
 
 	// Along cone1–cone2 boundaries (X–Y rims)
@@ -741,7 +743,7 @@ TEST_CASE("[Scene][JointLimitationKusudama3D] Test three cones - pose path no hi
 			real_t t = (real_t)i / (real_t)steps;
 			path.push_back(slerp_unit(px, py, t));
 		}
-		run_path("along_cone1_cone2_boundaries", path);
+		tjk_run_path(limitation, forward, right, rot, per_path, "along_cone1_cone2_boundaries", path);
 	}
 
 	// Exceed limits: path in forbidden negative octant (all points outside +X,+Y,+Z cones)
@@ -758,7 +760,7 @@ TEST_CASE("[Scene][JointLimitationKusudama3D] Test three cones - pose path no hi
 			real_t theta = ((real_t)i / (real_t)steps) * (real_t)(2.0 * Math::PI * 0.7);
 			path.push_back((neg + (u * Math::cos(theta) + v * Math::sin(theta)) * 0.1f).normalized());
 		}
-		run_path("exceed_negative_octant", path);
+		tjk_run_path(limitation, forward, right, rot, per_path, "exceed_negative_octant", path);
 	}
 
 	// Exceed limits: inside +X cone -> past boundary (exceed) -> back inside
@@ -782,7 +784,7 @@ TEST_CASE("[Scene][JointLimitationKusudama3D] Test three cones - pose path no hi
 			r = CLAMP(r, (real_t)0.02, (real_t)(Math::PI - 0.02));
 			path.push_back((cp1 * Math::cos(r) + perp * Math::sin(r)).normalized());
 		}
-		run_path("exceed_past_cone_then_back", path);
+		tjk_run_path(limitation, forward, right, rot, per_path, "exceed_past_cone_then_back", path);
 	}
 
 	// Exceed limits: path along forbidden diagonal (gap) with small perturbations
@@ -800,14 +802,14 @@ TEST_CASE("[Scene][JointLimitationKusudama3D] Test three cones - pose path no hi
 			real_t r = 0.05f + 0.03f * Math::sin(theta * 2.0f);
 			path.push_back((gap + (u * Math::cos(theta) + v * Math::sin(theta)) * r).normalized());
 		}
-		run_path("exceed_along_forbidden_diagonal", path);
+		tjk_run_path(limitation, forward, right, rot, per_path, "exceed_along_forbidden_diagonal", path);
 	}
 
-	Vector<PathResult> per_path_sym = per_path;
+	Vector<TjkPathResult> per_path_sym = per_path;
 	per_path.clear();
 
 	// Setup 2: long and thin (knee/elbow style) — one larger radius, two smaller; non-overlapping (45+20<=90, 20+20<=90)
-	set_radii_and_cones(Math::deg_to_rad(45.0), Math::deg_to_rad(20.0), Math::deg_to_rad(20.0));
+	tjk_set_radii(limitation, cp1, cp2, cp3, Math::deg_to_rad(45.0), Math::deg_to_rad(20.0), Math::deg_to_rad(20.0), radius1, radius2, radius3);
 
 	// Re-run all paths with long-thin radii (path geometry uses current radius1, radius2, radius3)
 	{
@@ -818,7 +820,7 @@ TEST_CASE("[Scene][JointLimitationKusudama3D] Test three cones - pose path no hi
 			real_t t = (real_t)i / (real_t)steps;
 			path.push_back((t <= 0.5f) ? slerp_unit(cp1, gap, t * 2.0f) : slerp_unit(gap, cp3, (t - 0.5f) * 2.0f));
 		}
-		run_path("through_gap", path);
+		tjk_run_path(limitation, forward, right, rot, per_path, "through_gap", path);
 	}
 	{
 		Vector<Vector3> path;
@@ -830,7 +832,7 @@ TEST_CASE("[Scene][JointLimitationKusudama3D] Test three cones - pose path no hi
 			real_t z = Math::sin(t * Math::PI * 0.5) * 0.3 * t + (1.0 - t) * 0.1;
 			path.push_back(Vector3(x, y, z).normalized());
 		}
-		run_path("sweep_cones", path);
+		tjk_run_path(limitation, forward, right, rot, per_path, "sweep_cones", path);
 	}
 	{
 		Vector<Vector3> path;
@@ -839,7 +841,7 @@ TEST_CASE("[Scene][JointLimitationKusudama3D] Test three cones - pose path no hi
 			real_t theta = ((real_t)i / (real_t)steps) * Math::PI;
 			path.push_back(Vector3(Math::cos(theta) * 0.9f, Math::sin(theta) * 0.9f, 0.1f).normalized());
 		}
-		run_path("near_boundary", path);
+		tjk_run_path(limitation, forward, right, rot, per_path, "near_boundary", path);
 	}
 	{
 		Vector<Vector3> path;
@@ -860,7 +862,7 @@ TEST_CASE("[Scene][JointLimitationKusudama3D] Test three cones - pose path no hi
 			}
 			path.push_back(Vector3(x, y, z).normalized());
 		}
-		run_path("cross_cone_boundary", path);
+		tjk_run_path(limitation, forward, right, rot, per_path, "cross_cone_boundary", path);
 	}
 	{
 		Vector<Vector3> path;
@@ -874,7 +876,7 @@ TEST_CASE("[Scene][JointLimitationKusudama3D] Test three cones - pose path no hi
 			real_t theta = ((real_t)i / (real_t)steps) * Math::TAU;
 			path.push_back((cp1 * Math::cos(radius1) + (perp0 * Math::cos(theta) + perp1 * Math::sin(theta)) * Math::sin(radius1)).normalized());
 		}
-		run_path("along_cone_boundary", path);
+		tjk_run_path(limitation, forward, right, rot, per_path, "along_cone_boundary", path);
 	}
 	{
 		Vector3 tan0 = Vector3(Math::cos(radius1), Math::sin(radius1), 0).normalized();
@@ -885,7 +887,7 @@ TEST_CASE("[Scene][JointLimitationKusudama3D] Test three cones - pose path no hi
 			real_t t = (real_t)i / (real_t)steps;
 			path.push_back(slerp_unit(tan0, tan1, t));
 		}
-		run_path("along_tangent_arc", path);
+		tjk_run_path(limitation, forward, right, rot, per_path, "along_tangent_arc", path);
 	}
 	{
 		Vector3 on_cone = cp1 * Math::cos(radius1) + Vector3(0, 1, 0).normalized() * Math::sin(radius1);
@@ -899,7 +901,7 @@ TEST_CASE("[Scene][JointLimitationKusudama3D] Test three cones - pose path no hi
 			real_t t = (real_t)i / (real_t)steps;
 			path.push_back(slerp_unit(on_cone, on_tangent, t));
 		}
-		run_path("cone_to_tangent_junction", path);
+		tjk_run_path(limitation, forward, right, rot, per_path, "cone_to_tangent_junction", path);
 	}
 	{
 		Vector3 gap = Vector3(1, 1, 1).normalized();
@@ -915,7 +917,7 @@ TEST_CASE("[Scene][JointLimitationKusudama3D] Test three cones - pose path no hi
 			real_t theta = ((real_t)i / (real_t)steps) * Math::TAU;
 			path.push_back((gap + (u * Math::cos(theta) + v * Math::sin(theta)) * r).normalized());
 		}
-		run_path("near_triple_gap", path);
+		tjk_run_path(limitation, forward, right, rot, per_path, "near_triple_gap", path);
 	}
 	{
 		Vector3 perp = cp1.cross(Vector3(0, 1, 0)).normalized();
@@ -930,7 +932,7 @@ TEST_CASE("[Scene][JointLimitationKusudama3D] Test three cones - pose path no hi
 			real_t r = CLAMP(radius1 + sign * eps, (real_t)0.01, (real_t)(Math::PI - 0.01));
 			path.push_back((cp1 * Math::cos(r) + perp * Math::sin(r)).normalized());
 		}
-		run_path("just_inside_outside_boundary", path);
+		tjk_run_path(limitation, forward, right, rot, per_path, "just_inside_outside_boundary", path);
 	}
 	{
 		Vector3 px = Vector3(Math::cos(radius1), Math::sin(radius1), 0).normalized();
@@ -941,7 +943,7 @@ TEST_CASE("[Scene][JointLimitationKusudama3D] Test three cones - pose path no hi
 			real_t t = (real_t)i / (real_t)steps;
 			path.push_back(slerp_unit(px, py, t));
 		}
-		run_path("along_cone1_cone2_boundaries", path);
+		tjk_run_path(limitation, forward, right, rot, per_path, "along_cone1_cone2_boundaries", path);
 	}
 	{
 		Vector3 neg = Vector3(-1, -1, -1).normalized();
@@ -956,7 +958,7 @@ TEST_CASE("[Scene][JointLimitationKusudama3D] Test three cones - pose path no hi
 			real_t theta = ((real_t)i / (real_t)steps) * (real_t)(2.0 * Math::PI * 0.7);
 			path.push_back((neg + (u * Math::cos(theta) + v * Math::sin(theta)) * 0.1f).normalized());
 		}
-		run_path("exceed_negative_octant", path);
+		tjk_run_path(limitation, forward, right, rot, per_path, "exceed_negative_octant", path);
 	}
 	{
 		Vector3 perp = cp1.cross(Vector3(0, 1, 0)).normalized();
@@ -978,7 +980,7 @@ TEST_CASE("[Scene][JointLimitationKusudama3D] Test three cones - pose path no hi
 			r = CLAMP(r, (real_t)0.02, (real_t)(Math::PI - 0.02));
 			path.push_back((cp1 * Math::cos(r) + perp * Math::sin(r)).normalized());
 		}
-		run_path("exceed_past_cone_then_back", path);
+		tjk_run_path(limitation, forward, right, rot, per_path, "exceed_past_cone_then_back", path);
 	}
 	{
 		Vector3 gap = Vector3(1, 1, 1).normalized();
@@ -994,7 +996,7 @@ TEST_CASE("[Scene][JointLimitationKusudama3D] Test three cones - pose path no hi
 			real_t r = 0.05f + 0.03f * Math::sin(theta * 2.0f);
 			path.push_back((gap + (u * Math::cos(theta) + v * Math::sin(theta)) * r).normalized());
 		}
-		run_path("exceed_along_forbidden_diagonal", path);
+		tjk_run_path(limitation, forward, right, rot, per_path, "exceed_along_forbidden_diagonal", path);
 	}
 
 	// Every path — including along_tangent_arc — must keep the constraint's added
