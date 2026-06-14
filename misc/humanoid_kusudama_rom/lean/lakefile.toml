@@ -20,3 +20,6 @@ name = "IKFold"
 
 [[lean_lib]]
 name = "IKFast"
+
+[[lean_lib]]
+name = "IKJerk"

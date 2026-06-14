@@ -266,6 +266,20 @@ void SwingTwistIK3D::solve() {
 		}
 	}
 
+	// Solver knobs inherited from IterateIK3D, all honored below: max_iterations (loop bound),
+	// angular_delta_limit (per-step jerk cap), min_distance (early-out), and influence (blend).
+	// `deterministic` is always satisfied -- this solve has a fixed tip->root order and no
+	// randomness, so it is deterministic regardless of the flag.
+	const double min_d_sq = get_min_distance() * get_min_distance();
+	const real_t infl = get_influence();
+	LocalVector<Quaternion> orig_rot; // pre-solve local rotations of the rotated bones (influence blend)
+	if (infl < (real_t)1.0) {
+		orig_rot.resize(solve_order.size());
+		for (uint32_t i = 0; i < solve_order.size(); i++) {
+			orig_rot[i] = sk->get_bone_pose_rotation(solve_order[i]);
+		}
+	}
+
 	LocalVector<Transform3D> gp;
 	gp.resize(bc);
 	// Seat each pose position at its rest offset (this solver drives only rotation; the pose
@@ -354,8 +368,36 @@ void SwingTwistIK3D::solve() {
 			const Basis parent_basis = parent >= 0 ? gp[parent].basis : Basis();
 			const Quaternion cand_local = (parent_basis.inverse() * new_gbasis).get_rotation_quaternion();
 			const Ref<JointLimitationKusudama3D> *limp = limitations.getptr(b);
-			sk->set_bone_pose_rotation(b, _clamp_swing_twist(sk, b, limp ? *limp : Ref<JointLimitationKusudama3D>(), cand_local));
+			Quaternion target_local = _clamp_swing_twist(sk, b, limp ? *limp : Ref<JointLimitationKusudama3D>(), cand_local);
+			// Rate-limit the per-iteration rotation delta (mirrors IterateIK3D's angular_delta_limit):
+			// at a kinematic fold the candidate can flip ~180deg in one step; slerping the delta down
+			// to the limit spreads that across iterations/frames so the joint sweeps smoothly instead
+			// of teleporting (bounded per-step angle => bounded jerk). At alignment diff~0 => no change,
+			// so the "hits the marker when aligned" fixed point is preserved.
+			const Quaternion prev_local = sk->get_bone_pose_rotation(b);
+			const double diff = prev_local.angle_to(target_local);
+			const double adl = get_angular_delta_limit();
+			if (diff > adl && !Math::is_zero_approx(diff)) {
+				target_local = prev_local.slerp(target_local, adl / diff);
+			}
+			sk->set_bone_pose_rotation(b, target_local);
 			_refresh_subtree(sk, gp, refresh_stack, child_offset, child_index, b); // refresh b's subtree, keep gp consistent
+		}
+		// Early-out (min_distance): stop once every effector is within min_distance of its target.
+		double worst_sq = 0.0;
+		for (const Effector &e : effectors) {
+			worst_sq = MAX(worst_sq, (double)(e.target.origin - gp[e.tip_bone].origin).length_squared());
+		}
+		if (worst_sq <= min_d_sq) {
+			break;
+		}
+	}
+	// Influence: blend each rotated bone from its pre-solve pose toward the solved pose. 1.0 (the
+	// default) leaves the full IK result untouched; <1 eases the IK in (animators' partial-IK knob).
+	if (infl < (real_t)1.0) {
+		for (uint32_t i = 0; i < solve_order.size(); i++) {
+			const int b = solve_order[i];
+			sk->set_bone_pose_rotation(b, orig_rot[i].slerp(sk->get_bone_pose_rotation(b), infl));
 		}
 	}
 	sk->force_update_all_bone_transforms();

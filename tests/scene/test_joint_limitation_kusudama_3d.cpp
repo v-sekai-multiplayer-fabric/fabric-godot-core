@@ -2590,6 +2590,7 @@ TEST_CASE("[SceneTree][SwingTwistIK3D] Whole-body swing-twist solve reaches the 
 	ik->set_end_bone_name(0, "Tip");
 	ik->set_target_node(0, NodePath("Target"));
 	ik->set_max_iterations(40);
+	ik->set_angular_delta_limit(Math::PI); // this case checks REACH, not smoothness: allow full steps
 	ik->solve();
 
 	const Vector3 reached = sk->get_bone_global_pose(tip).origin;
@@ -2720,6 +2721,7 @@ TEST_CASE("[SceneTree][SwingTwistIK3D] adversarial robustness / determinism / in
 		ik->set_end_bone_name(0, vformat("B%d", n - 1));
 		ik->set_target_node(0, NodePath("Target"));
 		ik->set_max_iterations(20);
+		ik->set_angular_delta_limit(Math::PI); // robustness/clamp/stability scenarios use full steps
 	};
 	auto finite = [](Skeleton3D *s) -> bool {
 		for (int b = 0; b < s->get_bone_count(); b++) {
