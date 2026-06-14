@@ -17,3 +17,6 @@ name = "JointRom"
 
 [[lean_lib]]
 name = "IKFold"
+
+[[lean_lib]]
+name = "IKFast"

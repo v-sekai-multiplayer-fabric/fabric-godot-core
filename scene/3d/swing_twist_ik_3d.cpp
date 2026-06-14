@@ -25,17 +25,6 @@ static Basis st_proper_rotation(const Basis &p_b) {
 	return o;
 }
 
-bool SwingTwistIK3D::_is_ancestor(Skeleton3D *p_sk, int p_anc, int p_bone) const {
-	int b = p_bone;
-	while (b >= 0) {
-		if (b == p_anc) {
-			return true;
-		}
-		b = p_sk->get_bone_parent(b);
-	}
-	return false;
-}
-
 void SwingTwistIK3D::_full_fk(Skeleton3D *p_sk, LocalVector<Transform3D> &p_gp) const {
 	const int bc = p_sk->get_bone_count();
 	for (int o = 0; o < bc; o++) {
@@ -44,7 +33,7 @@ void SwingTwistIK3D::_full_fk(Skeleton3D *p_sk, LocalVector<Transform3D> &p_gp) 
 	}
 }
 
-void SwingTwistIK3D::_refresh_subtree(Skeleton3D *p_sk, LocalVector<Transform3D> &p_gp, LocalVector<int> &p_stack, int p_root) const {
+void SwingTwistIK3D::_refresh_subtree(Skeleton3D *p_sk, LocalVector<Transform3D> &p_gp, LocalVector<int> &p_stack, const LocalVector<int> &p_child_offset, const LocalVector<int> &p_child_index, int p_root) const {
 	p_stack.clear();
 	p_stack.push_back(p_root);
 	while (!p_stack.is_empty()) {
@@ -52,9 +41,8 @@ void SwingTwistIK3D::_refresh_subtree(Skeleton3D *p_sk, LocalVector<Transform3D>
 		p_stack.resize(p_stack.size() - 1);
 		const int p = p_sk->get_bone_parent(x);
 		p_gp[x] = (p >= 0 ? p_gp[p] : Transform3D()) * p_sk->get_bone_pose(x); // parent already current
-		const Vector<int> children = p_sk->get_bone_children(x);
-		for (int i = 0; i < children.size(); i++) {
-			p_stack.push_back(children[i]);
+		for (int k = p_child_offset[x]; k < p_child_offset[x + 1]; k++) {
+			p_stack.push_back(p_child_index[k]);
 		}
 	}
 }
@@ -213,6 +201,59 @@ void SwingTwistIK3D::solve() {
 		order_dirty = false;
 	}
 
+	// CSR children adjacency, built once: get_bone_children() returns a Vector<int> BY VALUE
+	// (a heap allocation per call), which the per-bone subtree refresh would hit in its hot
+	// loop. A flat offset+index array gives the same children with no allocation. (childrenOf
+	// equivalence is proven in misc/humanoid_kusudama_rom/lean/IKFast.lean.)
+	LocalVector<int> child_offset;
+	child_offset.resize(bc + 1);
+	for (int b = 0; b <= bc; b++) {
+		child_offset[b] = 0;
+	}
+	for (int b = 0; b < bc; b++) {
+		const int p = sk->get_bone_parent(b);
+		if (p >= 0) {
+			child_offset[p + 1]++;
+		}
+	}
+	for (int b = 0; b < bc; b++) {
+		child_offset[b + 1] += child_offset[b];
+	}
+	LocalVector<int> child_index;
+	child_index.resize(child_offset[bc]);
+	LocalVector<int> child_cursor;
+	child_cursor.resize(bc);
+	for (int b = 0; b < bc; b++) {
+		child_cursor[b] = child_offset[b];
+	}
+	for (int b = 0; b < bc; b++) {
+		const int p = sk->get_bone_parent(b);
+		if (p >= 0) {
+			child_index[child_cursor[p]++] = b;
+		}
+	}
+
+	// Downstream-effector table, built once (O(effectors * depth)): for each controlled bone,
+	// the indices of effectors lying in its subtree. Replaces the per-iteration _is_ancestor
+	// rescan; indexed by solve_order position. (downstream-table equivalence is proven in
+	// IKFast.lean; the walk preserves effector order, so the Kabsch input is bit-identical.)
+	HashMap<int, int> order_index;
+	for (uint32_t i = 0; i < solve_order.size(); i++) {
+		order_index[solve_order[i]] = (int)i;
+	}
+	LocalVector<LocalVector<int>> down_by_order;
+	down_by_order.resize(solve_order.size());
+	for (uint32_t i = 0; i < effectors.size(); i++) {
+		int x = effectors[i].tip_bone;
+		while (x >= 0) {
+			const int *oi = order_index.getptr(x);
+			if (oi) {
+				down_by_order[*oi].push_back((int)i);
+			}
+			x = sk->get_bone_parent(x);
+		}
+	}
+
 	LocalVector<Transform3D> gp;
 	gp.resize(bc);
 	// Seat each pose position at its rest offset (this solver drives only rotation; the pose
@@ -253,7 +294,7 @@ void SwingTwistIK3D::solve() {
 			}
 			resid /= (real_t)effectors.size();
 			sk->set_bone_pose_position(motion_root, sk->get_bone_pose(motion_root).origin + resid);
-			_refresh_subtree(sk, gp, refresh_stack, motion_root); // root moved -> its subtree shifts
+			_refresh_subtree(sk, gp, refresh_stack, child_offset, child_index, motion_root); // root moved
 		}
 		// Tip -> root: joints nearest the effector bend first (reach sub-extension targets).
 		for (int bi = (int)solve_order.size() - 1; bi >= 0; bi--) {
@@ -272,17 +313,16 @@ void SwingTwistIK3D::solve() {
 				// Effector tip: its full target frame (6D axes) sets the orientation.
 				new_gbasis = st_proper_rotation(effectors[tip_eff].target.basis);
 			} else {
+				const LocalVector<int> &downstream = down_by_order[bi];
+				if (downstream.is_empty()) {
+					continue; // no downstream effector pulls this bone
+				}
 				LocalVector<Vector3> rest_pts;
 				LocalVector<Vector3> tgt_pts;
-				for (uint32_t i = 0; i < effectors.size(); i++) {
-					if (!_is_ancestor(sk, b, effectors[i].tip_bone)) {
-						continue;
-					}
-					rest_pts.push_back(gp[effectors[i].tip_bone].origin - gb.origin);
-					tgt_pts.push_back(effectors[i].target.origin - gb.origin);
-				}
-				if (rest_pts.is_empty()) {
-					continue;
+				for (uint32_t k = 0; k < downstream.size(); k++) {
+					const Effector &e = effectors[downstream[k]];
+					rest_pts.push_back(gp[e.tip_bone].origin - gb.origin);
+					tgt_pts.push_back(e.target.origin - gb.origin);
 				}
 				Basis R;
 				if (rest_pts.size() == 1) {
@@ -303,7 +343,7 @@ void SwingTwistIK3D::solve() {
 			const Quaternion cand_local = (parent_basis.inverse() * new_gbasis).get_rotation_quaternion();
 			const Ref<JointLimitationKusudama3D> *limp = limitations.getptr(b);
 			sk->set_bone_pose_rotation(b, _clamp_swing_twist(sk, b, limp ? *limp : Ref<JointLimitationKusudama3D>(), cand_local));
-			_refresh_subtree(sk, gp, refresh_stack, b); // bone b rotated -> refresh its subtree, keep gp consistent
+			_refresh_subtree(sk, gp, refresh_stack, child_offset, child_index, b); // refresh b's subtree, keep gp consistent
 		}
 	}
 	sk->force_update_all_bone_transforms();
