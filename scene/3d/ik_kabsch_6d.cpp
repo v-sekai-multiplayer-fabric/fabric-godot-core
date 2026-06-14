@@ -87,9 +87,37 @@ void IKKabsch6D::svd3(const double p_m[3][3], double r_u[3][3], double r_v[3][3]
 			}
 		}
 	} else if (r_sigma[1] <= eps) {
-		const Vector3 c0(r_u[0][0], r_u[1][0], r_u[2][0]);
-		const Vector3 c1 = c0.get_any_perpendicular().normalized();
-		const Vector3 c2 = c0.cross(c1).normalized();
+		// Rank 1: the swing axis is pinned (u0 <- v0), the perpendicular (twist) plane is free. Any
+		// perpendicular is a legal completion, so pick the CANONICAL one -- minimal twist -- by
+		// carrying V's free axes v1,v2 through the shortest arc v0 -> u0. Then U = [u0, R0 v1, R0 v2]
+		// and R = U V^T = R0, the swing-only (shortest-arc) rotation: deterministic and continuous,
+		// instead of get_any_perpendicular()'s arbitrary, flip-prone pick. (Verified in
+		// misc/humanoid_kusudama_rom/lean/KusKabsch.lean.)
+		const Vector3 u0(r_u[0][0], r_u[1][0], r_u[2][0]);
+		const Vector3 v0(r_v[0][0], r_v[1][0], r_v[2][0]);
+		const Vector3 v1(r_v[0][1], r_v[1][1], r_v[2][1]);
+		const Vector3 v2(r_v[0][2], r_v[1][2], r_v[2][2]);
+		Vector3 c1;
+		Vector3 c2;
+		const Vector3 axis = v0.cross(u0);
+		const double s = axis.length();
+		const double c = v0.dot(u0);
+		if (s < 1e-9) {
+			if (c > 0.0) {
+				c1 = v1; // v0 == u0: shortest arc is identity, carry V's free axes unchanged.
+				c2 = v2;
+			} else {
+				c1 = u0.get_any_perpendicular().normalized(); // antipodal: 180deg, twist truly free.
+				c2 = u0.cross(c1).normalized();
+			}
+		} else {
+			const Vector3 k = axis / s; // unit rotation axis of the shortest arc v0 -> u0
+			const double ang = Math::atan2(s, c);
+			const double cs = Math::cos(ang);
+			const double sn = Math::sin(ang);
+			c1 = v1 * cs + k.cross(v1) * sn + k * (k.dot(v1) * (1.0 - cs)); // Rodrigues
+			c2 = v2 * cs + k.cross(v2) * sn + k * (k.dot(v2) * (1.0 - cs));
+		}
 		r_u[0][1] = c1.x;
 		r_u[1][1] = c1.y;
 		r_u[2][1] = c1.z;
