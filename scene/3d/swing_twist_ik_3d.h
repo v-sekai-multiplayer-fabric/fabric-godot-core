@@ -23,6 +23,8 @@ class SwingTwistIK3D : public IterateIK3D {
 	struct Effector {
 		int tip_bone = -1;
 		Transform3D target; // skeleton-local 6D goal frame
+		real_t pos_weight = 1.0; // scales this effector's pull in the weighted Kabsch
+		real_t orient_weight = 1.0; // scales how much the tip matches the target basis (the "star")
 	};
 
 	// One unified animator concept: a bone is PINNED (has a target -> dragged), FREE (no pin
@@ -32,6 +34,20 @@ class SwingTwistIK3D : public IterateIK3D {
 	HashMap<StringName, bool> locked_bones; // bones frozen at FK (excluded from the solve)
 	bool free_root = false; // an UNPINNED motion root translates so pins (e.g. hands) drag the body
 	StringName root_bone_name; // the motion root; empty -> first parentless bone
+
+	// Per-JOINT weights, stored the IterateIK3D way: in the chain settings, exposed as
+	// settings/i/joints/j/pin_weight via _get_property_list/_set/_get (so they persist + undo
+	// like the per-joint limitation). position scales how hard the solver pulls that bone to its
+	// target point (weighted Kabsch); orientation scales how hard it matches the target BASIS (the
+	// "star"). A POLE is not a special case -- it is just a low-position, zero-orientation weight
+	// on a mid joint (elbow/knee) that also carries a pin: the strong wrist owns the reach, so the
+	// weak elbow can only influence the leftover roll DOF, swinging the elbow toward its target.
+	struct PinWeight {
+		real_t position = 1.0;
+		real_t orientation = 1.0;
+	};
+	LocalVector<LocalVector<PinWeight>> joint_weights; // [setting][joint]; resized to the chains
+	void _sync_joint_weights() const; // grow joint_weights to match the current settings/joint counts
 
 	LocalVector<int> solve_order; // parents before children; rebuilt each solve from the live skeleton
 
@@ -46,6 +62,10 @@ class SwingTwistIK3D : public IterateIK3D {
 protected:
 	static void _bind_methods();
 	void _validate_property(PropertyInfo &p_property) const;
+	// Store per-joint pin weights the IterateIK3D way (settings/i/joints/j/pin_weight).
+	void _get_property_list(List<PropertyInfo> *p_list) const;
+	bool _set(const StringName &p_name, const Variant &p_value);
+	bool _get(const StringName &p_name, Variant &r_ret) const;
 	virtual void _process_modification(double p_delta) override;
 
 public:
@@ -68,6 +88,13 @@ public:
 	Dictionary get_pins() const;
 	void set_locked_bones(const PackedStringArray &p_locked);
 	PackedStringArray get_locked_bones() const;
+
+	// Per-JOINT weights (also the mechanism for poles, soft IK, position-only goals). x = position
+	// weight (pull to the target point); y = orientation weight (match the target basis, the
+	// "star"). Stored with the chain joint and serialized as settings/i/joints/j/pin_weight.
+	// A pole = pin the mid joint + set_joint_pin_weight(chain, mid_joint, ~0.3, 0.0).
+	void set_joint_pin_weight(int p_index, int p_joint, real_t p_position, real_t p_orientation);
+	Vector2 get_joint_pin_weight(int p_index, int p_joint) const; // (position, orientation); (1,1) default
 
 	// Free root: an UNPINNED motion root translates so the pins (e.g. the hands) drag the whole
 	// body; pin the root (set_pin on it) to ground/drag it directly instead.
