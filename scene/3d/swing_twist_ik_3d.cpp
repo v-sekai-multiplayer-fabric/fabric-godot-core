@@ -138,7 +138,6 @@ void SwingTwistIK3D::solve() {
 				Effector e;
 				e.tip_bone = tip;
 				e.target = tgt;
-				e.valid = true;
 				effectors.push_back(e);
 				controlled[tip] = true;
 			}
@@ -155,7 +154,6 @@ void SwingTwistIK3D::solve() {
 				Effector e;
 				e.tip_bone = tip;
 				e.target = tgt;
-				e.valid = true;
 				effectors.push_back(e);
 				controlled[tip] = true;
 			}

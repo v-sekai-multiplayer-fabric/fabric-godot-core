@@ -23,7 +23,6 @@ class SwingTwistIK3D : public IterateIK3D {
 	struct Effector {
 		int tip_bone = -1;
 		Transform3D target; // skeleton-local 6D goal frame
-		bool valid = false;
 	};
 
 	// One unified animator concept: a bone is PINNED (has a target -> dragged), FREE (no pin
@@ -37,7 +36,6 @@ class SwingTwistIK3D : public IterateIK3D {
 	LocalVector<int> solve_order; // parents before children (whole skeleton)
 	bool order_dirty = true;
 
-	void _rebuild_order(Skeleton3D *p_sk);
 	bool _is_ancestor(Skeleton3D *p_sk, int p_anc, int p_bone) const;
 	Quaternion _clamp_swing_twist(Skeleton3D *p_sk, int p_bone, const Ref<JointLimitationKusudama3D> &p_lim, const Quaternion &p_candidate_local) const;
 
