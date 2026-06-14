@@ -2749,6 +2749,49 @@ TEST_CASE("[SceneTree][SwingTwistIK3D] pinned root translates to its target; sti
 	memdelete(sk);
 }
 
+// Extended end bone: a single self-rooted bone whose real effector is its `length`-long extension
+// (extend_end_bone) must AIM that extension at the target, like FABRIK/CCDIK -- not sit at identity
+// because the bone origin can't move. Regression for SwingTwistIK3D ignoring the end-bone extension.
+TEST_CASE("[SceneTree][SwingTwistIK3D] extended end bone aims its extension at the target") {
+	SceneTree *tree = SceneTree::get_singleton();
+	Skeleton3D *sk = memnew(Skeleton3D);
+	tree->get_root()->add_child(sk);
+	const int root = sk->add_bone("Root");
+	const int tip = sk->add_bone("Tip");
+	sk->set_bone_parent(tip, root);
+	sk->set_bone_rest(root, Transform3D(Basis(), Vector3(0, 0, 0)));
+	sk->set_bone_rest(tip, Transform3D(Basis(), Vector3(0, 1, 0))); // Tip extends +Y from Root
+	sk->notification(Skeleton3D::NOTIFICATION_UPDATE_SKELETON);
+
+	SwingTwistIK3D *ik = memnew(SwingTwistIK3D);
+	sk->add_child(ik);
+	Marker3D *target = memnew(Marker3D);
+	ik->add_child(target);
+	target->set_name("Target");
+	target->set_position(Vector3(3, 1, 0)); // off to +X of the Tip origin (0,1,0)
+	sk->notification(Skeleton3D::NOTIFICATION_UPDATE_SKELETON);
+	ik->set_setting_count(1);
+	ik->set_root_bone_name(0, "Tip"); // self-rooted single bone, like the vertical-slice rig
+	ik->set_end_bone_name(0, "Tip");
+	ik->set_extend_end_bone(0, true);
+	ik->set_end_bone_length(0, 2.0);
+	ik->set_end_bone_direction(0, SkeletonModifier3D::BONE_DIRECTION_FROM_PARENT);
+	ik->set_target_node(0, NodePath("Target"));
+	ik->set_max_iterations(40);
+	ik->set_angular_delta_limit(Math::PI); // no per-step cap, so the single-bone aim converges fully
+	ik->solve();
+
+	// The bone must actually rotate (not the old identity no-op)...
+	CHECK_FALSE(sk->get_bone_pose(tip).basis.get_rotation_quaternion().is_equal_approx(Quaternion()));
+	// ...and its extension (rest +Y, carried by the solved basis) must point at the marker.
+	const Vector3 tip_o = sk->get_bone_global_pose(tip).origin;
+	const Vector3 ext_dir = sk->get_bone_global_pose(tip).basis.xform(Vector3(0, 1, 0)).normalized();
+	const Vector3 to_marker = (Vector3(3, 1, 0) - tip_o).normalized();
+	CHECK(ext_dir.dot(to_marker) > 0.99);
+
+	memdelete(sk);
+}
+
 // Adversarial: hostile inputs must never corrupt the skeleton (NaN/degenerate -> finite),
 // the solve must be deterministic and stable, locked bones immovable, and the kusudama clamp
 // must hold even when a target pulls hard against it.

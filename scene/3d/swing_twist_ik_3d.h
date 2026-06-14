@@ -22,6 +22,7 @@ class SwingTwistIK3D : public IterateIK3D {
 	struct Effector {
 		int tip_bone = -1;
 		Transform3D target; // skeleton-local 6D goal frame
+		Vector3 ext_local; // end-bone extension offset in tip_bone's local frame; zero = at bone origin
 		real_t pos_weight = 1.0; // scales this effector's pull in the weighted Kabsch
 		real_t swing_weight = 1.0; // scales matching the target's forward axis at the tip
 		real_t twist_weight = 1.0; // scales matching the target's roll at the tip

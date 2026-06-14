@@ -290,6 +290,16 @@ void SwingTwistIK3D::solve() {
 				Effector e;
 				e.tip_bone = tip;
 				e.target = tgt;
+				// Extended end bone: the real effector is the virtual tip `length` out along the
+				// end-bone direction (what FABRIK/CCDIK aim). Store it as a local offset so rotating
+				// the bone moves it; without this a self-rooted single bone has no movable effector.
+				if (is_end_bone_extended(s) && get_end_bone_length(s) > (real_t)0.0) {
+					// REST-based axis (not the mutable pose): the bone poses are not seated until later
+					// in solve(), so the mutable variant would read an unseated (0,0,0) pose and return
+					// a zero axis. The extension length/direction is a rest-geometry property anyway.
+					const Vector3 axis = IKModifier3D::get_bone_axis(sk, tip, get_end_bone_direction(s), false);
+					e.ext_local = axis * get_end_bone_length(s);
+				}
 				if (const JointWeight *pw = bone_weight.getptr(tip)) {
 					e.pos_weight = pw->position;
 					e.swing_weight = pw->swing;
@@ -465,16 +475,26 @@ void SwingTwistIK3D::solve() {
 			}
 			Basis new_gbasis;
 			if (tip_eff >= 0) {
-				// Effector tip: match the target frame, but split the orientation delta into its
-				// SWING (aim the forward axis) and TWIST (roll about it) parts and scale each by its
-				// PST priority. swing=twist=1 -> full 6D match; both 0 -> keep FK orientation
-				// (position-only goal); independent values let an animator match aim but free the
-				// roll, etc. The split uses the bone's forward (its first child's rest dir).
+				// Effector tip. An EXTENDED end bone has no orientation to match, so it aims its
+				// extension at the target position (FABRIK-style). Otherwise match the target frame,
+				// splitting the orientation delta into SWING (aim the forward axis) and TWIST (roll
+				// about it) and scaling each by its PST priority: swing=twist=1 -> full 6D match;
+				// both 0 -> keep FK orientation; independent values match aim but free the roll, etc.
+				// The split uses the bone's forward (its first child's rest dir).
 				const Effector &te = effectors[tip_eff];
-				const Basis tgt_basis = st_proper_rotation(te.target.basis);
-				if (te.swing_weight >= (real_t)1.0 && te.twist_weight >= (real_t)1.0) {
-					new_gbasis = tgt_basis;
+				if (!te.ext_local.is_zero_approx()) {
+					// Extended end bone: aim its rigid extension at the target POSITION (FABRIK-style).
+					// A position target carries no orientation to match; rotating the bone moves the
+					// attached tip, and the kusudama clamps the resulting swing below.
+					const Vector3 cur_dir = gb.basis.xform(te.ext_local).normalized();
+					const Vector3 tgt_dir = (te.target.origin - gb.origin).normalized();
+					new_gbasis = (cur_dir.is_zero_approx() || tgt_dir.is_zero_approx())
+							? gb.basis
+							: Basis(Quaternion(cur_dir, tgt_dir)) * gb.basis;
+				} else if (te.swing_weight >= (real_t)1.0 && te.twist_weight >= (real_t)1.0) {
+					new_gbasis = st_proper_rotation(te.target.basis);
 				} else {
+					const Basis tgt_basis = st_proper_rotation(te.target.basis);
 					const Quaternion cur_q = gp[b].basis.get_rotation_quaternion();
 					const Quaternion delta = tgt_basis.get_rotation_quaternion() * cur_q.inverse(); // global cur->tgt
 					// twist axis = current global forward.
@@ -517,7 +537,7 @@ void SwingTwistIK3D::solve() {
 					// "pole") thus only nudges the fit -- the strong wrist pin dominates the reach.
 					// dtransmit folds in isolation (intervening pins blocking this pull).
 					const real_t sw = Math::sqrt(MAX((real_t)0.0, e.pos_weight * dtransmit[k]));
-					rest_pts.push_back((gp[e.tip_bone].origin - gb.origin) * sw);
+					rest_pts.push_back((gp[e.tip_bone].xform(e.ext_local) - gb.origin) * sw); // extended tip
 					tgt_pts.push_back((e.target.origin - gb.origin) * sw);
 				}
 				Basis R;
@@ -577,7 +597,7 @@ void SwingTwistIK3D::solve() {
 		// Early-out (min_distance): stop once every effector is within min_distance of its target.
 		double worst_sq = 0.0;
 		for (const Effector &e : effectors) {
-			worst_sq = MAX(worst_sq, (double)(e.target.origin - gp[e.tip_bone].origin).length_squared());
+			worst_sq = MAX(worst_sq, (double)(e.target.origin - gp[e.tip_bone].xform(e.ext_local)).length_squared());
 		}
 		if (worst_sq <= min_d_sq) {
 			break;
