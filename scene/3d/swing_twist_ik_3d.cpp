@@ -221,6 +221,21 @@ real_t SwingTwistIK3D::get_joint_isolation(int p_index, int p_joint) const {
 	return joint_weights[p_index][p_joint].isolation;
 }
 
+void SwingTwistIK3D::set_joint_relax(int p_index, int p_joint, real_t p_relax) {
+	_sync_joint_weights();
+	ERR_FAIL_INDEX(p_index, (int)joint_weights.size());
+	ERR_FAIL_INDEX(p_joint, (int)joint_weights[p_index].size());
+	joint_weights[p_index][p_joint].relax = CLAMP(p_relax, (real_t)0.0, (real_t)1.0);
+}
+
+real_t SwingTwistIK3D::get_joint_relax(int p_index, int p_joint) const {
+	_sync_joint_weights();
+	if (p_index < 0 || p_index >= (int)joint_weights.size() || p_joint < 0 || p_joint >= (int)joint_weights[p_index].size()) {
+		return 0.0;
+	}
+	return joint_weights[p_index][p_joint].relax;
+}
+
 void SwingTwistIK3D::_get_property_list(List<PropertyInfo> *p_list) const {
 	IterateIK3D::_get_property_list(p_list);
 	_sync_joint_weights();
@@ -233,6 +248,7 @@ void SwingTwistIK3D::_get_property_list(List<PropertyInfo> *p_list) const {
 			p_list->push_back(PropertyInfo(Variant::FLOAT, vformat("settings/%d/joints/%d/stiffness", i, j), PROPERTY_HINT_RANGE, "0,1,0.01"));
 			p_list->push_back(PropertyInfo(Variant::FLOAT, vformat("settings/%d/joints/%d/engage", i, j), PROPERTY_HINT_RANGE, "0,1,0.01"));
 			p_list->push_back(PropertyInfo(Variant::FLOAT, vformat("settings/%d/joints/%d/isolation", i, j), PROPERTY_HINT_RANGE, "0,1,0.01"));
+			p_list->push_back(PropertyInfo(Variant::FLOAT, vformat("settings/%d/joints/%d/relax", i, j), PROPERTY_HINT_RANGE, "0,1,0.01"));
 		}
 	}
 }
@@ -258,6 +274,10 @@ bool SwingTwistIK3D::_set(const StringName &p_name, const Variant &p_value) {
 			set_joint_isolation(parts[1].to_int(), parts[3].to_int(), p_value);
 			return true;
 		}
+		if (parts.size() == 5 && parts[4] == "relax") {
+			set_joint_relax(parts[1].to_int(), parts[3].to_int(), p_value);
+			return true;
+		}
 	}
 	return IterateIK3D::_set(p_name, p_value);
 }
@@ -280,6 +300,10 @@ bool SwingTwistIK3D::_get(const StringName &p_name, Variant &r_ret) const {
 		}
 		if (parts.size() == 5 && parts[4] == "isolation") {
 			r_ret = get_joint_isolation(parts[1].to_int(), parts[3].to_int());
+			return true;
+		}
+		if (parts.size() == 5 && parts[4] == "relax") {
+			r_ret = get_joint_relax(parts[1].to_int(), parts[3].to_int());
 			return true;
 		}
 	}
@@ -633,6 +657,13 @@ void SwingTwistIK3D::solve() {
 				if (pw->stiffness > (real_t)0.0) {
 					target_local = prev_local.slerp(target_local, MAX((real_t)0.0, (real_t)1.0 - pw->stiffness));
 				}
+				// RELAX: pull the target toward the bone's REST pose. The effectors re-assert the
+				// reach each iteration, so this only claims the slack they leave free; at 1 the bone
+				// sits at rest (reach abandoned).
+				if (pw->relax > (real_t)0.0) {
+					const Quaternion rest_q = sk->get_bone_rest(b).basis.get_rotation_quaternion();
+					target_local = target_local.slerp(rest_q, pw->relax);
+				}
 			}
 			// Rate-limit the per-iteration rotation delta (mirrors IterateIK3D's angular_delta_limit):
 			// at a kinematic fold the candidate can flip ~180deg in one step; slerping the delta down
@@ -715,6 +746,8 @@ void SwingTwistIK3D::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("get_joint_engage", "setting", "joint"), &SwingTwistIK3D::get_joint_engage);
 	ClassDB::bind_method(D_METHOD("set_joint_isolation", "setting", "joint", "isolation"), &SwingTwistIK3D::set_joint_isolation);
 	ClassDB::bind_method(D_METHOD("get_joint_isolation", "setting", "joint"), &SwingTwistIK3D::get_joint_isolation);
+	ClassDB::bind_method(D_METHOD("set_joint_relax", "setting", "joint", "relax"), &SwingTwistIK3D::set_joint_relax);
+	ClassDB::bind_method(D_METHOD("get_joint_relax", "setting", "joint"), &SwingTwistIK3D::get_joint_relax);
 
 	// All interactive state is serialized so it persists in the scene and is undoable via the
 	// inspector's built-in EditorUndoRedoManager. Per-joint weights ride the chain settings

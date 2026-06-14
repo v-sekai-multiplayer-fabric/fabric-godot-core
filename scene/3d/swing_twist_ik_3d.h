@@ -55,6 +55,8 @@ class SwingTwistIK3D : public IterateIK3D {
 		real_t engage = 0.0; // [0..1] how LATE in the solve this bone joins: 0 = from the start
 		real_t isolation = 0.0; // [0..1] a pin's isolation: 1 = its bone blocks descendant pulls from
 		// reaching ancestors above it; 0 = transparent (descendants pull through). EWBIK depthFalloff.
+		real_t relax = 0.0; // [0..1] restoring pull toward the bone's REST pose: 0 = none, 1 = sit at
+		// rest. Resolves the redundant null-space toward the comfortable pose. EWBIK returnfulness.
 	};
 	LocalVector<LocalVector<PinWeight>> joint_weights; // [setting][joint]; resized to the chains
 	void _sync_joint_weights() const; // grow joint_weights to match the current settings/joint counts
@@ -116,6 +118,10 @@ public:
 	real_t get_joint_engage(int p_index, int p_joint) const;
 	void set_joint_isolation(int p_index, int p_joint, real_t p_isolation);
 	real_t get_joint_isolation(int p_index, int p_joint) const;
+	// RELAX [0..1]: a restoring pull toward the bone's REST pose (EWBIK returnfulness). It biases
+	// only the slack the effectors leave free, so reach is preserved; at 1 the bone sits at rest.
+	void set_joint_relax(int p_index, int p_joint, real_t p_relax);
+	real_t get_joint_relax(int p_index, int p_joint) const;
 
 	// Free root: an UNPINNED motion root translates so the pins (e.g. the hands) drag the whole
 	// body; pin the root (set_pin on it) to ground/drag it directly instead.

@@ -536,6 +536,40 @@ Vector3 JointLimitationKusudama3D::_closest_on_small_circle(const Vector3 &p_poi
 	return (p_center * Math::cos(p_radius) + perp * Math::sin(p_radius)).normalized();
 }
 
+// Append a boundary closest-point candidate, tracking the nearest (anchor). (File-static helpers
+// instead of lambdas, per the no-lambda/no-auto style.)
+static void k_add_candidate(LocalVector<Vector3> &p_candidates, LocalVector<real_t> &p_distances, real_t &p_min_dist, uint32_t &p_anchor, const Vector3 &p_point, const Vector3 &q) {
+	const real_t d = p_point.angle_to(q);
+	p_candidates.push_back(q);
+	p_distances.push_back(d);
+	if (d < p_min_dist) {
+		p_min_dist = d;
+		p_anchor = p_candidates.size() - 1;
+	}
+}
+
+// Soft-saturate p_point's angle to one boundary circle and add the resulting candidate. keep_in:
+// cone (angle -> limit from below); else tangent circle (angle -> limit from above).
+static void k_soft_saturated(const Vector3 &p_point, real_t p_soft_band, LocalVector<Vector3> &p_candidates, LocalVector<real_t> &p_distances, real_t &p_min_dist, uint32_t &p_anchor, const Vector3 &p_center, real_t p_limit, bool p_keep_in) {
+	const real_t th = p_point.angle_to(p_center);
+	real_t th_sat = th;
+	if (p_keep_in) {
+		if (th > p_limit - p_soft_band) {
+			th_sat = p_limit - p_soft_band * Math::exp(-(th - (p_limit - p_soft_band)) / p_soft_band);
+		}
+	} else {
+		if (th < p_limit + p_soft_band) {
+			th_sat = p_limit + p_soft_band * Math::exp(-((p_limit + p_soft_band) - th) / p_soft_band);
+		}
+	}
+	Vector3 perp = p_point - p_center * p_center.dot(p_point);
+	if (perp.is_zero_approx()) {
+		perp = p_center.get_any_perpendicular();
+	}
+	perp.normalize();
+	k_add_candidate(p_candidates, p_distances, p_min_dist, p_anchor, p_point, (p_center * Math::cos(th_sat) + perp * Math::sin(th_sat)).normalized());
+}
+
 Vector3 JointLimitationKusudama3D::_continuous_project(const Vector3 &p_point) const {
 	// EWBIK boundary-curve projection. The allowed region's boundary is a smooth
 	// curve made of limit-cone boundary arcs joined by tangent-circle arcs: each
@@ -567,15 +601,6 @@ Vector3 JointLimitationKusudama3D::_continuous_project(const Vector3 &p_point) c
 	LocalVector<real_t> distances;
 	real_t min_dist = 1e30;
 	uint32_t anchor = 0;
-	auto add_candidate = [&](const Vector3 &q) {
-		real_t d = p_point.angle_to(q);
-		candidates.push_back(q);
-		distances.push_back(d);
-		if (d < min_dist) {
-			min_dist = d;
-			anchor = candidates.size() - 1;
-		}
-	};
 	// Each candidate is the input direction with its angle to one boundary circle
 	// *soft-saturated* — a calculus limit. Cones are "keep-in" (output angle ->
 	// radius from below, never exceeding it); tangent circles are "keep-out"
@@ -589,32 +614,13 @@ Vector3 JointLimitationKusudama3D::_continuous_project(const Vector3 &p_point) c
 	// The cushion is the soft-limit band; floored so the projection stays C1 (no boundary
 	// teleport) even if the animator dials it toward zero.
 	const real_t SOFT_BAND = MAX((real_t)0.01, cushion);
-	auto soft_saturated = [&](const Vector3 &center, real_t limit, bool keep_in) {
-		real_t th = p_point.angle_to(center);
-		real_t th_sat = th;
-		if (keep_in) {
-			if (th > limit - SOFT_BAND) {
-				th_sat = limit - SOFT_BAND * Math::exp(-(th - (limit - SOFT_BAND)) / SOFT_BAND);
-			}
-		} else {
-			if (th < limit + SOFT_BAND) {
-				th_sat = limit + SOFT_BAND * Math::exp(-((limit + SOFT_BAND) - th) / SOFT_BAND);
-			}
-		}
-		Vector3 perp = p_point - center * center.dot(p_point);
-		if (perp.is_zero_approx()) {
-			perp = center.get_any_perpendicular();
-		}
-		perp.normalize();
-		add_candidate((center * Math::cos(th_sat) + perp * Math::sin(th_sat)).normalized());
-	};
 	for (uint32_t i = 0; i < n; i++) {
-		soft_saturated(_get_cone_center_normalized(i), cones[i].w, true);
+		k_soft_saturated(p_point, SOFT_BAND, candidates, distances, min_dist, anchor, _get_cone_center_normalized(i), cones[i].w, true);
 	}
 	const uint32_t num_pairs = (n >= 1) ? n - 1 : 0;
 	for (uint32_t i = 0; i < num_pairs; i++) {
-		soft_saturated(_tangent_centers_1[i], _tangent_radii[i], false);
-		soft_saturated(_tangent_centers_2[i], _tangent_radii[i], false);
+		k_soft_saturated(p_point, SOFT_BAND, candidates, distances, min_dist, anchor, _tangent_centers_1[i], _tangent_radii[i], false);
+		k_soft_saturated(p_point, SOFT_BAND, candidates, distances, min_dist, anchor, _tangent_centers_2[i], _tangent_radii[i], false);
 	}
 
 	// Deep inside an allowed region the matching soft-saturation is the identity,

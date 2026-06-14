@@ -2471,7 +2471,7 @@ TEST_CASE("[Scene][HumanoidKusudamaRom] Per-joint IK-target gold table (Lean/Pla
 	// Membership invariants (algorithm-agnostic; the kusudama uses a continuous/soft
 	// projection, so an outside target does NOT land on the ideal hard-projection point).
 	const real_t TOL_PRESERVE = Math::deg_to_rad(6.0); // in-ROM dir left ~unchanged (soft-band nudge)
-	const real_t TOL_IDEM = Math::deg_to_rad(6.0);     // projected dir is in the allowed region
+	const real_t TOL_IDEM = Math::deg_to_rad(6.0); // projected dir is in the allowed region
 
 	String cur_bone;
 	Ref<JointLimitationKusudama3D> k;
@@ -3071,6 +3071,156 @@ TEST_CASE("[SceneTree][SwingTwistIK3D] solve has no jerk - per-step joint rotati
 	CHECK_MESSAGE(max_step <= max_iter * adl + Math::deg_to_rad(0.5),
 			vformat("max per-step joint rotation %.2f deg exceeds the %.1f deg cap (jerk!)",
 					Math::rad_to_deg(max_step), Math::rad_to_deg(max_iter * adl)));
+	memdelete(sk);
+}
+
+// Adversarial test for `relax` (returnfulness): it's subtle, so pin down every invariant -- 0 is
+// a no-op, it never breaks finiteness/determinism, it pulls a redundant joint TOWARD rest, full
+// relax sits the bone at rest, and a moderate relax still lets the chain essentially reach.
+TEST_CASE("[SceneTree][SwingTwistIK3D] relax (returnfulness) - adversarial invariants") {
+	SceneTree *tree = SceneTree::get_singleton();
+	SwingTwistIK3D *ik = nullptr;
+	Skeleton3D *sk = nullptr;
+	Marker3D *tgt = nullptr;
+	auto build = [&](int n, real_t seg) {
+		sk = memnew(Skeleton3D);
+		tree->get_root()->add_child(sk);
+		for (int i = 0; i < n; i++) {
+			const int b = sk->add_bone(vformat("B%d", i));
+			if (i > 0) {
+				sk->set_bone_parent(b, i - 1);
+			}
+			Basis rb;
+			if (i > 0) {
+				rb = Basis(Vector3(0, 0, 1), Math::deg_to_rad(10.0)); // distinct, observable rest
+			}
+			sk->set_bone_rest(b, Transform3D(rb, Vector3(i == 0 ? (real_t)0.0 : seg, 0, 0)));
+		}
+		sk->notification(Skeleton3D::NOTIFICATION_UPDATE_SKELETON);
+		ik = memnew(SwingTwistIK3D);
+		sk->add_child(ik);
+		tgt = memnew(Marker3D);
+		ik->add_child(tgt);
+		tgt->set_name("Target");
+		sk->notification(Skeleton3D::NOTIFICATION_UPDATE_SKELETON);
+		ik->set_setting_count(1);
+		ik->set_root_bone_name(0, "B0");
+		ik->set_end_bone_name(0, vformat("B%d", n - 1));
+		ik->set_target_node(0, NodePath("Target"));
+		ik->set_max_iterations(40);
+		ik->set_angular_delta_limit(Math::PI); // about reach/rest, not the jerk cap
+	};
+	auto finite = [](Skeleton3D *s) -> bool {
+		for (int b = 0; b < s->get_bone_count(); b++) {
+			const Quaternion q = s->get_bone_pose(b).basis.get_rotation_quaternion();
+			if (!Math::is_finite(q.x) || !Math::is_finite(q.y) || !Math::is_finite(q.z) || !Math::is_finite(q.w)) {
+				return false;
+			}
+		}
+		return true;
+	};
+
+	// 1. relax = 0 is a no-op: identical pose to never setting relax.
+	build(5, 0.3);
+	tgt->set_position(Vector3(0.6, 0.5, 0.0));
+	ik->solve();
+	PackedVector3Array base;
+	for (int b = 0; b < 5; b++) {
+		base.push_back(sk->get_bone_pose(b).basis.get_euler());
+	}
+	for (int b = 0; b < 5; b++) {
+		sk->set_bone_pose_rotation(b, Quaternion());
+	}
+	for (int j = 0; j < ik->get_joint_count(0); j++) {
+		ik->set_joint_relax(0, j, 0.0);
+	}
+	ik->solve();
+	bool same = true;
+	for (int b = 0; b < 5; b++) {
+		same = same && (sk->get_bone_pose(b).basis.get_euler() - base[b]).length() < 1e-5;
+	}
+	CHECK_MESSAGE(same, "relax=0 must be a no-op");
+	memdelete(sk);
+
+	// 2. relax lowers the chain's TOTAL rest-deviation (it minimizes overall "discomfort", not
+	// each joint independently -- a single joint can move either way as the branch reconfigures.
+	// That whole-chain-vs-per-joint distinction is exactly the subtlety in `relax`).
+	auto rest_energy = [&]() -> real_t {
+		real_t e = 0.0;
+		for (int j = 0; j < ik->get_joint_count(0); j++) {
+			const int b = ik->get_joint_bone(0, j);
+			e += sk->get_bone_pose(b).basis.get_rotation_quaternion().angle_to(sk->get_bone_rest(b).basis.get_rotation_quaternion());
+		}
+		return e;
+	};
+	build(6, 0.25);
+	tgt->set_position(Vector3(0.7, 0.2, 0.0));
+	ik->solve();
+	const real_t energy_norelax = rest_energy();
+	for (int b = 0; b < sk->get_bone_count(); b++) {
+		sk->set_bone_pose_rotation(b, Quaternion());
+	}
+	for (int j = 0; j < ik->get_joint_count(0); j++) {
+		ik->set_joint_relax(0, j, 0.3);
+	}
+	ik->solve();
+	const real_t energy_relax = rest_energy();
+	CHECK_MESSAGE(energy_relax <= energy_norelax + 1e-4,
+			vformat("relax must not raise total rest-deviation (%.3f vs %.3f)", (double)energy_relax, (double)energy_norelax));
+	CHECK(finite(sk));
+	memdelete(sk);
+
+	// 3. relax = 1 on every joint -> the chain abandons reach and sits at its REST pose.
+	build(5, 0.3);
+	tgt->set_position(Vector3(0.5, 0.5, 0.2));
+	for (int j = 0; j < ik->get_joint_count(0); j++) {
+		ik->set_joint_relax(0, j, 1.0);
+	}
+	ik->solve();
+	bool at_rest = true;
+	for (int j = 0; j < ik->get_joint_count(0); j++) {
+		const int b = ik->get_joint_bone(0, j);
+		const Quaternion rq = sk->get_bone_rest(b).basis.get_rotation_quaternion();
+		at_rest = at_rest && sk->get_bone_pose(b).basis.get_rotation_quaternion().angle_to(rq) < Math::deg_to_rad(2.0);
+	}
+	CHECK_MESSAGE(at_rest, "relax=1 must settle the bones at their rest pose");
+	CHECK(finite(sk));
+	memdelete(sk);
+
+	// 4. Determinism with relax active.
+	build(5, 0.3);
+	for (int j = 0; j < ik->get_joint_count(0); j++) {
+		ik->set_joint_relax(0, j, 0.4);
+	}
+	tgt->set_position(Vector3(0.55, 0.45, 0.1));
+	ik->solve();
+	PackedVector3Array a;
+	for (int b = 0; b < 5; b++) {
+		a.push_back(sk->get_bone_global_pose(b).origin);
+	}
+	for (int b = 0; b < 5; b++) {
+		sk->set_bone_pose_rotation(b, Quaternion());
+	}
+	ik->solve();
+	bool det = true;
+	for (int b = 0; b < 5; b++) {
+		det = det && a[b].is_equal_approx(sk->get_bone_global_pose(b).origin);
+	}
+	CHECK_MESSAGE(det, "relax must stay deterministic");
+	memdelete(sk);
+
+	// 5. Moderate relax still essentially reaches a reachable target (slack-only bias).
+	build(6, 0.25);
+	for (int j = 0; j < ik->get_joint_count(0); j++) {
+		ik->set_joint_relax(0, j, 0.2);
+	}
+	const Vector3 goal(0.6, 0.3, 0.0); // well within the 1.25 reach
+	tgt->set_position(goal);
+	ik->solve();
+	const Vector3 tip = sk->get_bone_global_pose(sk->find_bone("B5")).origin;
+	CHECK_MESSAGE((tip - goal).length() < 0.12,
+			vformat("moderate relax should still essentially reach (residual %.3f)", (double)(tip - goal).length()));
+	CHECK(finite(sk));
 	memdelete(sk);
 }
 

@@ -132,6 +132,9 @@
 		<member name="cones" type="PackedVector4Array" setter="set_cones" getter="get_cones" default="PackedVector4Array()">
 			The array of cones that define this kusudama constraint. Each cone is stored as a Vector4 where the XYZ components represent the center direction (stored raw; normalized internally) and the W component is the cone radius in radians (engine property range 1° to 180°). The cones are automatically sorted into convex hull order and connected in a closed loop to form a convex spherical polygon constraint boundary.
 		</member>
+		<member name="cushion" type="float" setter="set_cushion" getter="get_cushion" default="0.06">
+			Soft-limit margin in radians. Near a cone or twist boundary the projection eases the direction back over this band, giving a smooth approach to the limit. Wider values make the joint resist the limit earlier and more gently.
+		</member>
 		<member name="twist_from" type="float" setter="set_twist_from" getter="get_twist_from" default="0.0">
 			Lower bound of the twist limit, in radians, about the bone forward axis. The twist limit is active only when [member twist_to] is greater than [member twist_from]. See [method limit_twist].
 		</member>

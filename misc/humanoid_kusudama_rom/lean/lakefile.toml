@@ -23,3 +23,6 @@ name = "IKFast"
 
 [[lean_lib]]
 name = "IKJerk"
+
+[[lean_lib]]
+name = "IKBlock"
