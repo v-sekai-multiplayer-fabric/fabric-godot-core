@@ -231,29 +231,43 @@ Dictionary hk_build_targets(IterateIK3D *p_ik, const HKTarget *p_defs, int p_cou
 }
 } // namespace
 
-Dictionary HumanoidKusudamaRom::add_full_body_tracking(IterateIK3D *p_ik) const {
+Dictionary HumanoidKusudamaRom::add_control_rig(IterateIK3D *p_ik, ControlRig p_rig) const {
 	ERR_FAIL_NULL_V(p_ik, Dictionary());
-	// 15 sinew/ANNY points: hips, both legs (upper/lower/foot), chest, head, both arms
-	// (upper/lower/hand). End-effectors (hands/feet/head) drive the IK chains; the rest
-	// are passive segment trackers (use as pole targets / extra constraints).
-	static const HKTarget TS[] = {
-		{ "HipsTarget", "Hips", -1 },
-		{ "LeftUpperLegTarget", "LeftUpperLeg", -1 },
-		{ "RightUpperLegTarget", "RightUpperLeg", -1 },
-		{ "LeftLowerLegTarget", "LeftLowerLeg", -1 },
-		{ "RightLowerLegTarget", "RightLowerLeg", -1 },
-		{ "LeftFootTarget", "LeftFoot", 2 },
-		{ "RightFootTarget", "RightFoot", 3 },
-		{ "ChestTarget", "Chest", -1 },
-		{ "HeadTarget", "Head", 4 },
-		{ "LeftUpperArmTarget", "LeftUpperArm", -1 },
-		{ "RightUpperArmTarget", "RightUpperArm", -1 },
-		{ "LeftLowerArmTarget", "LeftLowerArm", -1 },
-		{ "RightLowerArmTarget", "RightLowerArm", -1 },
-		{ "LeftHandTarget", "LeftHand", 0 },
-		{ "RightHandTarget", "RightHand", 1 },
+	// Standard humanoid control rig. Head/hands/feet are chain end-effectors (IK goals,
+	// chain >= 0); hips is the root reference; elbows/knees are pole vectors; chest is an
+	// upper-body control. `full_only` controls (poles + chest) are added only for the FULL
+	// preset, which is a strict superset of IK_GOALS.
+	struct Def {
+		const char *name;
+		const char *bone;
+		int chain;
+		bool full_only;
 	};
-	return hk_build_targets(p_ik, TS, 15);
+	static const Def ALL[] = {
+		{ "HeadGoal", "Head", 4, false },
+		{ "LeftHandGoal", "LeftHand", 0, false },
+		{ "RightHandGoal", "RightHand", 1, false },
+		{ "HipsRoot", "Hips", -1, false },
+		{ "LeftFootGoal", "LeftFoot", 2, false },
+		{ "RightFootGoal", "RightFoot", 3, false },
+		{ "ChestControl", "Chest", -1, true },
+		{ "LeftElbowPole", "LeftLowerArm", -1, true },
+		{ "RightElbowPole", "RightLowerArm", -1, true },
+		{ "LeftKneePole", "LeftLowerLeg", -1, true },
+		{ "RightKneePole", "RightLowerLeg", -1, true },
+	};
+	const bool full = (p_rig == CONTROL_RIG_FULL);
+	HKTarget defs[sizeof(ALL) / sizeof(ALL[0])];
+	int n = 0;
+	for (const Def &d : ALL) {
+		if (full || !d.full_only) {
+			defs[n].name = d.name;
+			defs[n].bone = d.bone;
+			defs[n].chain = d.chain;
+			n++;
+		}
+	}
+	return hk_build_targets(p_ik, defs, n);
 }
 
 void HumanoidKusudamaRom::_bind_methods() {
@@ -264,5 +278,8 @@ void HumanoidKusudamaRom::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("get_supported_bones"), &HumanoidKusudamaRom::get_supported_bones);
 	ClassDB::bind_method(D_METHOD("setup_humanoid_chains", "ik"), &HumanoidKusudamaRom::setup_humanoid_chains);
 	ClassDB::bind_method(D_METHOD("apply_ik_limits", "ik", "phenotype"), &HumanoidKusudamaRom::apply_ik_limits);
-	ClassDB::bind_method(D_METHOD("add_full_body_tracking", "ik"), &HumanoidKusudamaRom::add_full_body_tracking);
+	ClassDB::bind_method(D_METHOD("add_control_rig", "ik", "rig"), &HumanoidKusudamaRom::add_control_rig, DEFVAL(CONTROL_RIG_FULL));
+
+	BIND_ENUM_CONSTANT(CONTROL_RIG_IK_GOALS);
+	BIND_ENUM_CONSTANT(CONTROL_RIG_FULL);
 }

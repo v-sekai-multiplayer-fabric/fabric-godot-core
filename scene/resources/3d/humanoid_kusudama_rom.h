@@ -69,8 +69,17 @@ public:
 	// of limits applied.
 	int apply_ik_limits(IterateIK3D *p_ik, const Dictionary &p_phenotype) const;
 
-	// Full-body 15-point tracking (the sinew/ANNY set): hips, both legs (upper/lower/foot),
-	// chest, head, both arms (upper/lower/hand). End-effectors drive the IK chains; the
-	// rest are passive segment trackers. Returns { target_name: Marker3D }.
-	Dictionary add_full_body_tracking(IterateIK3D *p_ik) const;
+	// Standard film/animation humanoid control-rig presets. IK_GOALS is the minimal effector
+	// set; FULL adds pole vectors and a chest control. FULL is a strict superset of IK_GOALS.
+	enum ControlRig {
+		CONTROL_RIG_IK_GOALS, // 6 effectors: root(hips), head, 2 hand-IK, 2 foot-IK
+		CONTROL_RIG_FULL, // + chest control + elbow/knee pole vectors (11 controls)
+	};
+
+	// Build a control rig on p_ik: head/hands/feet are chain end-effectors (IK goals), hips
+	// is the root reference, elbows/knees are pole vectors, chest is an upper-body control.
+	// Returns { control_name: Marker3D }.
+	Dictionary add_control_rig(IterateIK3D *p_ik, ControlRig p_rig = CONTROL_RIG_FULL) const;
 };
+
+VARIANT_ENUM_CAST(HumanoidKusudamaRom::ControlRig);

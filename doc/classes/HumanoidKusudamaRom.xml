@@ -10,11 +10,12 @@
 	<tutorials>
 	</tutorials>
 	<methods>
-		<method name="add_full_body_tracking" qualifiers="const">
+		<method name="add_control_rig" qualifiers="const">
 			<return type="Dictionary" />
 			<param index="0" name="ik" type="IterateIK3D" />
+			<param index="1" name="rig" type="int" enum="HumanoidKusudamaRom.ControlRig" default="1" />
 			<description>
-				Adds a full-body 15-point VR tracking rig to [code]ik[/code]: fifteen [Marker3D] targets (hips, both upper/lower legs, both feet, chest, head, both upper/lower arms, both hands) created as children of the IK node and seated at the rest pose. The end-effector targets (hands, feet, head) drive the IK chains; the remaining targets are passive segment trackers usable as pole targets or extra constraints. Returns a [Dictionary] mapping each target name (e.g. [code]"HeadTarget"[/code]) to its [Marker3D].
+				Builds a standard humanoid control rig of [Marker3D] controls under [code]ik[/code], seated at the rest pose, and returns a [Dictionary] mapping each control name to its [Marker3D]. The head, hands and feet are chain end-effectors (IK goals) that drive the IK chains; the hips control is the root reference; the elbow/knee controls are pole vectors and the chest is an upper-body control. [constant CONTROL_RIG_IK_GOALS] creates the six effectors; [constant CONTROL_RIG_FULL] (the default) is a strict superset that adds the chest control and the four pole vectors (eleven controls total).
 			</description>
 		</method>
 		<method name="apply_ik_limits" qualifiers="const">
@@ -69,4 +70,12 @@
 			</description>
 		</method>
 	</methods>
+	<constants>
+		<constant name="CONTROL_RIG_IK_GOALS" value="0" enum="ControlRig">
+			Minimal control rig: six end-effectors — the root (hips), head, both hands and both feet.
+		</constant>
+		<constant name="CONTROL_RIG_FULL" value="1" enum="ControlRig">
+			Full control rig: the six [constant CONTROL_RIG_IK_GOALS] effectors plus an upper-body chest control and elbow/knee pole vectors (eleven controls total).
+		</constant>
+	</constants>
 </class>

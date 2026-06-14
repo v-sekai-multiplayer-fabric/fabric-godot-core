@@ -2337,29 +2337,41 @@ TEST_CASE("[Scene][HumanoidKusudamaRom] Limits attach on a detached scene (impor
 	memdelete(sk);
 }
 
-TEST_CASE("[Scene][HumanoidKusudamaRom] Full-body 15-point VR tracking targets") {
+TEST_CASE("[Scene][HumanoidKusudamaRom] Control rig presets (IK goals vs full)") {
 	FABRIK3D *ik = nullptr;
 	Skeleton3D *sk = make_detached_rig(&ik);
 	Ref<HumanoidKusudamaRom> gen;
 	gen.instantiate();
 	gen->setup_humanoid_chains(ik);
-	Dictionary targets = gen->add_full_body_tracking(ik);
 
-	CHECK(targets.size() == 15); // sinew/ANNY full-body set
-	CHECK(targets.has("HipsTarget"));
-	CHECK(targets.has("ChestTarget"));
-	CHECK(targets.has("HeadTarget"));
-	CHECK(targets.has("LeftUpperLegTarget"));
-	CHECK(targets.has("RightLowerArmTarget"));
-	CHECK(targets.has("LeftHandTarget"));
-	// Each marker is parented under the IK node.
-	Node *head = Object::cast_to<Node>(targets["HeadTarget"]);
+	// Minimal preset: 6 IK goals (root + head + 2 hands + 2 feet), no poles/chest.
+	Dictionary goals = gen->add_control_rig(ik, HumanoidKusudamaRom::CONTROL_RIG_IK_GOALS);
+	CHECK(goals.size() == 6);
+	CHECK(goals.has("HipsRoot"));
+	CHECK(goals.has("HeadGoal"));
+	CHECK(goals.has("LeftHandGoal"));
+	CHECK(goals.has("RightFootGoal"));
+	CHECK_FALSE(goals.has("LeftElbowPole"));
+	CHECK_FALSE(goals.has("ChestControl"));
+	// End-effectors drive the chains; left-arm chain (index 0) targets the left hand.
+	CHECK(ik->get_target_node(0) == NodePath("LeftHandGoal"));
+	CHECK(ik->get_target_node(2) == NodePath("LeftFootGoal"));
+	Node *head = Object::cast_to<Node>(goals["HeadGoal"]);
 	REQUIRE(head != nullptr);
 	CHECK(head->get_parent() == ik);
-	// End-effectors drive the chains; the left-arm chain (index 0) targets the left hand.
-	CHECK(ik->get_target_node(0) == NodePath("LeftHandTarget"));
-	CHECK(ik->get_target_node(2) == NodePath("LeftFootTarget"));
 	memdelete(sk);
+
+	// Full preset is a strict superset: 6 goals + chest + 4 pole vectors = 11.
+	FABRIK3D *ik2 = nullptr;
+	Skeleton3D *sk2 = make_detached_rig(&ik2);
+	gen->setup_humanoid_chains(ik2);
+	Dictionary full = gen->add_control_rig(ik2, HumanoidKusudamaRom::CONTROL_RIG_FULL);
+	CHECK(full.size() == 11);
+	CHECK(full.has("ChestControl"));
+	CHECK(full.has("LeftElbowPole"));
+	CHECK(full.has("RightKneePole"));
+	CHECK(full.has("HipsRoot"));
+	memdelete(sk2);
 }
 
 TEST_CASE("[Scene][HumanoidKusudamaRom] Full rig: every chain joint keeps its limit (import order)") {
@@ -2389,7 +2401,7 @@ TEST_CASE("[Scene][HumanoidKusudamaRom] Full rig: every chain joint keeps its li
 	// exact import order:
 	gen->setup_humanoid_chains(ik);
 	gen->apply_ik_limits(ik, ph);
-	gen->add_full_body_tracking(ik);
+	gen->add_control_rig(ik);
 
 	int total = 0, with_limit = 0;
 	for (int c = 0; c < ik->get_setting_count(); c++) {

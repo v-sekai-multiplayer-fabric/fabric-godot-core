@@ -43,8 +43,9 @@ void PostImportPluginHumanoidRom::get_internal_import_options(InternalImportCate
 		r_options->push_back(ResourceImporter::ImportOption(PropertyInfo(Variant::FLOAT, "humanoid_rom/age", PROPERTY_HINT_RANGE, "0,1,0.01"), 0.5));
 		r_options->push_back(ResourceImporter::ImportOption(PropertyInfo(Variant::FLOAT, "humanoid_rom/muscle", PROPERTY_HINT_RANGE, "0,1,0.01"), 0.5));
 		r_options->push_back(ResourceImporter::ImportOption(PropertyInfo(Variant::FLOAT, "humanoid_rom/weight", PROPERTY_HINT_RANGE, "0,1,0.01"), 0.5));
-		// Full-body 15-point VR tracking targets (sinew/ANNY set) bound to the IK chains.
-		r_options->push_back(ResourceImporter::ImportOption(PropertyInfo(Variant::BOOL, "humanoid_rom/full_body_tracking"), true));
+		// Humanoid control rig bound to the IK chains: None, IK Goals (6 effectors), or Full
+		// (+ chest control + elbow/knee pole vectors).
+		r_options->push_back(ResourceImporter::ImportOption(PropertyInfo(Variant::INT, "humanoid_rom/control_rig", PROPERTY_HINT_ENUM, "None,IK Goals,Full"), 2));
 	}
 }
 
@@ -87,8 +88,9 @@ void PostImportPluginHumanoidRom::internal_process(InternalImportCategory p_cate
 	skeleton->add_child(ik);
 	ik->set_owner(p_base_scene ? p_base_scene : skeleton);
 	gen->setup_humanoid_chains(ik);
-	if (!p_options.has("humanoid_rom/full_body_tracking") || bool(p_options["humanoid_rom/full_body_tracking"])) {
-		gen->add_full_body_tracking(ik); // 15 sinew/ANNY targets so the IK can solve
+	const int rig = p_options.has("humanoid_rom/control_rig") ? int(p_options["humanoid_rom/control_rig"]) : 2;
+	if (rig > 0) { // 0 = None, 1 = IK Goals, 2 = Full
+		gen->add_control_rig(ik, rig == 1 ? HumanoidKusudamaRom::CONTROL_RIG_IK_GOALS : HumanoidKusudamaRom::CONTROL_RIG_FULL);
 	}
 	gen->apply_ik_limits(ik, phenotype); // apply LAST so nothing rebuilds the joints afterward
 }
