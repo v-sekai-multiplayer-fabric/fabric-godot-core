@@ -69,6 +69,51 @@ static bool tjk_proper(Skeleton3D *s) {
 	return true;
 }
 
+static void tjk_build_chain(SceneTree *p_tree, int n, real_t seg, real_t rest_tilt_deg, int max_iter, real_t adl, Skeleton3D *&sk, SwingTwistIK3D *&ik, Marker3D *&tgt) {
+	sk = memnew(Skeleton3D);
+	p_tree->get_root()->add_child(sk);
+	for (int i = 0; i < n; i++) {
+		const int b = sk->add_bone(vformat("B%d", i));
+		if (i > 0) {
+			sk->set_bone_parent(b, i - 1);
+		}
+		Basis rb;
+		if (i > 0 && rest_tilt_deg != (real_t)0.0) {
+			rb = Basis(Vector3(0, 0, 1), Math::deg_to_rad(rest_tilt_deg));
+		}
+		sk->set_bone_rest(b, Transform3D(rb, Vector3(i == 0 ? (real_t)0.0 : seg, 0, 0)));
+	}
+	sk->notification(Skeleton3D::NOTIFICATION_UPDATE_SKELETON);
+	ik = memnew(SwingTwistIK3D);
+	sk->add_child(ik);
+	tgt = memnew(Marker3D);
+	ik->add_child(tgt);
+	tgt->set_name("Target");
+	sk->notification(Skeleton3D::NOTIFICATION_UPDATE_SKELETON);
+	ik->set_setting_count(1);
+	ik->set_root_bone_name(0, "B0");
+	ik->set_end_bone_name(0, vformat("B%d", n - 1));
+	ik->set_target_node(0, NodePath("Target"));
+	ik->set_max_iterations(max_iter);
+	if (adl >= (real_t)0.0) {
+		ik->set_angular_delta_limit(adl);
+	}
+}
+static void tjk_reset(Skeleton3D *sk) {
+	for (int b = 0; b < sk->get_bone_count(); b++) {
+		sk->set_bone_pose_rotation(b, Quaternion());
+		sk->set_bone_pose_position(b, sk->get_bone_rest(b).origin);
+	}
+}
+static real_t tjk_rest_energy(Skeleton3D *sk, SwingTwistIK3D *ik) {
+	real_t e = 0.0;
+	for (int j = 0; j < ik->get_joint_count(0); j++) {
+		const int b = ik->get_joint_bone(0, j);
+		e += sk->get_bone_pose(b).basis.get_rotation_quaternion().angle_to(sk->get_bone_rest(b).basis.get_rotation_quaternion());
+	}
+	return e;
+}
+
 // Helper function to set cones from Vector<Vector4> using the individual cone API
 static void set_cones_from_vector4(Ref<JointLimitationKusudama3D> limitation, const Vector<Vector4> &cones) {
 	limitation->set_cone_count(cones.size());
@@ -2680,20 +2725,13 @@ TEST_CASE("[SceneTree][SwingTwistIK3D] free root drags the body; disabled bone s
 	ik->set_target_node(0, NodePath("Target"));
 	ik->set_max_iterations(40);
 
-	auto reset = [&]() {
-		for (int b = 0; b < sk->get_bone_count(); b++) {
-			sk->set_bone_pose_rotation(b, Quaternion());
-			sk->set_bone_pose_position(b, sk->get_bone_rest(b).origin);
-		}
-	};
-
 	// Pinned root (default): the tip cannot reach a target beyond arm length.
 	ik->solve();
 	CHECK((sk->get_bone_global_pose(tip).origin - Vector3(2, 0, 0)).length() > 0.5);
 
 	// Free root: the root translates so the pinned tip drags the body to the target.
 	ik->set_free_root(true);
-	reset();
+	tjk_reset(sk);
 	ik->solve();
 	CHECK((sk->get_bone_global_pose(tip).origin - Vector3(2, 0, 0)).length() < 0.05);
 
@@ -2702,7 +2740,7 @@ TEST_CASE("[SceneTree][SwingTwistIK3D] free root drags the body; disabled bone s
 	ik->set_bone_locked("B1", true);
 	CHECK(ik->is_bone_locked("B1"));
 	target->set_position(Vector3(0.5, 0.5, 0.0));
-	reset();
+	tjk_reset(sk);
 	ik->solve();
 	CHECK(sk->get_bone_pose(b1).basis.get_rotation_quaternion().is_equal_approx(Quaternion()));
 
@@ -2718,54 +2756,30 @@ TEST_CASE("[SceneTree][SwingTwistIK3D] adversarial robustness / determinism / in
 	Skeleton3D *sk = nullptr;
 	SwingTwistIK3D *ik = nullptr;
 	Marker3D *tgt = nullptr;
-	auto build = [&](int n, real_t seg) {
-		sk = memnew(Skeleton3D);
-		tree->get_root()->add_child(sk);
-		for (int i = 0; i < n; i++) {
-			const int b = sk->add_bone(vformat("B%d", i));
-			if (i > 0) {
-				sk->set_bone_parent(b, i - 1);
-			}
-			sk->set_bone_rest(b, Transform3D(Basis(), Vector3(i == 0 ? (real_t)0.0 : seg, 0, 0)));
-		}
-		sk->notification(Skeleton3D::NOTIFICATION_UPDATE_SKELETON);
-		ik = memnew(SwingTwistIK3D);
-		sk->add_child(ik);
-		tgt = memnew(Marker3D);
-		ik->add_child(tgt);
-		tgt->set_name("Target");
-		sk->notification(Skeleton3D::NOTIFICATION_UPDATE_SKELETON);
-		ik->set_setting_count(1);
-		ik->set_root_bone_name(0, "B0");
-		ik->set_end_bone_name(0, vformat("B%d", n - 1));
-		ik->set_target_node(0, NodePath("Target"));
-		ik->set_max_iterations(20);
-		ik->set_angular_delta_limit(Math::PI); // robustness/clamp/stability scenarios use full steps
-	};
 
 	// 1. NaN target must not propagate into the skeleton.
-	build(4, 0.3);
+	tjk_build_chain(tree, 4, 0.3, (real_t)0.0, 20, Math::PI, sk, ik, tgt);
 	tgt->set_position(Vector3(NAN, NAN, NAN));
 	ik->solve();
 	CHECK(tjk_finite(sk));
 	memdelete(sk);
 
 	// 2. Target exactly at the chain root (zero direction).
-	build(4, 0.3);
+	tjk_build_chain(tree, 4, 0.3, (real_t)0.0, 20, Math::PI, sk, ik, tgt);
 	tgt->set_position(Vector3(0, 0, 0));
 	ik->solve();
 	CHECK(tjk_finite(sk));
 	memdelete(sk);
 
 	// 3. Degenerate zero-length bones.
-	build(4, 0.0);
+	tjk_build_chain(tree, 4, 0.0, (real_t)0.0, 20, Math::PI, sk, ik, tgt);
 	tgt->set_position(Vector3(0.5, 0.5, 0));
 	ik->solve();
 	CHECK(tjk_finite(sk));
 	memdelete(sk);
 
 	// 4. All bones locked -> no-op, poses stay at FK identity.
-	build(4, 0.3);
+	tjk_build_chain(tree, 4, 0.3, (real_t)0.0, 20, Math::PI, sk, ik, tgt);
 	for (int i = 0; i < 4; i++) {
 		ik->set_bone_locked(vformat("B%d", i), true);
 	}
@@ -2778,7 +2792,7 @@ TEST_CASE("[SceneTree][SwingTwistIK3D] adversarial robustness / determinism / in
 	memdelete(sk);
 
 	// 5. Deterministic: identical input -> identical output.
-	build(5, 0.3);
+	tjk_build_chain(tree, 5, 0.3, (real_t)0.0, 20, Math::PI, sk, ik, tgt);
 	tgt->set_position(Vector3(0.6, 0.4, 0.2));
 	ik->solve();
 	PackedVector3Array a;
@@ -2798,7 +2812,7 @@ TEST_CASE("[SceneTree][SwingTwistIK3D] adversarial robustness / determinism / in
 	memdelete(sk);
 
 	// 6. Re-solve stability: solving again from the converged pose barely moves.
-	build(5, 0.3);
+	tjk_build_chain(tree, 5, 0.3, (real_t)0.0, 20, Math::PI, sk, ik, tgt);
 	tgt->set_position(Vector3(0.5, 0.5, 0));
 	ik->solve();
 	const Vector3 t1 = sk->get_bone_global_pose(4).origin;
@@ -2808,7 +2822,7 @@ TEST_CASE("[SceneTree][SwingTwistIK3D] adversarial robustness / determinism / in
 	memdelete(sk);
 
 	// 7. Kusudama clamp holds even when the target pulls hard against the cone.
-	build(5, 0.3);
+	tjk_build_chain(tree, 5, 0.3, (real_t)0.0, 20, Math::PI, sk, ik, tgt);
 	ik->resolve_chains();
 	Ref<JointLimitationKusudama3D> lim;
 	lim.instantiate();
@@ -2833,7 +2847,7 @@ TEST_CASE("[SceneTree][SwingTwistIK3D] adversarial robustness / determinism / in
 	memdelete(sk);
 
 	// 8. Pin a nonexistent bone -> ignored, no crash.
-	build(4, 0.3);
+	tjk_build_chain(tree, 4, 0.3, (real_t)0.0, 20, Math::PI, sk, ik, tgt);
 	ik->set_pin("DoesNotExist", NodePath("Target"));
 	tgt->set_position(Vector3(0.5, 0.3, 0));
 	ik->solve();
@@ -2841,7 +2855,7 @@ TEST_CASE("[SceneTree][SwingTwistIK3D] adversarial robustness / determinism / in
 	memdelete(sk);
 
 	// 9. Iteration extremes (0 clamps to 1).
-	build(4, 0.3);
+	tjk_build_chain(tree, 4, 0.3, (real_t)0.0, 20, Math::PI, sk, ik, tgt);
 	ik->set_max_iterations(0);
 	tgt->set_position(Vector3(0.5, 0.5, 0));
 	ik->solve();
@@ -2856,37 +2870,12 @@ TEST_CASE("[SceneTree][SwingTwistIK3D] adversarial robustness / determinism / in
 TEST_CASE("[SceneTree][SwingTwistIK3D] deeper adversarial - reflection / twist clamp / free root / branching") {
 	SceneTree *tree = SceneTree::get_singleton();
 
-
-	auto chain = [&](int n, real_t seg, Skeleton3D *&sk, SwingTwistIK3D *&ik, Marker3D *&tgt) {
-		sk = memnew(Skeleton3D);
-		tree->get_root()->add_child(sk);
-		for (int i = 0; i < n; i++) {
-			const int b = sk->add_bone(vformat("B%d", i));
-			if (i > 0) {
-				sk->set_bone_parent(b, i - 1);
-			}
-			sk->set_bone_rest(b, Transform3D(Basis(), Vector3(i == 0 ? (real_t)0.0 : seg, 0, 0)));
-		}
-		sk->notification(Skeleton3D::NOTIFICATION_UPDATE_SKELETON);
-		ik = memnew(SwingTwistIK3D);
-		sk->add_child(ik);
-		tgt = memnew(Marker3D);
-		ik->add_child(tgt);
-		tgt->set_name("Target");
-		sk->notification(Skeleton3D::NOTIFICATION_UPDATE_SKELETON);
-		ik->set_setting_count(1);
-		ik->set_root_bone_name(0, "B0");
-		ik->set_end_bone_name(0, vformat("B%d", n - 1));
-		ik->set_target_node(0, NodePath("Target"));
-		ik->set_max_iterations(20);
-	};
-
 	Skeleton3D *sk = nullptr;
 	SwingTwistIK3D *ik = nullptr;
 	Marker3D *tgt = nullptr;
 
 	// 1. Reflection target: a mirrored basis (det = -1) must not produce an improper pose basis.
-	chain(5, 0.3, sk, ik, tgt);
+	tjk_build_chain(tree, 5, 0.3, (real_t)0.0, 20, (real_t)-1.0, sk, ik, tgt);
 	{
 		Transform3D t;
 		t.origin = Vector3(0.8, 0.3, 0.1);
@@ -2900,7 +2889,7 @@ TEST_CASE("[SceneTree][SwingTwistIK3D] deeper adversarial - reflection / twist c
 
 	// 2. Hostile twist: drive the tip frame twisted hard about its forward axis; the limited
 	// joint's resulting twist must stay within [twist_from, twist_to] (+ soft slack).
-	chain(4, 0.3, sk, ik, tgt);
+	tjk_build_chain(tree, 4, 0.3, (real_t)0.0, 20, (real_t)-1.0, sk, ik, tgt);
 	ik->resolve_chains();
 	{
 		Ref<JointLimitationKusudama3D> lim;
@@ -2937,7 +2926,7 @@ TEST_CASE("[SceneTree][SwingTwistIK3D] deeper adversarial - reflection / twist c
 
 	// 3. Free root, unreachable pin: an unpinned root translating toward a far target must stay
 	// bounded (no runaway) over many iterations.
-	chain(4, 0.3, sk, ik, tgt);
+	tjk_build_chain(tree, 4, 0.3, (real_t)0.0, 20, (real_t)-1.0, sk, ik, tgt);
 	ik->set_free_root(true);
 	ik->set_motion_root_bone("B0");
 	ik->set_max_iterations(64);
@@ -2990,7 +2979,7 @@ TEST_CASE("[SceneTree][SwingTwistIK3D] deeper adversarial - reflection / twist c
 	}
 
 	// 5. Pin whose ancestors are ALL locked -> nothing can move it; must stay finite & unchanged.
-	chain(4, 0.3, sk, ik, tgt);
+	tjk_build_chain(tree, 4, 0.3, (real_t)0.0, 20, (real_t)-1.0, sk, ik, tgt);
 	ik->set_bone_locked("B0", true);
 	ik->set_bone_locked("B1", true);
 	ik->set_bone_locked("B2", true);
@@ -3073,37 +3062,9 @@ TEST_CASE("[SceneTree][SwingTwistIK3D] relax (returnfulness) - adversarial invar
 	SwingTwistIK3D *ik = nullptr;
 	Skeleton3D *sk = nullptr;
 	Marker3D *tgt = nullptr;
-	auto build = [&](int n, real_t seg) {
-		sk = memnew(Skeleton3D);
-		tree->get_root()->add_child(sk);
-		for (int i = 0; i < n; i++) {
-			const int b = sk->add_bone(vformat("B%d", i));
-			if (i > 0) {
-				sk->set_bone_parent(b, i - 1);
-			}
-			Basis rb;
-			if (i > 0) {
-				rb = Basis(Vector3(0, 0, 1), Math::deg_to_rad(10.0)); // distinct, observable rest
-			}
-			sk->set_bone_rest(b, Transform3D(rb, Vector3(i == 0 ? (real_t)0.0 : seg, 0, 0)));
-		}
-		sk->notification(Skeleton3D::NOTIFICATION_UPDATE_SKELETON);
-		ik = memnew(SwingTwistIK3D);
-		sk->add_child(ik);
-		tgt = memnew(Marker3D);
-		ik->add_child(tgt);
-		tgt->set_name("Target");
-		sk->notification(Skeleton3D::NOTIFICATION_UPDATE_SKELETON);
-		ik->set_setting_count(1);
-		ik->set_root_bone_name(0, "B0");
-		ik->set_end_bone_name(0, vformat("B%d", n - 1));
-		ik->set_target_node(0, NodePath("Target"));
-		ik->set_max_iterations(40);
-		ik->set_angular_delta_limit(Math::PI); // about reach/rest, not the jerk cap
-	};
 
 	// 1. relax = 0 is a no-op: identical pose to never setting relax.
-	build(5, 0.3);
+	tjk_build_chain(tree, 5, 0.3, (real_t)10.0, 40, Math::PI, sk, ik, tgt);
 	tgt->set_position(Vector3(0.6, 0.5, 0.0));
 	ik->solve();
 	PackedVector3Array base;
@@ -3127,18 +3088,10 @@ TEST_CASE("[SceneTree][SwingTwistIK3D] relax (returnfulness) - adversarial invar
 	// 2. relax lowers the chain's TOTAL rest-deviation (it minimizes overall "discomfort", not
 	// each joint independently -- a single joint can move either way as the branch reconfigures.
 	// That whole-chain-vs-per-joint distinction is exactly the subtlety in `relax`).
-	auto rest_energy = [&]() -> real_t {
-		real_t e = 0.0;
-		for (int j = 0; j < ik->get_joint_count(0); j++) {
-			const int b = ik->get_joint_bone(0, j);
-			e += sk->get_bone_pose(b).basis.get_rotation_quaternion().angle_to(sk->get_bone_rest(b).basis.get_rotation_quaternion());
-		}
-		return e;
-	};
-	build(6, 0.25);
+	tjk_build_chain(tree, 6, 0.25, (real_t)10.0, 40, Math::PI, sk, ik, tgt);
 	tgt->set_position(Vector3(0.7, 0.2, 0.0));
 	ik->solve();
-	const real_t energy_norelax = rest_energy();
+	const real_t energy_norelax = tjk_rest_energy(sk, ik);
 	for (int b = 0; b < sk->get_bone_count(); b++) {
 		sk->set_bone_pose_rotation(b, Quaternion());
 	}
@@ -3146,14 +3099,14 @@ TEST_CASE("[SceneTree][SwingTwistIK3D] relax (returnfulness) - adversarial invar
 		ik->set_joint_relax(0, j, 0.3);
 	}
 	ik->solve();
-	const real_t energy_relax = rest_energy();
+	const real_t energy_relax = tjk_rest_energy(sk, ik);
 	CHECK_MESSAGE(energy_relax <= energy_norelax + 1e-4,
 			vformat("relax must not raise total rest-deviation (%.3f vs %.3f)", (double)energy_relax, (double)energy_norelax));
 	CHECK(tjk_finite(sk));
 	memdelete(sk);
 
 	// 3. relax = 1 on every joint -> the chain abandons reach and sits at its REST pose.
-	build(5, 0.3);
+	tjk_build_chain(tree, 5, 0.3, (real_t)10.0, 40, Math::PI, sk, ik, tgt);
 	tgt->set_position(Vector3(0.5, 0.5, 0.2));
 	for (int j = 0; j < ik->get_joint_count(0); j++) {
 		ik->set_joint_relax(0, j, 1.0);
@@ -3170,7 +3123,7 @@ TEST_CASE("[SceneTree][SwingTwistIK3D] relax (returnfulness) - adversarial invar
 	memdelete(sk);
 
 	// 4. Determinism with relax active.
-	build(5, 0.3);
+	tjk_build_chain(tree, 5, 0.3, (real_t)10.0, 40, Math::PI, sk, ik, tgt);
 	for (int j = 0; j < ik->get_joint_count(0); j++) {
 		ik->set_joint_relax(0, j, 0.4);
 	}
@@ -3192,7 +3145,7 @@ TEST_CASE("[SceneTree][SwingTwistIK3D] relax (returnfulness) - adversarial invar
 	memdelete(sk);
 
 	// 5. Moderate relax still essentially reaches a reachable target (slack-only bias).
-	build(6, 0.25);
+	tjk_build_chain(tree, 6, 0.25, (real_t)10.0, 40, Math::PI, sk, ik, tgt);
 	for (int j = 0; j < ik->get_joint_count(0); j++) {
 		ik->set_joint_relax(0, j, 0.2);
 	}
