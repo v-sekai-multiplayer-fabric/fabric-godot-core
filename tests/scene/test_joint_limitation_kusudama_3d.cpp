@@ -37,7 +37,10 @@ TEST_FORCE_LINK(test_joint_limitation_kusudama_3d)
 #include "core/string/print_string.h"
 #include "core/variant/variant.h"
 #include "scene/3d/fabr_ik_3d.h"
+#include "scene/3d/ik_kabsch_6d.h"
+#include "scene/3d/marker_3d.h"
 #include "scene/3d/skeleton_3d.h"
+#include "scene/3d/swing_twist_ik_3d.h"
 #include "scene/main/scene_tree.h"
 #include "scene/main/window.h"
 #include "scene/resources/3d/humanoid_kusudama_rom.h"
@@ -2514,6 +2517,115 @@ TEST_CASE("[Scene][HumanoidKusudamaRom] Per-joint IK-target gold table (Lean/Pla
 	print_line(vformat("[gold] %d cases (%d inside, %d outside); worst preserve %.2f deg, worst idempotency %.2f deg",
 			checked, inside_cases, outside_cases,
 			Math::rad_to_deg(worst_preserve), Math::rad_to_deg(worst_idem)));
+}
+
+// The Kabsch/Procrustes 6-DOF rotation solver (ik_kabsch_6d) recovers a bone's FULL rotation
+// (swing + twist) from corresponding rest/target child vectors -- the rotational-matching
+// primitive FABRIK's single-child aim cannot provide. Verify it reconstructs a known rotation,
+// stays a proper orthonormal rotation, and handles the coplanar (reflection-risk) case.
+TEST_CASE("[Scene][IKKabsch6D] Recovers full rotation (swing + twist) from correspondences") {
+	const Basis R0(Quaternion(Vector3(0.3, 1.0, 0.2).normalized(), 0.73));
+
+	// Three non-colinear rest child directions (>= 2 recovers twist).
+	const Vector3 rest[3] = { Vector3(0, 0.4, 0), Vector3(0.12, -0.05, 0.02), Vector3(-0.08, -0.03, -0.06) };
+	Vector3 tgt[3];
+	for (int i = 0; i < 3; i++) {
+		tgt[i] = R0.xform(rest[i]);
+	}
+	const Basis R = IKKabsch6D::kabsch(rest, tgt, 3);
+
+	// Reconstructs R0 (incl. twist) to high precision.
+	for (int c = 0; c < 3; c++) {
+		CHECK(R.get_column(c).is_equal_approx(R0.get_column(c)));
+		CHECK((R.get_column(c) - R0.get_column(c)).length() < 1e-6);
+	}
+	// Proper orthonormal rotation (determinant +1, no reflection).
+	CHECK(R.orthonormalized().is_equal_approx(R));
+	CHECK(Math::abs((double)R.determinant() - 1.0) < 1e-9);
+
+	// Coplanar correspondences (rank-2) must still yield a proper rotation, not a reflection.
+	const Vector3 cop_rest[3] = { Vector3(0.3, 0, 0), Vector3(0, 0.3, 0), Vector3(0.2, 0.2, 0) };
+	Vector3 cop_tgt[3];
+	for (int i = 0; i < 3; i++) {
+		cop_tgt[i] = R0.xform(cop_rest[i]);
+	}
+	const Basis Rc = IKKabsch6D::kabsch(cop_rest, cop_tgt, 3);
+	CHECK(Math::abs((double)Rc.determinant() - 1.0) < 1e-6);
+	for (int i = 0; i < 3; i++) {
+		CHECK((Rc.xform(cop_rest[i]) - cop_tgt[i]).length() < 1e-6);
+	}
+}
+
+// Whole-body swing-twist-direct solver: the multi-limb Kabsch swing aim drives the chain so
+// the effector tip reaches its 6D target, and a kusudama swing cone actually constrains it.
+TEST_CASE("[SceneTree][SwingTwistIK3D] Whole-body swing-twist solve reaches the target") {
+	SceneTree *tree = SceneTree::get_singleton();
+	Skeleton3D *sk = memnew(Skeleton3D);
+	tree->get_root()->add_child(sk);
+	const int root = sk->add_bone("Root");
+	const int b1 = sk->add_bone("B1");
+	sk->set_bone_parent(b1, root);
+	const int b2 = sk->add_bone("B2");
+	sk->set_bone_parent(b2, b1);
+	const int tip = sk->add_bone("Tip");
+	sk->set_bone_parent(tip, b2);
+	sk->set_bone_rest(root, Transform3D(Basis(), Vector3(0, 0, 0)));
+	sk->set_bone_rest(b1, Transform3D(Basis(), Vector3(0.3, 0, 0)));
+	sk->set_bone_rest(b2, Transform3D(Basis(), Vector3(0.3, 0, 0)));
+	sk->set_bone_rest(tip, Transform3D(Basis(), Vector3(0.3, 0, 0)));
+	sk->notification(Skeleton3D::NOTIFICATION_UPDATE_SKELETON);
+
+	// SwingTwistIK3D is an IterateIK3D: configured through the same chain / target / limitation
+	// interface as FABRIK3D.
+	SwingTwistIK3D *ik = memnew(SwingTwistIK3D);
+	sk->add_child(ik);
+	Marker3D *target = memnew(Marker3D);
+	ik->add_child(target);
+	target->set_name("Target");
+	target->set_position(Vector3(0.5, 0.5, 0.0)); // inside the 0.9 reach, requires bending up
+	sk->notification(Skeleton3D::NOTIFICATION_UPDATE_SKELETON);
+
+	ik->set_setting_count(1);
+	ik->set_root_bone_name(0, "Root");
+	ik->set_end_bone_name(0, "Tip");
+	ik->set_target_node(0, NodePath("Target"));
+	ik->set_max_iterations(40);
+	ik->solve();
+
+	const Vector3 reached = sk->get_bone_global_pose(tip).origin;
+	CHECK_MESSAGE((reached - Vector3(0.5, 0.5, 0.0)).length() < 0.05,
+			vformat("tip at %s, target (0.5,0.5,0)", String(reached)));
+
+	// The modular kusudama limiter is applied per joint: a tight 10 deg swing cone on B1 must
+	// hold its forward axis inside the cone after solving (the chain is redundant, so it still
+	// reaches via the other joints -- the point is the clamp, not the reach).
+	ik->resolve_chains();
+	int b1_joint = -1;
+	for (int j = 0; j < ik->get_joint_count(0); j++) {
+		if (ik->get_joint_bone(0, j) == b1) {
+			b1_joint = j;
+		}
+	}
+	REQUIRE(b1_joint >= 0);
+	Ref<JointLimitationKusudama3D> lim;
+	lim.instantiate();
+	lim->set_cone_count(1);
+	lim->set_cone_center(0, Vector3(0, 1, 0)); // canonical +Y == the bone's rest forward
+	lim->set_cone_radius(0, Math::deg_to_rad(10.0));
+	ik->set_joint_limitation(0, b1_joint, lim);
+	for (int b = 0; b < sk->get_bone_count(); b++) {
+		sk->set_bone_pose_rotation(b, Quaternion());
+	}
+	ik->solve();
+	// B1's forward (rest dir to B2 = +X) must stay within the cone (+ soft-band slack).
+	const Vector3 fwd(1, 0, 0);
+	const Quaternion b1_delta = sk->get_bone_rest(b1).basis.get_rotation_quaternion().inverse() *
+			sk->get_bone_pose(b1).basis.get_rotation_quaternion();
+	const real_t b1_swing = Math::acos(CLAMP((double)b1_delta.xform(fwd).dot(fwd), -1.0, 1.0));
+	CHECK_MESSAGE(b1_swing <= Math::deg_to_rad(14.0),
+			vformat("B1 swing %.1f deg exceeds the 10 deg cone (+slack)", Math::rad_to_deg(b1_swing)));
+
+	memdelete(sk); // frees ik + target
 }
 
 } // namespace TestJointLimitationKusudama3D

@@ -243,6 +243,7 @@
 #include "scene/3d/ik_modifier_3d.h"
 #include "scene/3d/importer_mesh_instance_3d.h"
 #include "scene/3d/iterate_ik_3d.h"
+#include "scene/3d/swing_twist_ik_3d.h"
 #include "scene/3d/jacobian_ik_3d.h"
 #include "scene/3d/label_3d.h"
 #include "scene/3d/light_3d.h"
@@ -698,6 +699,7 @@ void register_scene_types() {
 	GDREGISTER_CLASS(SplineIK3D);
 	GDREGISTER_ABSTRACT_CLASS(IterateIK3D);
 	GDREGISTER_CLASS(FABRIK3D);
+	GDREGISTER_CLASS(SwingTwistIK3D);
 	GDREGISTER_CLASS(CCDIK3D);
 	GDREGISTER_CLASS(JacobianIK3D);
 	GDREGISTER_CLASS(LimitAngularVelocityModifier3D);
