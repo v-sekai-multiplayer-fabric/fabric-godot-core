@@ -782,16 +782,21 @@ void JointLimitationKusudama3D::get_kusudama_fill_mesh_and_material(const Transf
 	}
 
 	for (int idx = 0; idx < points.size(); idx++) {
+		// CUSTOM0 carries the classification direction the shader tests against cone_sequence,
+		// which is in the CANONICAL (+Y forward) cone frame. It must stay canonical: baking the
+		// swing rotation (p_transform.basis) into it would rotate the allowed region off the
+		// bone forward, so the forward vertex would land in the forbidden (teal) region.
+		const Vector3 canonical_dir = normals[idx];
 		Vector3 n = normals[idx];
 		Vector3 pos = points[idx];
 		if (use_skin) {
 			pos = p_transform.xform(pos * sphere_r);
-			n = p_transform.basis.xform(n).normalized();
+			n = p_transform.basis.xform(n).normalized(); // render normal only (placement/lighting)
 		}
 		Color c;
-		c.r = n.x;
-		c.g = n.y;
-		c.b = n.z;
+		c.r = canonical_dir.x;
+		c.g = canonical_dir.y;
+		c.b = canonical_dir.z;
 		c.a = 0.0f;
 		st->set_custom(0, c);
 		st->set_normal(n);
