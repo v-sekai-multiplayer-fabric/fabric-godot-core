@@ -158,20 +158,37 @@ void SwingTwistIK3D::_sync_joint_weights() const {
 	}
 }
 
-void SwingTwistIK3D::set_joint_pin_weight(int p_index, int p_joint, real_t p_position, real_t p_orientation) {
+void SwingTwistIK3D::set_joint_priorities(int p_index, int p_joint, real_t p_position, real_t p_swing, real_t p_twist) {
 	_sync_joint_weights();
 	ERR_FAIL_INDEX(p_index, (int)joint_weights.size());
 	ERR_FAIL_INDEX(p_joint, (int)joint_weights[p_index].size());
 	joint_weights[p_index][p_joint].position = MAX((real_t)0.0, p_position);
-	joint_weights[p_index][p_joint].orientation = CLAMP(p_orientation, (real_t)0.0, (real_t)1.0);
+	joint_weights[p_index][p_joint].swing = CLAMP(p_swing, (real_t)0.0, (real_t)1.0);
+	joint_weights[p_index][p_joint].twist = CLAMP(p_twist, (real_t)0.0, (real_t)1.0);
 }
 
-Vector2 SwingTwistIK3D::get_joint_pin_weight(int p_index, int p_joint) const {
+Vector3 SwingTwistIK3D::get_joint_priorities(int p_index, int p_joint) const {
 	_sync_joint_weights();
 	if (p_index < 0 || p_index >= (int)joint_weights.size() || p_joint < 0 || p_joint >= (int)joint_weights[p_index].size()) {
-		return Vector2(1.0, 1.0);
+		return Vector3(1.0, 1.0, 1.0);
 	}
-	return Vector2(joint_weights[p_index][p_joint].position, joint_weights[p_index][p_joint].orientation);
+	const PinWeight &w = joint_weights[p_index][p_joint];
+	return Vector3(w.position, w.swing, w.twist);
+}
+
+void SwingTwistIK3D::set_joint_stiffness(int p_index, int p_joint, real_t p_stiffness) {
+	_sync_joint_weights();
+	ERR_FAIL_INDEX(p_index, (int)joint_weights.size());
+	ERR_FAIL_INDEX(p_joint, (int)joint_weights[p_index].size());
+	joint_weights[p_index][p_joint].stiffness = CLAMP(p_stiffness, (real_t)0.0, (real_t)1.0);
+}
+
+real_t SwingTwistIK3D::get_joint_stiffness(int p_index, int p_joint) const {
+	_sync_joint_weights();
+	if (p_index < 0 || p_index >= (int)joint_weights.size() || p_joint < 0 || p_joint >= (int)joint_weights[p_index].size()) {
+		return 0.0;
+	}
+	return joint_weights[p_index][p_joint].stiffness;
 }
 
 void SwingTwistIK3D::_get_property_list(List<PropertyInfo> *p_list) const {
@@ -179,20 +196,26 @@ void SwingTwistIK3D::_get_property_list(List<PropertyInfo> *p_list) const {
 	_sync_joint_weights();
 	for (int i = 0; i < get_setting_count(); i++) {
 		for (int j = 0; j < get_joint_count(i); j++) {
-			// Stored with the joint (like the per-joint limitation): x = position weight, y =
-			// orientation ("star") weight. A pole = low x, y = 0 on a mid joint.
-			p_list->push_back(PropertyInfo(Variant::VECTOR2, vformat("settings/%d/joints/%d/pin_weight", i, j)));
+			// Stored with the joint (like the per-joint limitation): PST priorities
+			// (x = position, y = swing, z = twist) + stiffness. A pole = low position, swing =
+			// twist = 0 on a mid joint.
+			p_list->push_back(PropertyInfo(Variant::VECTOR3, vformat("settings/%d/joints/%d/priorities", i, j)));
+			p_list->push_back(PropertyInfo(Variant::FLOAT, vformat("settings/%d/joints/%d/stiffness", i, j), PROPERTY_HINT_RANGE, "0,1,0.01"));
 		}
 	}
 }
 
 bool SwingTwistIK3D::_set(const StringName &p_name, const Variant &p_value) {
 	const String n = p_name;
-	if (n.begins_with("settings/") && n.ends_with("/pin_weight")) {
+	if (n.begins_with("settings/")) {
 		const Vector<String> parts = n.split("/");
-		if (parts.size() == 5) {
-			const Vector2 v = p_value;
-			set_joint_pin_weight(parts[1].to_int(), parts[3].to_int(), v.x, v.y);
+		if (parts.size() == 5 && parts[4] == "priorities") {
+			const Vector3 v = p_value;
+			set_joint_priorities(parts[1].to_int(), parts[3].to_int(), v.x, v.y, v.z);
+			return true;
+		}
+		if (parts.size() == 5 && parts[4] == "stiffness") {
+			set_joint_stiffness(parts[1].to_int(), parts[3].to_int(), p_value);
 			return true;
 		}
 	}
@@ -201,10 +224,14 @@ bool SwingTwistIK3D::_set(const StringName &p_name, const Variant &p_value) {
 
 bool SwingTwistIK3D::_get(const StringName &p_name, Variant &r_ret) const {
 	const String n = p_name;
-	if (n.begins_with("settings/") && n.ends_with("/pin_weight")) {
+	if (n.begins_with("settings/")) {
 		const Vector<String> parts = n.split("/");
-		if (parts.size() == 5) {
-			r_ret = get_joint_pin_weight(parts[1].to_int(), parts[3].to_int());
+		if (parts.size() == 5 && parts[4] == "priorities") {
+			r_ret = get_joint_priorities(parts[1].to_int(), parts[3].to_int());
+			return true;
+		}
+		if (parts.size() == 5 && parts[4] == "stiffness") {
+			r_ret = get_joint_stiffness(parts[1].to_int(), parts[3].to_int());
 			return true;
 		}
 	}
@@ -264,7 +291,8 @@ void SwingTwistIK3D::solve() {
 				e.target = tgt;
 				if (const PinWeight *pw = bone_weight.getptr(tip)) {
 					e.pos_weight = pw->position;
-					e.orient_weight = pw->orientation;
+					e.swing_weight = pw->swing;
+					e.twist_weight = pw->twist;
 				}
 				effectors.push_back(e);
 				controlled[tip] = true;
@@ -284,7 +312,8 @@ void SwingTwistIK3D::solve() {
 				e.target = tgt;
 				if (const PinWeight *pw = bone_weight.getptr(tip)) {
 					e.pos_weight = pw->position;
-					e.orient_weight = pw->orientation;
+					e.swing_weight = pw->swing;
+					e.twist_weight = pw->twist;
 				}
 				effectors.push_back(e);
 				controlled[tip] = true;
@@ -449,16 +478,42 @@ void SwingTwistIK3D::solve() {
 			}
 			Basis new_gbasis;
 			if (tip_eff >= 0) {
-				// Effector tip: the target frame (the 6D "star") sets the orientation, scaled by
-				// orient_weight. 1 = match fully; 0 = keep the FK orientation (position-only goal);
-				// in between blends. This is the per-pin orientation weight.
+				// Effector tip: match the target frame, but split the orientation delta into its
+				// SWING (aim the forward axis) and TWIST (roll about it) parts and scale each by its
+				// PST priority. swing=twist=1 -> full 6D match; both 0 -> keep FK orientation
+				// (position-only goal); independent values let an animator match aim but free the
+				// roll, etc. The split uses the bone's forward (its first child's rest dir).
 				const Effector &te = effectors[tip_eff];
 				const Basis tgt_basis = st_proper_rotation(te.target.basis);
-				if (te.orient_weight >= (real_t)1.0) {
+				if (te.swing_weight >= (real_t)1.0 && te.twist_weight >= (real_t)1.0) {
 					new_gbasis = tgt_basis;
 				} else {
-					const Quaternion cur = gp[b].basis.get_rotation_quaternion();
-					new_gbasis = Basis(cur.slerp(tgt_basis.get_rotation_quaternion(), te.orient_weight));
+					const Quaternion cur_q = gp[b].basis.get_rotation_quaternion();
+					const Quaternion delta = tgt_basis.get_rotation_quaternion() * cur_q.inverse(); // global cur->tgt
+					// twist axis = current global forward.
+					Vector3 f_local(0, 1, 0);
+					const Vector<int> ch = sk->get_bone_children(b);
+					if (!ch.is_empty()) {
+						const Vector3 d = sk->get_bone_rest(ch[0]).origin.normalized();
+						if (!d.is_zero_approx()) {
+							f_local = d;
+						}
+					}
+					const Vector3 f = gp[b].basis.xform(f_local).normalized();
+					// swing-twist decomposition of `delta` about f.
+					const Vector3 ra(delta.x, delta.y, delta.z);
+					const Vector3 proj = f * ra.dot(f);
+					Quaternion twist(proj.x, proj.y, proj.z, delta.w);
+					if (twist.length_squared() < (real_t)CMP_EPSILON) {
+						twist = Quaternion();
+					} else {
+						twist.normalize();
+					}
+					const Quaternion swing = (delta * twist.inverse()).normalized();
+					// Scale each component's angle by its priority (q^w = slerp(identity, q, w)).
+					const Quaternion sw = Quaternion().slerp(swing, te.swing_weight);
+					const Quaternion tw = Quaternion().slerp(twist, te.twist_weight);
+					new_gbasis = Basis((sw * tw * cur_q).normalized());
 				}
 			} else {
 				const LocalVector<int> &downstream = down_by_order[bi];
@@ -495,12 +550,19 @@ void SwingTwistIK3D::solve() {
 			const Quaternion cand_local = (parent_basis.inverse() * new_gbasis).get_rotation_quaternion();
 			const Ref<JointLimitationKusudama3D> *limp = limitations.getptr(b);
 			Quaternion target_local = _clamp_swing_twist(sk, b, limp ? *limp : Ref<JointLimitationKusudama3D>(), cand_local);
+			const Quaternion prev_local = sk->get_bone_pose_rotation(b);
+			// STIFFNESS: a soft, continuous resistance to rotating. stiffness 1 holds the bone
+			// (rigid), 0 lets it move freely; in between it keeps a fraction of its prior pose.
+			if (const PinWeight *pw = bone_weight.getptr(b)) {
+				if (pw->stiffness > (real_t)0.0) {
+					target_local = prev_local.slerp(target_local, MAX((real_t)0.0, (real_t)1.0 - pw->stiffness));
+				}
+			}
 			// Rate-limit the per-iteration rotation delta (mirrors IterateIK3D's angular_delta_limit):
 			// at a kinematic fold the candidate can flip ~180deg in one step; slerping the delta down
 			// to the limit spreads that across iterations/frames so the joint sweeps smoothly instead
 			// of teleporting (bounded per-step angle => bounded jerk). At alignment diff~0 => no change,
 			// so the "hits the marker when aligned" fixed point is preserved.
-			const Quaternion prev_local = sk->get_bone_pose_rotation(b);
 			const double diff = prev_local.angle_to(target_local);
 			const double adl = get_angular_delta_limit();
 			if (diff > adl && !Math::is_zero_approx(diff)) {
@@ -569,8 +631,10 @@ void SwingTwistIK3D::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("get_pins"), &SwingTwistIK3D::get_pins);
 	ClassDB::bind_method(D_METHOD("set_locked_bones", "locked_bones"), &SwingTwistIK3D::set_locked_bones);
 	ClassDB::bind_method(D_METHOD("get_locked_bones"), &SwingTwistIK3D::get_locked_bones);
-	ClassDB::bind_method(D_METHOD("set_joint_pin_weight", "setting", "joint", "position", "orientation"), &SwingTwistIK3D::set_joint_pin_weight);
-	ClassDB::bind_method(D_METHOD("get_joint_pin_weight", "setting", "joint"), &SwingTwistIK3D::get_joint_pin_weight);
+	ClassDB::bind_method(D_METHOD("set_joint_priorities", "setting", "joint", "position", "swing", "twist"), &SwingTwistIK3D::set_joint_priorities);
+	ClassDB::bind_method(D_METHOD("get_joint_priorities", "setting", "joint"), &SwingTwistIK3D::get_joint_priorities);
+	ClassDB::bind_method(D_METHOD("set_joint_stiffness", "setting", "joint", "stiffness"), &SwingTwistIK3D::set_joint_stiffness);
+	ClassDB::bind_method(D_METHOD("get_joint_stiffness", "setting", "joint"), &SwingTwistIK3D::get_joint_stiffness);
 
 	// All interactive state is serialized so it persists in the scene and is undoable via the
 	// inspector's built-in EditorUndoRedoManager. Per-joint weights ride the chain settings

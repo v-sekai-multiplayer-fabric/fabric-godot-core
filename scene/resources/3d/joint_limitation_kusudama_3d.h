@@ -58,6 +58,12 @@ class JointLimitationKusudama3D : public JointLimitation3D {
 	real_t twist_from = 0.0;
 	real_t twist_to = 0.0;
 
+	// Cushion: the soft-limit margin (radians). Near a cone/twist boundary the projection
+	// eases the direction back over this band instead of hard-clamping -- the EWBIK "cushion"
+	// (a comfortable approach to the limit). Wider = the joint resists the limit earlier and
+	// more gently. Kept above a small floor so the projection stays C1 (no boundary teleport).
+	real_t cushion = 0.06;
+
 	Vector3 _swing_center() const; // normalized mean of cone centers (the rest/forward axis)
 	bool _point_in_cone_union(const Vector3 &p_point) const;
 	real_t _swing_boundary(const Vector3 &p_center, const Vector3 &p_tangent) const;
@@ -116,6 +122,10 @@ public:
 	real_t get_twist_to() const;
 	bool has_twist_limit() const;
 	real_t clamp_twist_angle(real_t p_angle) const;
+
+	// --- Cushion: tunable soft-limit margin (radians). EWBIK's "cushion". ---
+	void set_cushion(real_t p_radians);
+	real_t get_cushion() const;
 	// Clamp the twist of p_rotation about p_axis into [twist_from, twist_to]; swing untouched.
 	Quaternion limit_twist(const Quaternion &p_rotation, const Vector3 &p_axis) const;
 

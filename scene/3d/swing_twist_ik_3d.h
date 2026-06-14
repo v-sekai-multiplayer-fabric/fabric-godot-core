@@ -24,7 +24,8 @@ class SwingTwistIK3D : public IterateIK3D {
 		int tip_bone = -1;
 		Transform3D target; // skeleton-local 6D goal frame
 		real_t pos_weight = 1.0; // scales this effector's pull in the weighted Kabsch
-		real_t orient_weight = 1.0; // scales how much the tip matches the target basis (the "star")
+		real_t swing_weight = 1.0; // scales matching the target's forward axis at the tip
+		real_t twist_weight = 1.0; // scales matching the target's roll at the tip
 	};
 
 	// One unified animator concept: a bone is PINNED (has a target -> dragged), FREE (no pin
@@ -42,9 +43,15 @@ class SwingTwistIK3D : public IterateIK3D {
 	// "star"). A POLE is not a special case -- it is just a low-position, zero-orientation weight
 	// on a mid joint (elbow/knee) that also carries a pin: the strong wrist owns the reach, so the
 	// weak elbow can only influence the leftover roll DOF, swinging the elbow toward its target.
+	// Per-joint solver weights -- the EWBIK PST (position/swing/twist) priorities plus stiffness.
+	// position scales the pull to the target point; swing scales matching the target's forward
+	// AXIS; twist scales matching its ROLL about that axis (swing + twist = the orientation
+	// "star", split into its two physical DOF). stiffness is how much the bone resists rotating.
 	struct PinWeight {
 		real_t position = 1.0;
-		real_t orientation = 1.0;
+		real_t swing = 1.0;
+		real_t twist = 1.0;
+		real_t stiffness = 0.0; // [0..1] how much this bone RESISTS rotating: 0 = free, 1 = rigid
 	};
 	LocalVector<LocalVector<PinWeight>> joint_weights; // [setting][joint]; resized to the chains
 	void _sync_joint_weights() const; // grow joint_weights to match the current settings/joint counts
@@ -93,8 +100,12 @@ public:
 	// weight (pull to the target point); y = orientation weight (match the target basis, the
 	// "star"). Stored with the chain joint and serialized as settings/i/joints/j/pin_weight.
 	// A pole = pin the mid joint + set_joint_pin_weight(chain, mid_joint, ~0.3, 0.0).
-	void set_joint_pin_weight(int p_index, int p_joint, real_t p_position, real_t p_orientation);
-	Vector2 get_joint_pin_weight(int p_index, int p_joint) const; // (position, orientation); (1,1) default
+	void set_joint_priorities(int p_index, int p_joint, real_t p_position, real_t p_swing, real_t p_twist);
+	Vector3 get_joint_priorities(int p_index, int p_joint) const; // (position, swing, twist); (1,1,1) default
+	// Per-bone STIFFNESS [0..1]: how much the joint resists the solver. 0 = free, 1 = rigid (a soft
+	// continuous version of locking). Stored as settings/i/joints/j/stiffness.
+	void set_joint_stiffness(int p_index, int p_joint, real_t p_stiffness);
+	real_t get_joint_stiffness(int p_index, int p_joint) const;
 
 	// Free root: an UNPINNED motion root translates so the pins (e.g. the hands) drag the whole
 	// body; pin the root (set_pin on it) to ground/drag it directly instead.

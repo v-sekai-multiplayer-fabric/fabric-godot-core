@@ -54,6 +54,8 @@ void JointLimitationKusudama3D::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("get_twist_from"), &JointLimitationKusudama3D::get_twist_from);
 	ClassDB::bind_method(D_METHOD("set_twist_to", "radians"), &JointLimitationKusudama3D::set_twist_to);
 	ClassDB::bind_method(D_METHOD("get_twist_to"), &JointLimitationKusudama3D::get_twist_to);
+	ClassDB::bind_method(D_METHOD("set_cushion", "radians"), &JointLimitationKusudama3D::set_cushion);
+	ClassDB::bind_method(D_METHOD("get_cushion"), &JointLimitationKusudama3D::get_cushion);
 	ClassDB::bind_method(D_METHOD("has_twist_limit"), &JointLimitationKusudama3D::has_twist_limit);
 	ClassDB::bind_method(D_METHOD("clamp_twist_angle", "angle"), &JointLimitationKusudama3D::clamp_twist_angle);
 	ClassDB::bind_method(D_METHOD("limit_twist", "rotation", "axis"), &JointLimitationKusudama3D::limit_twist);
@@ -66,6 +68,7 @@ void JointLimitationKusudama3D::_bind_methods() {
 	// Stored/scripted in radians; the inspector shows and edits degrees (range is in degrees).
 	ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "twist_from", PROPERTY_HINT_RANGE, "-360,360,0.1,radians_as_degrees"), "set_twist_from", "get_twist_from");
 	ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "twist_to", PROPERTY_HINT_RANGE, "-360,360,0.1,radians_as_degrees"), "set_twist_to", "get_twist_to");
+	ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "cushion", PROPERTY_HINT_RANGE, "0.5,30,0.1,radians_as_degrees"), "set_cushion", "get_cushion");
 }
 
 void JointLimitationKusudama3D::set_cones(const Vector<Vector4> &p_cones) {
@@ -193,6 +196,12 @@ void JointLimitationKusudama3D::set_twist_to(real_t p_radians) {
 }
 real_t JointLimitationKusudama3D::get_twist_to() const {
 	return twist_to;
+}
+void JointLimitationKusudama3D::set_cushion(real_t p_radians) {
+	cushion = MAX((real_t)0.0, p_radians);
+}
+real_t JointLimitationKusudama3D::get_cushion() const {
+	return cushion;
 }
 bool JointLimitationKusudama3D::has_twist_limit() const {
 	// The twist range IS the constraint: twist_to > twist_from is a window; twist_to ==
@@ -577,7 +586,9 @@ Vector3 JointLimitationKusudama3D::_continuous_project(const Vector3 &p_point) c
 	// (the boundary-crossing jerk) with zero overshoot. Both the inside-cone and
 	// inside-tangent-path "fast accept" cases are folded in here, so solve() is C1
 	// across every seam while staying within the hard limit.
-	const real_t SOFT_BAND = 0.06;
+	// The cushion is the soft-limit band; floored so the projection stays C1 (no boundary
+	// teleport) even if the animator dials it toward zero.
+	const real_t SOFT_BAND = MAX((real_t)0.01, cushion);
 	auto soft_saturated = [&](const Vector3 &center, real_t limit, bool keep_in) {
 		real_t th = p_point.angle_to(center);
 		real_t th_sat = th;
