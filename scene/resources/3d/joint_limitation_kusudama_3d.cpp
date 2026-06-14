@@ -195,7 +195,10 @@ real_t JointLimitationKusudama3D::get_twist_to() const {
 	return twist_to;
 }
 bool JointLimitationKusudama3D::has_twist_limit() const {
-	return twist_to > twist_from + (real_t)1e-6;
+	// The twist range IS the constraint: twist_to > twist_from is a window; twist_to ==
+	// twist_from is LOCKED (a zero-width limit, e.g. a hinge knee/finger that must not spin);
+	// an inverted range (twist_to < twist_from) is the "no twist limit / free" sentinel.
+	return twist_to >= twist_from;
 }
 
 real_t JointLimitationKusudama3D::clamp_twist_angle(real_t p_angle) const {
@@ -223,17 +226,19 @@ Quaternion JointLimitationKusudama3D::limit_twist(const Quaternion &p_rotation, 
 }
 
 real_t JointLimitationKusudama3D::twist_to_normalized(real_t p_angle) const {
-	if (!has_twist_limit()) {
-		return 0.0;
+	const real_t span = twist_to - twist_from;
+	if (!has_twist_limit() || span <= (real_t)1e-9) {
+		return 0.0; // free, or LOCKED (zero-width) -> no meaningful normalized position
 	}
-	return CLAMP((p_angle - twist_from) / (twist_to - twist_from), (real_t)0.0, (real_t)1.0);
+	return CLAMP((p_angle - twist_from) / span, (real_t)0.0, (real_t)1.0);
 }
 
 real_t JointLimitationKusudama3D::twist_from_normalized(real_t p_normalized) const {
-	if (!has_twist_limit()) {
-		return 0.0;
+	const real_t span = twist_to - twist_from;
+	if (!has_twist_limit() || span <= (real_t)1e-9) {
+		return twist_from; // LOCKED -> the single angle; free -> twist_from (0)
 	}
-	return twist_from + CLAMP(p_normalized, (real_t)0.0, (real_t)1.0) * (twist_to - twist_from);
+	return twist_from + CLAMP(p_normalized, (real_t)0.0, (real_t)1.0) * span;
 }
 
 // Deterministic tangent basis at a swing axis: build a Basis that rotates the rest
