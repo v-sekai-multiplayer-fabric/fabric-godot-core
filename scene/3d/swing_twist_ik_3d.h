@@ -52,6 +52,9 @@ class SwingTwistIK3D : public IterateIK3D {
 		real_t swing = 1.0;
 		real_t twist = 1.0;
 		real_t stiffness = 0.0; // [0..1] how much this bone RESISTS rotating: 0 = free, 1 = rigid
+		real_t engage = 0.0; // [0..1] how LATE in the solve this bone joins: 0 = from the start
+		real_t isolation = 0.0; // [0..1] a pin's isolation: 1 = its bone blocks descendant pulls from
+		// reaching ancestors above it; 0 = transparent (descendants pull through). EWBIK depthFalloff.
 	};
 	LocalVector<LocalVector<PinWeight>> joint_weights; // [setting][joint]; resized to the chains
 	void _sync_joint_weights() const; // grow joint_weights to match the current settings/joint counts
@@ -106,6 +109,13 @@ public:
 	// continuous version of locking). Stored as settings/i/joints/j/stiffness.
 	void set_joint_stiffness(int p_index, int p_joint, real_t p_stiffness);
 	real_t get_joint_stiffness(int p_index, int p_joint) const;
+	// ENGAGE [0..1]: how late in the solve this bone joins (0 = from the start). Distal-first
+	// settling, etc. ISOLATION [0..1]: how much a pin blocks descendant pulls from reaching
+	// ancestors above it (0 = transparent). Both stored as settings/i/joints/j/...
+	void set_joint_engage(int p_index, int p_joint, real_t p_engage);
+	real_t get_joint_engage(int p_index, int p_joint) const;
+	void set_joint_isolation(int p_index, int p_joint, real_t p_isolation);
+	real_t get_joint_isolation(int p_index, int p_joint) const;
 
 	// Free root: an UNPINNED motion root translates so the pins (e.g. the hands) drag the whole
 	// body; pin the root (set_pin on it) to ground/drag it directly instead.

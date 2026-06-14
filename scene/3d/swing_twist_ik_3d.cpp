@@ -191,6 +191,36 @@ real_t SwingTwistIK3D::get_joint_stiffness(int p_index, int p_joint) const {
 	return joint_weights[p_index][p_joint].stiffness;
 }
 
+void SwingTwistIK3D::set_joint_engage(int p_index, int p_joint, real_t p_engage) {
+	_sync_joint_weights();
+	ERR_FAIL_INDEX(p_index, (int)joint_weights.size());
+	ERR_FAIL_INDEX(p_joint, (int)joint_weights[p_index].size());
+	joint_weights[p_index][p_joint].engage = CLAMP(p_engage, (real_t)0.0, (real_t)1.0);
+}
+
+real_t SwingTwistIK3D::get_joint_engage(int p_index, int p_joint) const {
+	_sync_joint_weights();
+	if (p_index < 0 || p_index >= (int)joint_weights.size() || p_joint < 0 || p_joint >= (int)joint_weights[p_index].size()) {
+		return 0.0;
+	}
+	return joint_weights[p_index][p_joint].engage;
+}
+
+void SwingTwistIK3D::set_joint_isolation(int p_index, int p_joint, real_t p_isolation) {
+	_sync_joint_weights();
+	ERR_FAIL_INDEX(p_index, (int)joint_weights.size());
+	ERR_FAIL_INDEX(p_joint, (int)joint_weights[p_index].size());
+	joint_weights[p_index][p_joint].isolation = CLAMP(p_isolation, (real_t)0.0, (real_t)1.0);
+}
+
+real_t SwingTwistIK3D::get_joint_isolation(int p_index, int p_joint) const {
+	_sync_joint_weights();
+	if (p_index < 0 || p_index >= (int)joint_weights.size() || p_joint < 0 || p_joint >= (int)joint_weights[p_index].size()) {
+		return 0.0;
+	}
+	return joint_weights[p_index][p_joint].isolation;
+}
+
 void SwingTwistIK3D::_get_property_list(List<PropertyInfo> *p_list) const {
 	IterateIK3D::_get_property_list(p_list);
 	_sync_joint_weights();
@@ -201,6 +231,8 @@ void SwingTwistIK3D::_get_property_list(List<PropertyInfo> *p_list) const {
 			// twist = 0 on a mid joint.
 			p_list->push_back(PropertyInfo(Variant::VECTOR3, vformat("settings/%d/joints/%d/priorities", i, j)));
 			p_list->push_back(PropertyInfo(Variant::FLOAT, vformat("settings/%d/joints/%d/stiffness", i, j), PROPERTY_HINT_RANGE, "0,1,0.01"));
+			p_list->push_back(PropertyInfo(Variant::FLOAT, vformat("settings/%d/joints/%d/engage", i, j), PROPERTY_HINT_RANGE, "0,1,0.01"));
+			p_list->push_back(PropertyInfo(Variant::FLOAT, vformat("settings/%d/joints/%d/isolation", i, j), PROPERTY_HINT_RANGE, "0,1,0.01"));
 		}
 	}
 }
@@ -218,6 +250,14 @@ bool SwingTwistIK3D::_set(const StringName &p_name, const Variant &p_value) {
 			set_joint_stiffness(parts[1].to_int(), parts[3].to_int(), p_value);
 			return true;
 		}
+		if (parts.size() == 5 && parts[4] == "engage") {
+			set_joint_engage(parts[1].to_int(), parts[3].to_int(), p_value);
+			return true;
+		}
+		if (parts.size() == 5 && parts[4] == "isolation") {
+			set_joint_isolation(parts[1].to_int(), parts[3].to_int(), p_value);
+			return true;
+		}
 	}
 	return IterateIK3D::_set(p_name, p_value);
 }
@@ -232,6 +272,14 @@ bool SwingTwistIK3D::_get(const StringName &p_name, Variant &r_ret) const {
 		}
 		if (parts.size() == 5 && parts[4] == "stiffness") {
 			r_ret = get_joint_stiffness(parts[1].to_int(), parts[3].to_int());
+			return true;
+		}
+		if (parts.size() == 5 && parts[4] == "engage") {
+			r_ret = get_joint_engage(parts[1].to_int(), parts[3].to_int());
+			return true;
+		}
+		if (parts.size() == 5 && parts[4] == "isolation") {
+			r_ret = get_joint_isolation(parts[1].to_int(), parts[3].to_int());
 			return true;
 		}
 	}
@@ -396,14 +444,33 @@ void SwingTwistIK3D::solve() {
 		order_index[solve_order[i]] = (int)i;
 	}
 	LocalVector<LocalVector<int>> down_by_order;
+	LocalVector<LocalVector<real_t>> down_transmit; // per (bone, effector): isolation-attenuated weight
 	down_by_order.resize(solve_order.size());
+	down_transmit.resize(solve_order.size());
+	HashMap<int, real_t> effector_isolation; // an effector bone's isolation blocks it from ancestors above
+	for (uint32_t i = 0; i < effectors.size(); i++) {
+		const PinWeight *pw = bone_weight.getptr(effectors[i].tip_bone);
+		effector_isolation[effectors[i].tip_bone] = pw ? pw->isolation : (real_t)0.0;
+	}
 	for (uint32_t i = 0; i < effectors.size(); i++) {
 		int x = effectors[i].tip_bone;
+		real_t transmit = 1.0;
+		bool first = true;
 		while (x >= 0) {
 			const int *oi = order_index.getptr(x);
 			if (oi) {
 				down_by_order[*oi].push_back((int)i);
+				down_transmit[*oi].push_back(transmit);
 			}
+			// An intervening pin (x, not the source tip) with isolation attenuates this effector's
+			// pull on every ancestor ABOVE x.
+			if (!first) {
+				const real_t *iso = effector_isolation.getptr(x);
+				if (iso && *iso > (real_t)0.0) {
+					transmit *= (real_t)1.0 - *iso;
+				}
+			}
+			first = false;
 			x = sk->get_bone_parent(x);
 		}
 	}
@@ -517,6 +584,7 @@ void SwingTwistIK3D::solve() {
 				}
 			} else {
 				const LocalVector<int> &downstream = down_by_order[bi];
+				const LocalVector<real_t> &dtransmit = down_transmit[bi];
 				if (downstream.is_empty()) {
 					continue; // no downstream effector pulls this bone
 				}
@@ -527,7 +595,8 @@ void SwingTwistIK3D::solve() {
 					// Weighted Kabsch: scaling a correspondence pair by sqrt(w) scales its term in
 					// the covariance Sum(w * rest (X) tgt) by w. A low-weight pin (e.g. an elbow
 					// "pole") thus only nudges the fit -- the strong wrist pin dominates the reach.
-					const real_t sw = Math::sqrt(MAX((real_t)0.0, e.pos_weight));
+					// dtransmit folds in isolation (intervening pins blocking this pull).
+					const real_t sw = Math::sqrt(MAX((real_t)0.0, e.pos_weight * dtransmit[k]));
 					rest_pts.push_back((gp[e.tip_bone].origin - gb.origin) * sw);
 					tgt_pts.push_back((e.target.origin - gb.origin) * sw);
 				}
@@ -551,9 +620,16 @@ void SwingTwistIK3D::solve() {
 			const Ref<JointLimitationKusudama3D> *limp = limitations.getptr(b);
 			Quaternion target_local = _clamp_swing_twist(sk, b, limp ? *limp : Ref<JointLimitationKusudama3D>(), cand_local);
 			const Quaternion prev_local = sk->get_bone_pose_rotation(b);
-			// STIFFNESS: a soft, continuous resistance to rotating. stiffness 1 holds the bone
-			// (rigid), 0 lets it move freely; in between it keeps a fraction of its prior pose.
 			if (const PinWeight *pw = bone_weight.getptr(b)) {
+				// ENGAGE: ramp the bone in over the solve (0 = full from the start). Lets distal
+				// joints settle before proximal ones engage, etc.
+				if (pw->engage > (real_t)0.0) {
+					const real_t t = ((real_t)it + (real_t)1.0) / (real_t)iters; // solve progress
+					const real_t ramp = CLAMP((t - pw->engage) / MAX((real_t)1e-3, (real_t)1.0 - pw->engage), (real_t)0.0, (real_t)1.0);
+					target_local = prev_local.slerp(target_local, ramp);
+				}
+				// STIFFNESS: a soft, continuous resistance to rotating. 1 holds the bone (rigid),
+				// 0 lets it move freely; in between it keeps a fraction of its prior pose.
 				if (pw->stiffness > (real_t)0.0) {
 					target_local = prev_local.slerp(target_local, MAX((real_t)0.0, (real_t)1.0 - pw->stiffness));
 				}
@@ -635,6 +711,10 @@ void SwingTwistIK3D::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("get_joint_priorities", "setting", "joint"), &SwingTwistIK3D::get_joint_priorities);
 	ClassDB::bind_method(D_METHOD("set_joint_stiffness", "setting", "joint", "stiffness"), &SwingTwistIK3D::set_joint_stiffness);
 	ClassDB::bind_method(D_METHOD("get_joint_stiffness", "setting", "joint"), &SwingTwistIK3D::get_joint_stiffness);
+	ClassDB::bind_method(D_METHOD("set_joint_engage", "setting", "joint", "engage"), &SwingTwistIK3D::set_joint_engage);
+	ClassDB::bind_method(D_METHOD("get_joint_engage", "setting", "joint"), &SwingTwistIK3D::get_joint_engage);
+	ClassDB::bind_method(D_METHOD("set_joint_isolation", "setting", "joint", "isolation"), &SwingTwistIK3D::set_joint_isolation);
+	ClassDB::bind_method(D_METHOD("get_joint_isolation", "setting", "joint"), &SwingTwistIK3D::get_joint_isolation);
 
 	// All interactive state is serialized so it persists in the scene and is undoable via the
 	// inspector's built-in EditorUndoRedoManager. Per-joint weights ride the chain settings
