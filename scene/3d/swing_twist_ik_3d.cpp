@@ -111,6 +111,37 @@ void SwingTwistIK3D::set_motion_root_bone(const StringName &p_name) {
 	root_bone_name = p_name;
 }
 
+void SwingTwistIK3D::set_pins(const Dictionary &p_pins) {
+	pins.clear();
+	const Array keys = p_pins.keys();
+	for (int i = 0; i < keys.size(); i++) {
+		pins[StringName(keys[i])] = NodePath(p_pins[keys[i]]);
+	}
+}
+
+Dictionary SwingTwistIK3D::get_pins() const {
+	Dictionary d;
+	for (const KeyValue<StringName, NodePath> &kv : pins) {
+		d[kv.key] = kv.value;
+	}
+	return d;
+}
+
+void SwingTwistIK3D::set_locked_bones(const PackedStringArray &p_locked) {
+	locked_bones.clear();
+	for (int i = 0; i < p_locked.size(); i++) {
+		locked_bones[StringName(p_locked[i])] = true;
+	}
+}
+
+PackedStringArray SwingTwistIK3D::get_locked_bones() const {
+	PackedStringArray a;
+	for (const KeyValue<StringName, bool> &kv : locked_bones) {
+		a.push_back(String(kv.key));
+	}
+	return a;
+}
+
 void SwingTwistIK3D::solve() {
 	Skeleton3D *sk = get_skeleton();
 	if (!sk) {
@@ -439,7 +470,15 @@ void SwingTwistIK3D::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("get_free_root"), &SwingTwistIK3D::get_free_root);
 	ClassDB::bind_method(D_METHOD("set_motion_root_bone", "name"), &SwingTwistIK3D::set_motion_root_bone);
 	ClassDB::bind_method(D_METHOD("get_motion_root_bone"), &SwingTwistIK3D::get_motion_root_bone);
+	ClassDB::bind_method(D_METHOD("set_pins", "pins"), &SwingTwistIK3D::set_pins);
+	ClassDB::bind_method(D_METHOD("get_pins"), &SwingTwistIK3D::get_pins);
+	ClassDB::bind_method(D_METHOD("set_locked_bones", "locked_bones"), &SwingTwistIK3D::set_locked_bones);
+	ClassDB::bind_method(D_METHOD("get_locked_bones"), &SwingTwistIK3D::get_locked_bones);
 
 	ADD_PROPERTY(PropertyInfo(Variant::BOOL, "free_root"), "set_free_root", "get_free_root");
 	ADD_PROPERTY(PropertyInfo(Variant::STRING_NAME, "motion_root_bone", PROPERTY_HINT_ENUM_SUGGESTION, ""), "set_motion_root_bone", "get_motion_root_bone");
+	// Serialized + inspector-editable -> persists in the scene and is undoable via the inspector's
+	// built-in EditorUndoRedoManager.
+	ADD_PROPERTY(PropertyInfo(Variant::DICTIONARY, "pins"), "set_pins", "get_pins");
+	ADD_PROPERTY(PropertyInfo(Variant::PACKED_STRING_ARRAY, "locked_bones"), "set_locked_bones", "get_locked_bones");
 }

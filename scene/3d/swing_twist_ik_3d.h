@@ -61,6 +61,14 @@ public:
 	void set_bone_locked(const StringName &p_bone, bool p_locked);
 	bool is_bone_locked(const StringName &p_bone) const;
 
+	// Bulk pin/lock state as serialized properties (bone_name -> target NodePath; list of locked
+	// bone names). Exposing these makes the interactive state persist in the scene AND undoable
+	// via the inspector's built-in EditorUndoRedoManager (no custom gizmo needed).
+	void set_pins(const Dictionary &p_pins);
+	Dictionary get_pins() const;
+	void set_locked_bones(const PackedStringArray &p_locked);
+	PackedStringArray get_locked_bones() const;
+
 	// Free root: an UNPINNED motion root translates so the pins (e.g. the hands) drag the whole
 	// body; pin the root (set_pin on it) to ground/drag it directly instead.
 	void set_free_root(bool p_enabled);
