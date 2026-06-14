@@ -63,8 +63,9 @@ void JointLimitationKusudama3D::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("twist_from_normalized", "normalized"), &JointLimitationKusudama3D::twist_from_normalized);
 
 	ADD_PROPERTY(PropertyInfo(Variant::ARRAY, "cones", PROPERTY_HINT_NONE, "", PROPERTY_USAGE_STORAGE), "set_cones", "get_cones");
-	ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "twist_from", PROPERTY_HINT_RANGE, "-6.29,6.29,0.001,radians_as_radians"), "set_twist_from", "get_twist_from");
-	ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "twist_to", PROPERTY_HINT_RANGE, "-6.29,6.29,0.001,radians_as_radians"), "set_twist_to", "get_twist_to");
+	// Stored/scripted in radians; the inspector shows and edits degrees (range is in degrees).
+	ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "twist_from", PROPERTY_HINT_RANGE, "-360,360,0.1,radians_as_degrees"), "set_twist_from", "get_twist_from");
+	ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "twist_to", PROPERTY_HINT_RANGE, "-360,360,0.1,radians_as_degrees"), "set_twist_to", "get_twist_to");
 }
 
 void JointLimitationKusudama3D::set_cones(const Vector<Vector4> &p_cones) {
