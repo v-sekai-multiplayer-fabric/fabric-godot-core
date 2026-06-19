@@ -181,14 +181,12 @@ def findAllSplitsByCubic (polys : Array (Array Vec3))
           splits := splits.modify i (·.push { arcLen := aLen, pos := mid })
           splits := splits.modify j (·.push { arcLen := bLen, pos := mid })
       else
-        -- Fallback: polyline-sample global minimum (single split per
-        -- stroke pair). Used for fixtures that don't carry cubic data.
-        let mut bestD2 : Float := prox2 + 1.0
-        let mut bestA : Nat := 0
-        let mut bestB : Nat := 0
-        let mut bestS : Float := 0.0
-        let mut bestT : Float := 0.0
-        let mut bestMid : Vec3 := (0.0, 0.0, 0.0)
+        -- Fallback (no cubic data): collect EVERY near-crossing between the
+        -- two polylines — not just the global nearest — so a pair that truly
+        -- crosses multiple times subdivides at each crossing. Coalesce by
+        -- world position so the tube of near-segments around one crossing
+        -- collapses to a single split.
+        let mut hits : Array (Float × Float × Vec3) := #[]
         for a in [:pi1] do
           let a0 := pi[a]!
           let a1 := pi[a+1]!
@@ -196,27 +194,32 @@ def findAllSplitsByCubic (polys : Array (Array Vec3))
             let b0 := pj[b]!
             let b1 := pj[b+1]!
             let r := segSegClosest a0 a1 b0 b1
-            if r.dist2 < bestD2 then
-              bestD2 := r.dist2
-              bestA := a
-              bestB := b
-              bestS := r.s
-              bestT := r.t
-              let cpA := add a0 (scl (sub a1 a0) r.s)
-              let cpB := add b0 (scl (sub b1 b0) r.t)
-              bestMid := scl (add cpA cpB) 0.5
-        if bestD2 > prox2 then continue
-        let atEndpointA := (bestA = 0 ∧ bestS < 0.05) ∨
-                           (bestA = pi1 - 1 ∧ bestS > 0.95)
-        let atEndpointB := (bestB = 0 ∧ bestT < 0.05) ∨
-                           (bestB = pj1 - 1 ∧ bestT > 0.95)
-        if atEndpointA ∧ atEndpointB then continue
-        let segLenA := cls[i]![bestA+1]! - cls[i]![bestA]!
-        let segLenB := cls[j]![bestB+1]! - cls[j]![bestB]!
-        splits := splits.modify i (·.push
-          { arcLen := cls[i]![bestA]! + bestS * segLenA, pos := bestMid })
-        splits := splits.modify j (·.push
-          { arcLen := cls[j]![bestB]! + bestT * segLenB, pos := bestMid })
+            if r.dist2 < prox2 then
+              let atEndpointA := (a = 0 ∧ r.s < 0.05) ∨
+                                 (a = pi1 - 1 ∧ r.s > 0.95)
+              let atEndpointB := (b = 0 ∧ r.t < 0.05) ∨
+                                 (b = pj1 - 1 ∧ r.t > 0.95)
+              if ¬ (atEndpointA ∧ atEndpointB) then
+                let cpA := add a0 (scl (sub a1 a0) r.s)
+                let cpB := add b0 (scl (sub b1 b0) r.t)
+                let mid := scl (add cpA cpB) 0.5
+                let segLenA := cls[i]![a+1]! - cls[i]![a]!
+                let segLenB := cls[j]![b+1]! - cls[j]![b]!
+                hits := hits.push
+                  (cls[i]![a]! + r.s * segLenA, cls[j]![b]! + r.t * segLenB, mid)
+        -- Coalesce near-coincident hits by world position.
+        let mut reps : Array (Float × Float × Vec3) := #[]
+        for h in hits do
+          let mut found := false
+          for rr in reps do
+            if vdist h.2.2 rr.2.2 < clusterEps then
+              found := true
+              break
+          if ¬ found then
+            reps := reps.push h
+        for h in reps do
+          splits := splits.modify i (·.push { arcLen := h.1, pos := h.2.2 })
+          splits := splits.modify j (·.push { arcLen := h.2.1, pos := h.2.2 })
   return splits
 
 /-- Build the planar arrangement directly from pre-supplied splits per
