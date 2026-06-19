@@ -31,18 +31,16 @@
 #include "refine.h"
 
 // PMP path (ENG-88 follow-up). Mirrors upstream
-// E:\cassie-triangulation/src/refine.cpp: pmp::uniform_remeshing on a
+// cassie-triangulation/src/refine.cpp: pmp::uniform_remeshing on a
 // SurfaceMesh built from p_verts + p_indices, with the boundary marked
 // as a feature edge so pmp's split_long_edges keeps the polyline geometry
-// intact. use_projection=true projects refined vertices back onto the
-// DMWT reference surface.
+// intact. use_projection=true keeps refined vertices on the input
+// (DMWT-output) surface, so no separate reference mesh is needed.
 #include <pmp/algorithms/remeshing.h>
 #include <pmp/surface_mesh.h>
 
 void refine_patch(PackedVector3Array &p_verts, PackedInt32Array &p_indices,
-		float p_target_edge_length,
-		const PackedVector3Array &p_ref_verts,
-		const PackedInt32Array &p_ref_indices) {
+		float p_target_edge_length) {
 	if (p_verts.size() < 3 || p_indices.size() < 3 ||
 			p_indices.size() % 3 != 0) {
 		return;
@@ -120,6 +118,4 @@ void refine_patch(PackedVector3Array &p_verts, PackedInt32Array &p_indices,
 	}
 	p_verts = out_verts;
 	p_indices = out_idx;
-	(void)p_ref_verts;
-	(void)p_ref_indices;
 }

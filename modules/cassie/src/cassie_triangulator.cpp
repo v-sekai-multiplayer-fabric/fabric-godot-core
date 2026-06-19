@@ -398,8 +398,7 @@ Dictionary CassieTriangulator::triangulate(const PackedVector3Array &p_boundary,
 			Vector3(float(bx), float(by), float(bz)),
 			Vector3(float(cx), float(cy), float(cz)) };
 		PackedInt32Array idx = { 0, 1, 2 };
-		// Pass the triangle itself as the reference surface.
-		refine_patch(verts, idx, p_target_edge_length, verts, idx);
+		refine_patch(verts, idx, p_target_edge_length);
 		return arrays_to_dict(verts, idx);
 	}
 
@@ -524,12 +523,10 @@ Dictionary CassieTriangulator::triangulate(const PackedVector3Array &p_boundary,
 		t_pack = time->get_ticks_usec() - t_pk0;
 	}
 
-	// Keep a copy of the DMWT surface as the reference so refined vertices
-	// are projected back onto it after each smooth pass (prevents drift).
-	const PackedVector3Array ref_verts = packed_verts;
-	const PackedInt32Array ref_idx = packed_idx;
+	// refine_patch keeps vertices on the DMWT-output surface internally
+	// (pmp use_projection=true), so no separate reference copy is needed.
 	const uint64_t t_rf0 = verbose ? time->get_ticks_usec() : 0;
-	refine_patch(packed_verts, packed_idx, p_target_edge_length, ref_verts, ref_idx);
+	refine_patch(packed_verts, packed_idx, p_target_edge_length);
 	if (verbose) {
 		t_refine = time->get_ticks_usec() - t_rf0;
 		const CassieRefineProfile &rp = cassie_refine_last_profile();

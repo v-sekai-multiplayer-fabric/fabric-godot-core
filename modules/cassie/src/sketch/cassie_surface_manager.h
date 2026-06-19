@@ -60,7 +60,8 @@ class CassieSurfaceManager : public Resource {
 	GDCLASS(CassieSurfaceManager, Resource);
 
 	Ref<CassieSketchGraph> graph;
-	real_t target_edge_length = real_t(0.1);
+	// Matches the upstream Unity DLL caller (SurfaceManager.cs uses 0.02).
+	real_t target_edge_length = real_t(0.02);
 
 	// Canonical signature → active patch. Signature is the cycle's
 	// edge ids sorted ascending and joined with ',' — stable across
@@ -82,7 +83,7 @@ class CassieSurfaceManager : public Resource {
 		String signature;
 		PackedInt32Array cycle_edge_ids; // for round-trip export_raw_data_dict
 		PackedVector3Array boundary;
-		real_t target_edge_length = real_t(0.1);
+		real_t target_edge_length = real_t(0.02);
 		Dictionary tri_result; // written by worker thread
 	};
 
