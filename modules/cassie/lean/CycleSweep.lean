@@ -70,6 +70,15 @@ def cyclesUnion (g : Graph) : Array (Array EdgeId) := Id.run do
         if ¬ seenSig.contains sig then
           seenSig := seenSig.push sig
           out := out.push c
+  -- EXPERIMENT (cassie-climb): also union the parallel-transport port walker.
+  -- CyclePatch uses findCyclesPort exclusively and calls it a strict superset
+  -- of the legacy single-global-PCA-plane findCycles; the sweep was never
+  -- updated to it, so it under-enumerates faces of the 3D hat arrangement.
+  for c in findCyclesPort g do
+    let sig := c.qsort (· < ·)
+    if ¬ seenSig.contains sig then
+      seenSig := seenSig.push sig
+      out := out.push c
   return out
 
 /-- For each cycle, the upstream stroke-id set. Deduped. -/
@@ -84,7 +93,10 @@ def cycleStrokeIdSets (strokeIds : Array Nat) (g : Graph)
 
 def runOne (strokes : Array (Array Vec3)) (strokeIds : Array Nat)
     (patches : Array (Array Nat)) (prox : Float) : SweepRow :=
-  let g := buildArrangement strokes #[] prox prox 8
+  -- cassie-climb: augment so nodeMeta is populated and findCyclesPort engages
+  -- (plain buildArrangement leaves nodeMeta empty → port walker silently falls
+  -- back to the legacy single-global-PCA-plane walk). Matches CyclePatch.
+  let g := buildArrangementAugmented strokes #[] prox prox 8
   let cs := cyclesUnion g
   let sets := cycleStrokeIdSets strokeIds g cs
   let exact := Id.run do
