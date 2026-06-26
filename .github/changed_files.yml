@@ -21,7 +21,6 @@ clangd:
   - "**/*.{h,hpp,hxx,hh,c,cpp,cxx,cc}"
   - "!**/thirdparty/**"
   - "!**/*-so_wrap.{h,c}"
-  - "!modules/cassie/src/lean_ffi/**" # Lean 4 FFI shims; need lean/lean.h from the Lean toolchain, absent in the static-check env.
   - "!**/shaders/*_cpu.cpp" # slang `-target cpp` reference output; not built, includes a host-specific prelude.
   - "!drivers/{apple*,core*,d3d12,metal,wasapi,windows,winmidi,xaudio2}/**"
   - "!editor/shader/shader_baker/shader_baker_export_plugin_platform_{d3d12,metal}.{h,cpp}"
