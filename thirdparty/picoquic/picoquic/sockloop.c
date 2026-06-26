@@ -38,6 +38,7 @@
 #include <winsock2.h>
 #include <windows.h>
 #include <assert.h>
+#include <errno.h>
 #include <iphlpapi.h>
 #include <stdint.h>
 #include <stdio.h>
