@@ -243,6 +243,7 @@
 #include "scene/3d/ik_modifier_3d.h"
 #include "scene/3d/importer_mesh_instance_3d.h"
 #include "scene/3d/iterate_ik_3d.h"
+#include "scene/3d/swing_twist_ik_3d.h"
 #include "scene/3d/jacobian_ik_3d.h"
 #include "scene/3d/label_3d.h"
 #include "scene/3d/light_3d.h"
@@ -369,6 +370,8 @@
 #include "scene/resources/3d/cylinder_shape_3d.h"
 #include "scene/resources/3d/height_map_shape_3d.h"
 #include "scene/resources/3d/importer_mesh.h"
+#include "scene/resources/3d/humanoid_kusudama_rom.h"
+#include "scene/resources/3d/joint_limitation_kusudama_3d.h"
 #include "scene/resources/3d/mesh_library.h"
 #include "scene/resources/3d/navigation_mesh_source_geometry_data_3d.h"
 #include "scene/resources/3d/primitive_meshes.h"
@@ -682,6 +685,8 @@ void register_scene_types() {
 	GDREGISTER_CLASS(RetargetModifier3D);
 	GDREGISTER_VIRTUAL_CLASS(JointLimitation3D);
 	GDREGISTER_CLASS(JointLimitationCone3D);
+	GDREGISTER_CLASS(JointLimitationKusudama3D);
+	GDREGISTER_CLASS(HumanoidKusudamaRom);
 	GDREGISTER_CLASS(SpringBoneSimulator3D);
 	GDREGISTER_VIRTUAL_CLASS(SpringBoneCollision3D);
 	GDREGISTER_CLASS(SpringBoneCollisionSphere3D);
@@ -697,6 +702,7 @@ void register_scene_types() {
 	GDREGISTER_CLASS(SplineIK3D);
 	GDREGISTER_ABSTRACT_CLASS(IterateIK3D);
 	GDREGISTER_CLASS(FABRIK3D);
+	GDREGISTER_CLASS(SwingTwistIK3D);
 	GDREGISTER_CLASS(CCDIK3D);
 	GDREGISTER_CLASS(JacobianIK3D);
 	GDREGISTER_CLASS(LimitAngularVelocityModifier3D);
