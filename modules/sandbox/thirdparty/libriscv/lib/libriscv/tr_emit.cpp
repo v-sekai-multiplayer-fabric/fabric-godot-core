@@ -321,7 +321,8 @@ struct Emitter
 	}
 
 	static bool offset_is_within_overallocation(int64_t old_offset, int64_t new_offset, size_t size) {
-		return std::abs(new_offset - old_offset) <= int64_t(Memory<W>::OVERALLOCATE - size);
+		const int64_t diff = new_offset - old_offset;
+		return (diff >= 0 ? diff : -diff) <= int64_t(Memory<W>::OVERALLOCATE - size);
 	}
 
 	bool skip_load_bounds_check(int reg, int64_t offset, size_t size) {
