@@ -1,0 +1,55 @@
+#!/usr/bin/env python
+from misc.utility.scons_hints import *
+
+Import("env")
+Import("env_modules")
+
+env_pixal3d = env_modules.Clone()
+# Godot links this statically, so the C ABI header must resolve to dllexport on
+# both sides; left at its dllimport default the module's own TU asks lld-link
+# for an import stub that no DLL provides.
+env_pixal3d.Append(CPPDEFINES=["TRELLIS2_BUILD"])
+
+tp = "#thirdparty/pixal3d/"
+env_pixal3d.Prepend(
+    CPPPATH=[
+        tp,
+        tp + "stb",
+        tp + "third_party/xatlas",
+        "#modules/ggml",
+        "#modules/pixal3d",
+    ]
+)
+
+module_obj = []
+env_pixal3d.add_source_files(module_obj, "*.cpp")
+env.modules_sources += module_obj
+
+pixal3d_thirdparty = [
+    tp + "trellis2.cpp",
+    tp + "trellis2_capi.cpp",
+    tp + "mesh_export.cpp",
+    tp + "third_party/xatlas/xatlas.cpp",
+]
+
+env_thirdparty = env_pixal3d.Clone()
+env_thirdparty.disable_warnings()
+env_thirdparty.Prepend(CPPPATH=["#thirdparty/ggml/include"])
+# MSVC's <cmath> only declares M_PI when _USE_MATH_DEFINES precedes it;
+# trellis2.cpp uses M_PI directly.
+env_thirdparty.Append(CPPDEFINES=["_USE_MATH_DEFINES"])
+env_thirdparty["CXXFLAGS"] = [
+    f
+    for f in env_thirdparty["CXXFLAGS"]
+    if not f.startswith("-std=") and not f.startswith("/std") and f != "-fno-exceptions"
+]
+if env.msvc:
+    env_thirdparty.Append(CXXFLAGS=["/std:c++17", "/EHsc"])
+else:
+    _exc_flag = "-fwasm-exceptions" if env["platform"] == "web" else "-fexceptions"
+    env_thirdparty.Append(CXXFLAGS=["-std=c++17", _exc_flag])
+
+thirdparty_obj = []
+env_thirdparty.add_source_files(thirdparty_obj, pixal3d_thirdparty)
+env.modules_sources += thirdparty_obj
+env.Depends(module_obj, thirdparty_obj)

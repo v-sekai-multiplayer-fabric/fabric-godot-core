@@ -1,0 +1,63 @@
+#!/usr/bin/env python
+from misc.utility.scons_hints import *
+
+Import("env")
+Import("env_modules")
+
+env_kimodo = env_modules.Clone()
+# Godot links this statically, so the C ABI header must resolve to dllexport on
+# both sides; left at its dllimport default the module's own TU asks lld-link
+# for an import stub that no DLL provides.
+env_kimodo.Append(CPPDEFINES=["KIMODO_BUILD"])
+
+tp = "#thirdparty/kimodo/"
+env_kimodo.Prepend(
+    CPPPATH=[
+        tp + "include",
+        tp + "src",
+        "#modules/ggml",
+        "#modules/kimodo",
+    ]
+)
+
+module_obj = []
+env_kimodo.add_source_files(module_obj, "*.cpp")
+env.modules_sources += module_obj
+
+# The four CLI entry points (encode, generate, inspect, sample_fixture) each
+# define main() and stay out; everything else is library code capi.cpp calls.
+kimodo_thirdparty = [
+    tp + f"src/{s}"
+    for s in [
+        "capi.cpp",
+        "denoiser.cpp",
+        "diffusion.cpp",
+        "ggml_weights.cpp",
+        "gguf.cpp",
+        "llm_text_encoder.cpp",
+        "llm_tokenizer.cpp",
+        "model.cpp",
+        "motion_decode.cpp",
+        "motion_rep.cpp",
+        "sequence.cpp",
+    ]
+]
+
+env_thirdparty = env_kimodo.Clone()
+env_thirdparty.disable_warnings()
+env_thirdparty.Prepend(CPPPATH=["#thirdparty/ggml/include"])
+env_thirdparty["CXXFLAGS"] = [
+    f
+    for f in env_thirdparty["CXXFLAGS"]
+    if not f.startswith("-std=") and not f.startswith("/std") and f != "-fno-exceptions"
+]
+if env.msvc:
+    env_thirdparty.Append(CXXFLAGS=["/std:c++latest", "/EHsc"])
+else:
+    _exc_flag = "-fwasm-exceptions" if env["platform"] == "web" else "-fexceptions"
+    env_thirdparty.Append(CXXFLAGS=["-std=c++23", _exc_flag])
+
+thirdparty_obj = []
+env_thirdparty.add_source_files(thirdparty_obj, kimodo_thirdparty)
+env.modules_sources += thirdparty_obj
+env.Depends(module_obj, thirdparty_obj)

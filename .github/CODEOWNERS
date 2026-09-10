@@ -299,3 +299,7 @@
 *.py                                          @godotengine/buildsystem
 SConstruct                                    @godotengine/buildsystem
 SCsub                                         @godotengine/buildsystem
+/modules/motion_bricks/                               @fire
+/modules/pixal3d/                                     @fire
+/modules/rf_detr/                                     @fire
+/modules/kimodo/                                      @fire

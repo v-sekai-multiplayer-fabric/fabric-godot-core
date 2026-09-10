@@ -1,0 +1,26 @@
+#!/usr/bin/env python
+from misc.utility.scons_hints import *
+
+Import("env")
+Import("env_modules")
+
+env_rf_detr = env_modules.Clone()
+# Godot links this statically, so the C ABI header must resolve to dllexport on
+# both sides; left at its dllimport default the module's own TU asks lld-link
+# for an import stub that no DLL provides.
+env_rf_detr.Append(CPPDEFINES=["RFDETR_BUILD"])
+
+tp = "#thirdparty/rfdetr/"
+env_rf_detr.Prepend(CPPPATH=[tp + "include", "#modules/ggml", "#modules/rf_detr"])
+
+module_obj = []
+env_rf_detr.add_source_files(module_obj, "*.cpp")
+env.modules_sources += module_obj
+
+env_thirdparty = env_rf_detr.Clone()
+env_thirdparty.disable_warnings()
+env_thirdparty.Append(CPPDEFINES=["RFDETR_BUILD"])
+thirdparty_obj = []
+env_thirdparty.add_source_files(thirdparty_obj, [tp + "src/rfdetr_capi.cpp"])
+env.modules_sources += thirdparty_obj
+env.Depends(module_obj, thirdparty_obj)

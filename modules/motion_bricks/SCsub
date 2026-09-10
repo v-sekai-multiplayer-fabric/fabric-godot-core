@@ -1,0 +1,62 @@
+#!/usr/bin/env python
+from misc.utility.scons_hints import *
+
+Import("env")
+Import("env_modules")
+
+env_motion_bricks = env_modules.Clone()
+# Godot links this statically, so the C ABI header must resolve to dllexport on
+# both sides; left at its dllimport default the module's own TU asks lld-link
+# for an import stub that no DLL provides.
+env_motion_bricks.Append(CPPDEFINES=["MOTIONBRICKS_BUILD"])
+
+tp = "#thirdparty/motion_bricks/"
+env_motion_bricks.Prepend(
+    CPPPATH=[
+        tp + "include",
+        tp + "src",
+        "#modules/ggml",
+        "#modules/motion_bricks",
+    ]
+)
+
+module_obj = []
+env_motion_bricks.add_source_files(module_obj, "*.cpp")
+env.modules_sources += module_obj
+
+motion_bricks_thirdparty = [
+    tp + "src/" + s
+    for s in [
+        "capi.cpp",
+        "agent.cpp",
+        "decoder.cpp",
+        "error.cpp",
+        "model.cpp",
+        "motion_rep.cpp",
+        "neural_runtime.cpp",
+        "planner.cpp",
+        "pose.cpp",
+        "root.cpp",
+        "style.cpp",
+    ]
+]
+
+env_thirdparty = env_motion_bricks.Clone()
+env_thirdparty.disable_warnings()
+env_thirdparty.Prepend(CPPPATH=["#thirdparty/ggml/include"])
+env_thirdparty.Append(CPPDEFINES=[("MOTIONBRICKS_HAVE_GGML", "1")])
+env_thirdparty["CXXFLAGS"] = [
+    f
+    for f in env_thirdparty["CXXFLAGS"]
+    if not f.startswith("-std=") and not f.startswith("/std") and f != "-fno-exceptions"
+]
+if env.msvc:
+    env_thirdparty.Append(CXXFLAGS=["/std:c++20", "/EHsc"])
+else:
+    _exc_flag = "-fwasm-exceptions" if env["platform"] == "web" else "-fexceptions"
+    env_thirdparty.Append(CXXFLAGS=["-std=c++20", _exc_flag])
+
+thirdparty_obj = []
+env_thirdparty.add_source_files(thirdparty_obj, motion_bricks_thirdparty)
+env.modules_sources += thirdparty_obj
+env.Depends(module_obj, thirdparty_obj)
