@@ -303,3 +303,4 @@ SCsub                                         @godotengine/buildsystem
 /modules/pixal3d/                                     @fire
 /modules/rf_detr/                                     @fire
 /modules/kimodo/                                      @fire
+/modules/skin_tokens/                                 @fire

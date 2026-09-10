@@ -1,0 +1,58 @@
+#!/usr/bin/env python
+from misc.utility.scons_hints import *
+
+Import("env")
+Import("env_modules")
+
+env_skin_tokens = env_modules.Clone()
+# Godot links this statically, so the C ABI header must resolve to dllexport on
+# both sides; left at its dllimport default the module's own TU asks lld-link
+# for an import stub that no DLL provides.
+env_skin_tokens.Append(CPPDEFINES=["SKINTOKENS_BUILD"])
+
+tp = "#thirdparty/skin_tokens/"
+env_skin_tokens.Prepend(CPPPATH=[tp + "include", tp + "src", "#modules/ggml", "#modules/skin_tokens"])
+
+module_obj = []
+env_skin_tokens.add_source_files(module_obj, "*.cpp")
+env.modules_sources += module_obj
+
+env_thirdparty = env_skin_tokens.Clone()
+env_thirdparty.disable_warnings()
+env_thirdparty.Prepend(CPPPATH=["#thirdparty/ggml/include", "#thirdparty/skin_tokens/vendor"])
+env_thirdparty["CXXFLAGS"] = [
+    f
+    for f in env_thirdparty["CXXFLAGS"]
+    if not f.startswith("-std=") and not f.startswith("/std") and f != "-fno-exceptions"
+]
+if env.msvc:
+    # skintokens.hpp returns std::expected, so MSVC needs c++latest, not c++20.
+    env_thirdparty.Append(CXXFLAGS=["/std:c++latest", "/EHsc"])
+else:
+    _exc_flag = "-fwasm-exceptions" if env["platform"] == "web" else "-fexceptions"
+    env_thirdparty.Append(CXXFLAGS=["-std=c++23", _exc_flag])
+
+skin_tokens_srcs = [
+    tp + "src/" + s
+    for s in [
+        "backend.cpp",
+        "binding.cpp",
+        "c_api.cpp",
+        "gguf.cpp",
+        "glb.cpp",
+        "mesh_encoder.cpp",
+        "model.cpp",
+        "qwen.cpp",
+        "retarget.cpp",
+        "skin_vae.cpp",
+        "skinning.cpp",
+        "tokenizer.cpp",
+        "weights.cpp",
+        # cli.cpp intentionally omitted — declares main()
+    ]
+]
+
+thirdparty_obj = []
+env_thirdparty.add_source_files(thirdparty_obj, skin_tokens_srcs)
+env.modules_sources += thirdparty_obj
+env.Depends(module_obj, thirdparty_obj)
